@@ -367,6 +367,27 @@ class Catalogue:
 
         return process.extractOne(folded, self._title_list, scorer=fuzz.token_sort_ratio, processor=None, score_cutoff=TITLE_THRESHOLD) is not None
 
+    def match(self, doi: str, title: str) -> tuple[Paper | None, str]:
+        """The paper a reference names, and how it matched: "doi", "title" or
+        "fuzzy". The /exists policy: a DOI settles it on its own (a reference
+        whose DOI we lack is a paper we lack), and only without one is the
+        title matched, exactly or at 96."""
+        clean = normalize_doi(doi)
+        if clean:
+            key = self._dois.get(clean.lower())
+            return (self._papers.get(key), "doi") if key else (None, "")
+        folded = q.fold(title)
+        if not folded:
+            return None, ""
+        if folded in self._titles:
+            return self._papers.get(self._titles[folded]), "title"
+        from rapidfuzz import fuzz, process
+
+        best = process.extractOne(folded, self._title_list, scorer=fuzz.token_sort_ratio, processor=None, score_cutoff=TITLE_THRESHOLD)
+        if best is None:
+            return None, ""
+        return self._papers.get(self._titles[best[0]]), "fuzzy"
+
     def find(self, spec: str) -> Paper | None:
         """A paper named by its key, its DOI, or its Zotero key."""
         spec = (spec or "").strip()

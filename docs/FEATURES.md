@@ -14,7 +14,7 @@ The idea that changes everything: **no reindex, no pipeline to run**.
 - [x] **P1** `/api/exists` + `/api/version` for the userscripts (a DOI settles it; with no DOI, title fuzzy ≥ 96). An API key is required.
 - [x] **P1** Userscripts updated (`userscripts/`): new address, `Authorization: Bearer`.
 - [x] **P1** PDF served from Zotero storage (`/api/paper/pdf?key=`).
-- [ ] **P2** "Recently added" from Zotero, on the Lists screen.
+- [x] **P2** "Recently added" from Zotero, on the Lists screen (past week / 2 weeks / month, multi-pick, tag and position per paper).
 - [ ] **P4** Paper screen: abstract, full text, methods, links, content status.
 - [ ] **P7** Research-log check (`check-missing-file`).
 
@@ -38,16 +38,17 @@ The idea that changes everything: **no reindex, no pipeline to run**.
 - [x] **P1** The full ops engine ported (`app/boards/ops.py`): about 30 ops, `dry_run`, `if_rev`, `#N`, positions.
 - [x] **P1** Ops over the API (`POST /api/lists/<slug>/ops`, `GET /api/lists/schema`).
 - [x] **P1** Ops over MCP (`search_library`, `list_lists`, `get_list`, `list_schema`, `list_ops`).
+- [x] **P2** Every op usable and tested; read routes `GET /api/lists/<slug>/rows` and `/export.csv`; MCP `list_history`.
 - [x] **P1** Old lists imported: `manage import-legacy --from <old output>`.
 - [x] **P1** Every change keeps the previous version (the last 40 per list).
-- [ ] **P2** Columns: add, rename, move, delete, fold, resize; live links in cells.
-- [ ] **P2** Multi-select, bulk tagging, tag filter any/all/none, find a tag, chip bar drag order, Colours dialog.
-- [ ] **P2** Order-by once, Auto-move, jump to # / anchor.
-- [ ] **P2** Staging shelf + Import refs (paste, .docx/.txt; AMA/Vancouver/APA/IEEE).
-- [ ] **P2** CSV import/export with `Cite`.
-- [ ] **P2** CSL citations (in-text + full, copy buttons, style picker).
-- [ ] **P2** Version history screen with restore; view-only lock in the list menu.
-- [ ] **P2** Faster redraw of very long lists (only changed rows).
+- [x] **P2** Columns: add, rename, move, delete, fold, resize; live links in cells.
+- [x] **P2** Multi-select, bulk tagging, painting, tag filter any/all/none, find a tag, chip bar drag order, Colours dialog.
+- [x] **P2** Order-by once, Auto-move, Add-to, jump to # / anchor / top / bottom.
+- [x] **P2** Staging shelf + Import refs (paste, .docx/.txt; AMA/Vancouver/APA/IEEE).
+- [x] **P2** CSV import (merge / replace, one undo step) and export with `Cite` (all rows, or the rows shown).
+- [x] **P2** CSL citations (in-text + full, copy buttons, style picker; `POST /api/cite`).
+- [x] **P2** Version history with a preview of what restoring changes, and restore (undoable); view-only lock in the list menu, live in every tab.
+- [x] **P2** Faster redraw of very long lists (only changed rows; ~0.65 s → ~0.1 s on 1,527 rows), and focus kept across redraws.
 - [ ] **P3** Duplicate, rename (with redirect), delete (to trash, undoable).
 - [ ] **P3** Copy/move rows to another list; import from lists or remaining papers.
 - [ ] **P3** Tags and cells mirrored across lists (two-way / one-way / off).

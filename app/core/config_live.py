@@ -141,6 +141,7 @@ def live_config(boot: Config, boot_file: config.File, file: config.File) -> Conf
             boot.library,
             watch_seconds=file.library.watch_seconds,
             proxy_url=file.library.proxy_url,
+            cite_style=file.library.cite_style,
         ),
         file=file,
     )

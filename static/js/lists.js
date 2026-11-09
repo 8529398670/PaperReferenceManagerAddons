@@ -6,22 +6,26 @@
 // no whole-list save, so there is nothing to merge and no draft to keep: what
 // is on screen is what the server has.
 //
-// Every change is undoable: each one is sent through Undo.run with the ops
-// that put it back, worked out before it is sent.
+// Every change is undoable, as one step however many rows it touched. Most
+// carry the ops that put them back, worked out before they are sent; the big
+// ones (order by, the shelf, an import) are undone by putting back the
+// version the server kept from just before them (changeWhole).
 //
 // Live: /api/lists/stream says "list X is at rev N" whenever any list changes,
 // from another tab, another person or an agent; the open list is fetched again
 // when that is newer than what is showing.
+//
+// This file holds the state, the sending and the adding; board_view.js draws
+// rows, list_tools.js the tag bar, selection, filter and moving around, and
+// list_panels.js the list menu's dialogs.
 const Lists = {
   me: null,
   lists: [],
   slug: null,
   view: null,
+  items: new Map(),
+  positions: new Map(),
   storageKey: "lists-open",
-  addTimer: null,
-  addTicket: 0,
-  addHits: [],
-  addActive: -1,
   stream: null,
   // Changes this page has sent and not heard back about. While there are any,
   // a live "the list moved" is most likely the echo of one of them, and is
@@ -29,6 +33,22 @@ const Lists = {
   sending: 0,
   heard: 0,
   claimedColors: new Set(),
+  // key -> { intext , full } in `citeStyle`, filled in the background.
+  cites: {},
+  citeStyle: "",
+  citing: false,
+  // key -> how a staged reference matched ("doi", "title", "fuzzy").
+  matched: {},
+  // Ticked rows on the shelf.
+  checked: new Set(),
+  // The add box's hits.
+  hits: [],
+  hitsKind: "search",
+  picked: new Set(),
+  active: -1,
+  pickAnchor: -1,
+  addTicket: 0,
+  addTimer: null,
 
   async init( me ) {
     this.me = me;
@@ -37,29 +57,22 @@ const Lists = {
     Dom.get( "list-new" ).addEventListener( "click" , () => this.showNewForm( true ) );
     Dom.get( "list-new-cancel" ).addEventListener( "click" , () => this.showNewForm( false ) );
     Dom.onSubmit( Dom.get( "list-new-form" ) , this.onCreate.bind( this ) );
-    Dom.get( "list-filter" ).addEventListener( "input" , () => this.draw() );
-    const add = Dom.get( "list-add" );
-    add.addEventListener( "input" , () => this.searchLater() );
-    add.addEventListener( "keydown" , ( event ) => this.onAddKey( event ) );
-    add.addEventListener( "blur" , () => setTimeout( () => this.closeHits() , 150 ) );
+    this.initAdd();
+    ListTools.init( this );
+    ListPanels.init( this );
     await this.loadLists();
     this.listen();
   },
 
   // ---- which list -------------------------------------------------------
 
-  remembered() {
+  local( key , value ) {
     try {
-      return window.localStorage.getItem( this.storageKey ) || "";
-    } catch ( error ) {
-      return "";
-    }
-  },
-
-  remember( slug ) {
-    try {
-      window.localStorage.setItem( this.storageKey , slug );
+      if ( value === undefined ) return window.localStorage.getItem( key );
+      if ( value === null ) window.localStorage.removeItem( key );
+      else window.localStorage.setItem( key , value );
     } catch ( error ) { /* only a convenience */ }
+    return null;
   },
 
   async loadLists( choose ) {
@@ -68,6 +81,7 @@ const Lists = {
     const picker = Dom.get( "list-picker" );
     picker.replaceChildren( ...this.lists.map( ( list ) => Dom.el( "option" , { text: list.name , attrs: { value: list.slug } } ) ) );
     Dom.show( picker , this.lists.length > 0 );
+    Dom.show( Dom.get( "list-menu-holder" ) , this.lists.length > 0 );
     Dom.show( Dom.get( "lists-none" ) , this.lists.length === 0 );
     Dom.show( Dom.get( "list-body" ) , this.lists.length > 0 );
     if ( this.lists.length === 0 ) {
@@ -75,17 +89,41 @@ const Lists = {
       Dom.text( Dom.get( "list-count" ) , "" );
       return;
     }
-    const wanted = [ choose , this.slug , this.remembered() , "main" ].find( ( slug ) => slug && this.lists.some( ( list ) => list.slug === slug ) );
+    const wanted = [ choose , this.slug , this.local( this.storageKey ) , "main" ].find( ( slug ) => slug && this.lists.some( ( list ) => list.slug === slug ) );
     await this.open( wanted || this.lists[ 0 ].slug );
   },
 
   async open( slug ) {
     const answer = await Api.request( "/api/lists/" + encodeURIComponent( slug ) );
+    if ( slug !== this.slug ) {
+      // Another list: what was picked, ticked and painted belonged to the last.
+      ListTools.forget();
+      this.checked.clear();
+      this.matched = {};
+      this.cites = {};
+      BoardView.reset( Dom.get( "list-rows" ) );
+      BoardView.reset( Dom.get( "list-shelf-rows" ) );
+    }
     this.slug = slug;
-    this.remember( slug );
+    this.local( this.storageKey , slug );
     Dom.get( "list-picker" ).value = slug;
-    this.view = answer.list;
+    this.take( answer.list );
+  },
+
+  // A list as the server sent it: index it, draw it.
+  take( view ) {
+    this.view = view;
+    this.items = new Map();
+    this.positions = new Map();
+    ( view.doc.items || [] ).forEach( ( item , index ) => {
+      this.items.set( item.key , item );
+      this.positions.set( item.key , index + 1 );
+    } );
+    this.shelfItems = new Map( ( view.doc.staging || [] ).map( ( item ) => [ item.key , item ] ) );
+    const entry = this.lists.find( ( list ) => list.slug === view.slug );
+    if ( entry ) Object.assign( entry , { name: view.name , locked: view.locked , rev: view.rev } );
     this.draw();
+    this.fetchCites();
   },
 
   showNewForm( visible ) {
@@ -110,76 +148,184 @@ const Lists = {
 
   // ---- drawing -------------------------------------------------------------
 
+  // The columns drawn: every one that is not folded, and the folded ones too
+  // while "extra columns" is on.
+  columns() {
+    const doc = this.view.doc;
+    const folded = new Set( ( doc.options && doc.options.fold_cols ) || [] );
+    return ( doc.columns || [] ).filter( ( column ) => ListTools.showExtra || !folded.has( column.id ) );
+  },
+
+  widths() {
+    try {
+      return JSON.parse( this.local( "list-col-widths" ) || "{}" ) || {};
+    } catch ( error ) {
+      return {};
+    }
+  },
+
+  // One grid for the header and every row, so the columns line up. Widths are
+  // per browser; a column nobody resized gets the default.
+  layout( columns ) {
+    const widths = this.widths();
+    const template = [ "var(--board-side)" , "minmax(18rem, 1fr)" ]
+      .concat( columns.map( ( column ) => ( widths[ column.id ] ? widths[ column.id ] + "px" : "var(--board-col)" ) ) )
+      .concat( [ "2.25rem" ] ).join( " " );
+    // On the list body, so the shelf's rows line up with the list's.
+    const scroll = Dom.get( "list-body" );
+    scroll.style.setProperty( "--board-grid" , template );
+    // The least width all of it needs; past it the board scrolls sideways.
+    const fixed = columns.map( ( column ) => ( widths[ column.id ] ? widths[ column.id ] + "px" : "var(--board-col)" ) );
+    const gaps = ( columns.length + 3 ) * 0.75;
+    scroll.style.setProperty( "--board-min" , "calc(var(--board-side) + 18rem + 2.25rem + " + gaps + "rem" + fixed.map( ( width ) => " + " + width ).join( "" ) + ")" );
+  },
+
+  resize( id , width , done ) {
+    const widths = this.widths();
+    if ( width === 0 ) delete widths[ id ];
+    else if ( width ) widths[ id ] = width;
+    this.local( "list-col-widths" , JSON.stringify( widths ) );
+    this.layout( this.columns() );
+  },
+
   draw() {
     const view = this.view;
     if ( !view ) return;
+    const started = performance.now();
     const doc = view.doc;
     const count = ( doc.items || [] ).length;
     Dom.text( Dom.get( "list-count" ) , I18n.get( "lists.count" ).replace( "{count}" , count.toLocaleString() ) );
     Dom.show( Dom.get( "list-view-only" ) , view.locked );
-    const filter = Dom.get( "list-filter" ).value;
-    const handlers = {
+    Dom.get( "lists-panel" ).classList.toggle( "is-locked" , Boolean( view.locked ) );
+    const columns = this.columns();
+    const colSig = columns.map( ( column ) => column.id + "=" + column.label ).join( "|" );
+    if ( colSig !== this.lastColSig ) {
+      this.lastColSig = colSig;
+      BoardView.head( Dom.get( "list-head" ) , columns , this.widths() , ( id , width , done ) => this.resize( id , width , done ) );
+    }
+    this.layout( columns );
+
+    const visible = ( doc.items || [] ).filter( ( item ) => ListTools.matches( item , view.papers[ item.key ] ) ).map( ( item ) => item.key );
+    const handlers = this.handlers();
+    const anchor = ListTools.anchor();
+    BoardView.render( Dom.get( "list-rows" ) , {
+      doc: doc , papers: view.papers || {} , handlers: handlers , locked: view.locked , columns: columns ,
+      items: this.items , visible: visible , positions: this.positions , cites: this.cites , anchor: anchor ,
+    } );
+    ListTools.paintSelection();
+    this.drawShelf( columns , handlers );
+
+    const filtered = Dom.get( "list-filtered" );
+    const describe = ListTools.describe();
+    Dom.text( filtered , I18n.get( "lists.filtered" ).replace( "{shown}" , visible.length.toLocaleString() ).replace( "{count}" , count.toLocaleString() ) + ( describe ? " · " + describe : "" ) );
+    Dom.show( filtered , ListTools.filtering() );
+    Dom.show( Dom.get( "list-empty" ) , count === 0 );
+    const names = ListTools.tagNames();
+    const options = Dom.get( "list-tag-options" );
+    if ( options._names !== names.join( "\n" ) ) {
+      options._names = names.join( "\n" );
+      options.replaceChildren( ...names.map( ( name ) => Dom.el( "option" , { attrs: { value: name } } ) ) );
+    }
+    ListTools.drawBar();
+    ListPanels.drawMenu();
+    this.lastDrawMs = performance.now() - started;
+  },
+
+  drawShelf( columns , handlers ) {
+    const doc = this.view.doc;
+    const staged = doc.staging || [];
+    const shelf = Dom.get( "list-shelf" );
+    Dom.show( shelf , staged.length > 0 );
+    for ( const key of Array.from( this.checked ) ) {
+      if ( !this.shelfItems.has( key ) ) this.checked.delete( key );
+    }
+    BoardView.render( Dom.get( "list-shelf-rows" ) , {
+      doc: doc , papers: this.view.papers || {} , handlers: handlers , locked: this.view.locked , columns: columns ,
+      items: this.shelfItems , visible: staged.map( ( item ) => item.key ) , positions: new Map() , cites: {} ,
+      shelf: true , matched: this.matched , checked: this.checked ,
+    } );
+    if ( staged.length === 0 ) return;
+    Dom.text( Dom.get( "list-shelf-title" ) , I18n.get( "lists.shelf_title_count" ).replace( "{count}" , staged.length ) );
+    const all = Dom.get( "list-shelf-all" );
+    all.checked = this.checked.size === staged.length;
+    all.indeterminate = this.checked.size > 0 && this.checked.size < staged.length;
+    const n = this.checked.size || staged.length;
+    Dom.text( Dom.get( "list-shelf-add" ) , I18n.get( this.checked.size ? "lists.shelf_add_checked" : "lists.shelf_add_all" ).replace( "{count}" , n ) );
+    Dom.get( "list-shelf-drop" ).disabled = this.checked.size === 0;
+  },
+
+  handlers() {
+    return {
       move: ( key , position ) => this.move( key , position ),
       moveNear: ( key , anchor , side ) => this.moveNear( key , anchor , side ),
       remove: ( key ) => this.remove( key ),
-      addTag: ( key , name ) => this.addTag( key , name ),
-      removeTag: ( key , name ) => this.removeTag( key , name ),
-      setNote: ( key , value , previous ) => this.setNote( key , value , previous ),
+      addTag: ( key , name ) => this.addTag( [ key ] , name ),
+      removeTag: ( key , name ) => this.removeTag( [ key ] , name ),
+      setCell: ( key , column , value , previous ) => this.setCell( key , column , value , previous ),
+      anchor: ( key ) => ListTools.toggleAnchor( key ),
+      copy: ( text ) => this.copy( text ),
+      rename: ( key , title , previous ) => this.change( "undo.list_title" , [ { op: "update" , row: key , title: title } ] , [ { op: "update" , row: key , title: previous } ] ),
+      check: ( key , on ) => {
+        if ( on ) this.checked.add( key );
+        else this.checked.delete( key );
+        this.drawShelf( this.columns() , this.handlers() );
+      },
     };
-    const rows = Dom.get( "list-rows" );
-    const focus = this.focusOf( rows );
-    const shown = BoardView.render( rows , doc , view.papers || {} , handlers , filter , view.locked );
-    this.restoreFocus( rows , focus );
-    const filtered = Dom.get( "list-filtered" );
-    Dom.text( filtered , I18n.get( "lists.filtered" ).replace( "{shown}" , shown ).replace( "{count}" , count ) );
-    Dom.show( filtered , filter.trim() !== "" );
-    Dom.show( Dom.get( "list-empty" ) , count === 0 );
-    const options = Dom.get( "list-tag-options" );
-    options.replaceChildren( ...( ( doc.vocab && doc.vocab.tags ) || [] ).map( ( tag ) => Dom.el( "option" , { attrs: { value: tag.name } } ) ) );
   },
 
-  // A redraw replaces every row. Whatever field had the focus (a note being
-  // typed in, the next tag box) gets it back, with its caret and anything
-  // typed there that was not sent yet.
-  focusOf( rows ) {
-    const active = document.activeElement;
-    if ( !active || !rows.contains( active ) ) return null;
-    const row = active.closest( "[data-key]" );
-    const kind = [ "board-row-note" , "tag-input" , "board-row-num" ].find( ( name ) => active.classList.contains( name ) );
-    if ( !row || !kind ) return null;
-    return { key: row.getAttribute( "data-key" ) , kind: kind , value: active.value , start: active.selectionStart , end: active.selectionEnd };
+  state( key , text ) {
+    Dom.text( Dom.get( "list-state" ) , text || ( key ? I18n.get( key ) : "" ) );
   },
 
-  restoreFocus( rows , focus ) {
-    if ( !focus ) return;
-    const row = Array.from( rows.children ).find( ( element ) => element.getAttribute( "data-key" ) === focus.key );
-    const field = row && row.querySelector( "." + focus.kind );
-    if ( !field ) return;
-    if ( focus.kind !== "board-row-num" ) field.value = focus.value;
-    field.focus();
+  async copy( text ) {
+    const holder = Dom.el( "span" , { text: text , class: "visually-hidden" } );
+    document.body.appendChild( holder );
     try {
-      field.setSelectionRange( focus.start , focus.end );
-    } catch ( error ) { /* not every field has a caret */ }
+      await Dom.copy( holder );
+    } finally {
+      holder.remove();
+    }
   },
 
-  state( key ) {
-    Dom.text( Dom.get( "list-state" ) , key ? I18n.get( key ) : "" );
+  // ---- citations, in the background -------------------------------------------
+
+  async fetchCites() {
+    if ( this.citing || !this.view ) return;
+    const slug = this.slug;
+    const style = ( this.view.doc.options && this.view.doc.options.cite_style ) || "";
+    if ( style !== this.citeStyleWanted ) {
+      this.citeStyleWanted = style;
+      this.cites = {};
+    }
+    const missing = ( this.view.doc.items || [] ).map( ( item ) => item.key ).filter( ( key ) => !( key in this.cites ) );
+    if ( missing.length === 0 ) return;
+    this.citing = true;
+    try {
+      for ( let at = 0 ; at < missing.length ; at += 150 ) {
+        const answer = await Api.post( "/api/cite" , { keys: missing.slice( at , at + 150 ) , list: slug } );
+        if ( slug !== this.slug ) return;
+        Object.assign( this.cites , answer.cites );
+        this.citeStyle = answer.style;
+        this.draw();
+      }
+    } catch ( error ) {
+      // Citations are a nicety: the rows stand without them.
+    } finally {
+      this.citing = false;
+    }
   },
 
   // ---- sending ---------------------------------------------------------------
 
-  // Sends a batch to the open list, draws the answer. The slug is fixed at the
-  // time of the action, so an undo reaches the list it happened on even after
+  // Sends a batch to a list, draws the answer. The slug is fixed at the time
+  // of the action, so an undo reaches the list it happened on even after
   // another one was opened.
   async send( slug , ops ) {
     this.state( "lists.saving" );
     this.sending += 1;
     try {
       const answer = await Api.post( "/api/lists/" + encodeURIComponent( slug ) + "/ops" , { ops: ops } );
-      if ( slug === this.slug && answer.list ) {
-        this.view = answer.list;
-        this.draw();
-      }
+      if ( slug === this.slug && answer.list ) this.take( answer.list );
       this.state( "lists.saved" );
       return answer;
     } catch ( error ) {
@@ -194,7 +340,19 @@ const Lists = {
     }
   },
 
-  // One undoable change: ops now, back() to put it back.
+  // Puts back the version the server kept at `rev`, as a new version.
+  async restoreTo( slug , rev ) {
+    this.sending += 1;
+    try {
+      const answer = await Api.post( "/api/lists/" + encodeURIComponent( slug ) + "/restore" , { rev: rev } );
+      if ( slug === this.slug && answer.list ) this.take( answer.list );
+      return answer;
+    } finally {
+      this.sending -= 1;
+    }
+  },
+
+  // One undoable change: ops now, back to put it back.
   async change( label , ops , back , options ) {
     const slug = this.slug;
     const settings = options || {};
@@ -206,165 +364,361 @@ const Lists = {
         undo: () => this.send( slug , back ),
       } );
       if ( settings.flash ) BoardView.flash( Dom.get( "list-rows" ) , settings.flash );
+      return true;
     } catch ( error ) {
-      Dom.toast( error.message , "error" );
-      // What is on screen may be ahead of the server now: ask again.
-      if ( slug === this.slug ) await this.open( slug ).catch( () => {} );
+      this.failed( slug , error );
+      return false;
     }
   },
 
-  item( key ) {
-    const items = ( this.view && this.view.doc.items ) || [];
-    const index = items.findIndex( ( item ) => item.key === key );
-    return index < 0 ? null : { index: index , item: items[ index ] };
+  // One undoable change whose undo is the version kept from just before it:
+  // for changes too wide to invert op by op (a new order, the shelf, imports).
+  async changeWhole( label , ops , options ) {
+    const slug = this.slug;
+    const settings = options || {};
+    let before = null;
+    let answer = null;
+    try {
+      await Undo.run( {
+        label: I18n.get( label ),
+        toast: settings.toast !== false,
+        do: async () => {
+          const rev = this.view.rev;
+          const sent = await this.send( slug , ops );
+          if ( sent.changed ) before = rev;
+          answer = sent;
+          return sent;
+        },
+        undo: () => ( before === null ? Promise.resolve() : this.restoreTo( slug , before ) ),
+      } );
+      return answer;
+    } catch ( error ) {
+      this.failed( slug , error );
+      return null;
+    }
+  },
+
+  failed( slug , error ) {
+    Dom.toast( error.message , "error" );
+    // What is on screen may be ahead of the server now: ask again.
+    if ( slug === this.slug ) this.open( slug ).catch( () => {} );
   },
 
   move( key , position ) {
-    const found = this.item( key );
-    if ( !found ) return;
-    this.change( "undo.list_move" , [ { op: "move" , row: key , to: position } ] , [ { op: "move" , row: key , to: found.index + 1 } ] , { flash: key } );
+    const at = this.positions.get( key );
+    if ( !at ) return;
+    this.change( "undo.list_move" , [ { op: "move" , row: key , to: position } ] , [ { op: "move" , row: key , to: at } ] , { flash: key } );
   },
 
+  // Dropped next to another row. A selected row brings the whole selection.
   moveNear( key , anchor , side ) {
-    const found = this.item( key );
-    if ( !found ) return;
+    const selected = ListTools.selectedKeys();
+    if ( selected.length > 1 && selected.includes( key ) && !selected.includes( anchor ) ) {
+      const to = {};
+      to[ side ] = anchor;
+      this.changeWhole( "undo.list_move" , [ { op: "reorder" , rows: selected , at: to } ] , { toast: false } );
+      return;
+    }
+    const at = this.positions.get( key );
+    if ( !at ) return;
     const to = {};
     to[ side ] = anchor;
-    this.change( "undo.list_move" , [ { op: "move" , row: key , to: to } ] , [ { op: "move" , row: key , to: found.index + 1 } ] , { flash: key } );
+    this.change( "undo.list_move" , [ { op: "move" , row: key , to: to } ] , [ { op: "move" , row: key , to: at } ] , { flash: key } );
   },
 
   remove( key ) {
-    const found = this.item( key );
-    if ( !found ) return;
-    const item = found.item;
+    const item = this.items.get( key );
+    if ( !item ) return;
     // Everything the row was, so putting it back loses nothing: its tags, its
     // cells, where it stood.
     const paper = { key: item.key , title: item.title || "" , doi: item.doi || "" , year: item.year || null , journal: item.journal || "" };
     if ( item.authors ) paper.authors = item.authors;
     const back = [ {
-      op: "add" , paper: paper , at: found.index + 1 , tags: item.tags || [] ,
+      op: "add" , paper: paper , at: this.positions.get( key ) , tags: item.tags || [] ,
       cells: item.fields || {} , auto_tag: false , prefill: false ,
     } ];
+    ListTools.unselect( key );
     this.change( "undo.list_remove" , [ { op: "remove" , rows: [ key ] } ] , back , { toast: true } );
   },
 
-  addTag( key , name ) {
-    const found = this.item( key );
-    if ( !found ) return;
-    if ( ( found.item.tags || [] ).some( ( tag ) => tag.toLowerCase() === name.toLowerCase() ) ) return;
-    const vocab = this.view.doc.vocab.tags || [];
-    const known = vocab.find( ( tag ) => tag.name.toLowerCase() === name.toLowerCase() );
-    const ops = [];
-    const back = [ { op: "tag" , row: key , remove: [ known ? known.name : name ] } ];
-    let color = null;
-    if ( !known ) {
-      // A new tag takes the next colour no tag has, nor one still on its way
-      // to the server; undoing takes it off the list's tags again, since only
-      // this row had it.
-      color = TagColors.next( vocab.concat( Array.from( this.claimedColors , ( claimed ) => ( { color: claimed } ) ) ) );
-      this.claimedColors.add( color );
-      ops.push( { op: "tag_create" , name: name , color: color } );
-      back.push( { op: "tag_delete" , name: name } );
-    }
-    ops.push( { op: "tag" , row: key , add: [ known ? known.name : name ] } );
-    this.change( "undo.list_tag" , ops , back ).finally( () => {
-      if ( color ) this.claimedColors.delete( color );
+  row( key ) {
+    return this.items.get( key ) || ( this.shelfItems && this.shelfItems.get( key ) ) || null;
+  },
+
+  vocabEntry( name ) {
+    const vocab = ( this.view.doc.vocab && this.view.doc.vocab.tags ) || [];
+    return vocab.find( ( tag ) => tag.name.toLowerCase() === String( name ).toLowerCase() ) || null;
+  },
+
+  // The ops that make `name` a tag of the list (with a colour of its own)
+  // when it is not one yet, and their undo.
+  createTag( name , ops , back ) {
+    const known = this.vocabEntry( name );
+    if ( known ) return known.name;
+    const vocab = ( this.view.doc.vocab && this.view.doc.vocab.tags ) || [];
+    const color = TagColors.next( vocab.concat( Array.from( this.claimedColors , ( claimed ) => ( { color: claimed } ) ) ) );
+    this.claimedColors.add( color );
+    setTimeout( () => this.claimedColors.delete( color ) , 5000 );
+    ops.push( { op: "tag_create" , name: name , color: color } );
+    back.push( { op: "tag_delete" , name: name } );
+    return name;
+  },
+
+  autoMove() {
+    return Boolean( this.view.doc.options && this.view.doc.options.auto_move );
+  },
+
+  // Tags rows (one row, or a selection) with name. Undo takes it off exactly
+  // the rows that did not have it. With Auto-move on the rows may move too,
+  // so that undo puts the version back instead.
+  addTag( keys , name ) {
+    const lacking = keys.filter( ( key ) => {
+      const row = this.row( key );
+      return row && !( row.tags || [] ).some( ( tag ) => tag.toLowerCase() === name.toLowerCase() );
     } );
+    if ( lacking.length === 0 ) return Promise.resolve( true );
+    const ops = [];
+    const back = [];
+    const real = this.createTag( name , ops , back );
+    ops.push( { op: "tag" , rows: lacking , add: [ real ] } );
+    back.unshift( { op: "tag" , rows: lacking , remove: [ real ] } );
+    if ( this.autoMove() ) return this.changeWhole( "undo.list_tag" , ops , { toast: false } );
+    return this.change( "undo.list_tag" , ops , back );
   },
 
-  removeTag( key , name ) {
-    this.change( "undo.list_tag" , [ { op: "tag" , row: key , remove: [ name ] } ] , [ { op: "tag" , row: key , add: [ name ] } ] );
+  removeTag( keys , name ) {
+    const having = keys.filter( ( key ) => {
+      const row = this.row( key );
+      return row && ( row.tags || [] ).some( ( tag ) => tag.toLowerCase() === name.toLowerCase() );
+    } );
+    if ( having.length === 0 ) return Promise.resolve( true );
+    const ops = [ { op: "tag" , rows: having , remove: [ name ] } ];
+    if ( this.autoMove() ) return this.changeWhole( "undo.list_tag" , ops , { toast: false } );
+    return this.change( "undo.list_tag" , ops , [ { op: "tag" , rows: having , add: [ name ] } ] );
   },
 
-  setNote( key , value , previous ) {
+  setCell( key , column , value , previous ) {
     this.change( "undo.list_note" ,
-      [ { op: "set_cell" , row: key , col: "notes" , value: value } ] ,
-      [ { op: "set_cell" , row: key , col: "notes" , value: previous } ] );
+      [ { op: "set_cell" , row: key , col: column , value: value } ] ,
+      [ { op: "set_cell" , row: key , col: column , value: previous } ] );
   },
 
-  // ---- adding from the library -------------------------------------------
+  // ---- adding from the library: search, or what was saved recently ------------
 
-  searchLater() {
-    clearTimeout( this.addTimer );
-    this.addTimer = setTimeout( () => this.search() , 150 );
+  initAdd() {
+    const add = Dom.get( "list-add" );
+    add.addEventListener( "input" , () => {
+      clearTimeout( this.addTimer );
+      this.addTimer = setTimeout( () => this.search() , 150 );
+    } );
+    add.addEventListener( "keydown" , ( event ) => this.onAddKey( event ) );
+    Dom.get( "list-add-results" ).addEventListener( "keydown" , ( event ) => {
+      if ( event.key === "Escape" ) {
+        this.closeHits();
+        add.focus();
+      }
+    } );
+    Dom.onPress( Dom.get( "list-recent" ) , () => this.recent() );
+    Dom.onPress( Dom.get( "list-add-picked" ) , () => this.addPicked() );
+    Dom.get( "list-add-close" ).addEventListener( "click" , () => this.closeHits() );
+    // Open while the pointer or the focus is in it: the hits have boxes of
+    // their own (a tag, a position) to type in.
+    document.addEventListener( "mousedown" , ( event ) => {
+      if ( !Dom.get( "list-add-wrap" ).contains( event.target ) ) this.closeHits();
+    } );
+    Dom.get( "list-add-wrap" ).addEventListener( "focusout" , ( event ) => {
+      if ( event.relatedTarget && !Dom.get( "list-add-wrap" ).contains( event.relatedTarget ) ) this.closeHits();
+    } );
   },
 
   async search() {
     const text = Dom.get( "list-add" ).value.trim();
     const ticket = ++this.addTicket;
     if ( text.length < 2 ) {
-      this.closeHits();
+      if ( this.hitsKind === "search" ) this.closeHits();
       return;
     }
     const params = new URLSearchParams( { q: text , mode: "title" , limit: "8" } );
     const answer = await Api.request( "/api/papers?" + params );
     if ( ticket !== this.addTicket ) return;
-    this.addHits = answer.papers;
-    this.addActive = answer.papers.length ? 0 : -1;
+    this.showHits( "search" , answer.papers , "" );
+  },
+
+  async recent() {
+    const days = Dom.get( "list-recent-days" ).value;
+    const ticket = ++this.addTicket;
+    const params = new URLSearchParams( { days: days , not_on: this.slug , limit: "200" } );
+    const answer = await Api.request( "/api/papers/recent?" + params );
+    if ( ticket !== this.addTicket ) return;
+    this.recentRange = Dom.get( "list-recent-days" ).selectedOptions[ 0 ].textContent;
+    this.recentTotal = answer.total;
+    this.showHits( "recent" , answer.papers , this.recentHead() );
+  },
+
+  recentHead() {
+    return I18n.get( "lists.recent_head" ).replace( "{range}" , () => this.recentRange ).replace( "{count}" , this.recentTotal );
+  },
+
+  showHits( kind , papers , head ) {
+    this.hitsKind = kind;
+    this.hits = papers.map( ( paper ) => Object.assign( {} , paper , { addTags: [] , at: "" } ) );
+    this.picked = new Set();
+    this.active = this.hits.length ? 0 : -1;
+    this.pickAnchor = this.active;
+    Dom.text( Dom.get( "list-add-head" ) , head );
+    Dom.show( Dom.get( "list-add-head" ) , Boolean( head ) );
     this.drawHits();
   },
 
   drawHits() {
     const list = Dom.get( "list-add-results" );
-    const items = this.addHits.map( ( paper , index ) => {
-      const on = this.item( paper.key );
-      const children = [
-        Dom.el( "div" , { class: "paper-title" , text: paper.title } ),
-        Dom.el( "div" , { class: "paper-meta" , text: PaperLinks.meta( paper ) } ),
-      ];
-      if ( on ) children.push( Dom.el( "div" , { class: "small text-success" , text: I18n.get( "lists.add_on_list" ).replace( "{n}" , on.index + 1 ) } ) );
-      const element = Dom.el( "li" , {
-        class: "list-group-item list-group-item-action add-hit" + ( index === this.addActive ? " active" : "" ),
-        attrs: { role: "option" , "aria-selected": String( index === this.addActive ) },
-        children: children,
-      } );
-      // mousedown, not click: the input's blur would close the list first.
-      element.addEventListener( "mousedown" , ( event ) => {
-        event.preventDefault();
-        this.pick( index );
-      } );
-      return element;
-    } );
-    if ( items.length === 0 ) items.push( Dom.el( "li" , { class: "list-group-item text-body-secondary" , text: I18n.get( "lists.add_nothing" ) } ) );
+    const items = this.hits.map( ( paper , index ) => this.hitRow( paper , index ) );
+    if ( items.length === 0 ) {
+      items.push( Dom.el( "li" , { class: "list-group-item text-body-secondary" , text: I18n.get( this.hitsKind === "recent" ? "lists.recent_nothing" : "lists.add_nothing" ) } ) );
+    }
     list.replaceChildren( ...items );
-    Dom.show( list , true );
+    const button = Dom.get( "list-add-picked" );
+    Dom.show( button , this.picked.size > 1 );
+    Dom.text( button , I18n.get( "lists.add_picked" ).replace( "{count}" , this.picked.size ) );
+    Dom.show( Dom.get( "list-add-panel" ) , true );
     Dom.get( "list-add" ).setAttribute( "aria-expanded" , "true" );
+    const active = list.querySelector( ".add-hit.active" );
+    if ( active ) active.scrollIntoView( { block: "nearest" } );
+  },
+
+  hitRow( paper , index ) {
+    const on = this.positions.get( paper.key );
+    const picked = this.picked.has( index );
+    const children = [
+      Dom.el( "div" , { class: "paper-title" , text: paper.title } ),
+      Dom.el( "div" , { class: "paper-meta" , text: PaperLinks.meta( paper ) } ),
+    ];
+    if ( on ) {
+      children.push( Dom.el( "div" , { class: "small text-success" , text: I18n.get( "lists.add_on_list" ).replace( "{n}" , on ) } ) );
+    } else {
+      // A tag and a position for this one, so it arrives where and as it should.
+      const tag = Dom.el( "input" , {
+        class: "form-control form-control-sm tag-input",
+        attrs: { type: "text" , list: "list-tag-options" , autocomplete: "off" , placeholder: I18n.get( "lists.tag_add_placeholder" ) , "aria-label": BoardView.label( "lists.tag_add_label" , paper.title ) },
+      } );
+      tag.value = paper.addTags.join( ", " );
+      tag.addEventListener( "change" , () => {
+        paper.addTags = tag.value.split( "," ).map( ( name ) => name.trim() ).filter( Boolean );
+      } );
+      const at = Dom.el( "input" , {
+        class: "form-control form-control-sm board-row-num",
+        attrs: { type: "text" , inputmode: "numeric" , placeholder: "#" , "aria-label": BoardView.label( "lists.add_at_label" , paper.title ) },
+      } );
+      at.value = paper.at;
+      at.addEventListener( "change" , () => { paper.at = at.value.trim(); } );
+      [ tag , at ].forEach( ( input ) => input.addEventListener( "keydown" , ( event ) => {
+        if ( event.key === "Enter" ) {
+          event.preventDefault();
+          input.dispatchEvent( new Event( "change" ) );
+          this.addHits( this.picked.has( index ) && this.picked.size > 1 ? Array.from( this.picked ) : [ index ] );
+        }
+      } ) );
+      children.push( Dom.el( "div" , { class: "add-hit-extra" , children: [ tag , at ] } ) );
+    }
+    const element = Dom.el( "li" , {
+      class: "list-group-item list-group-item-action add-hit" + ( index === this.active ? " active" : "" ) + ( picked ? " is-picked" : "" ),
+      attrs: { role: "option" , "aria-selected": String( picked || index === this.active ) },
+      children: children,
+    } );
+    element.addEventListener( "mousedown" , ( event ) => {
+      if ( event.target.closest( "input" ) ) return;
+      // Not the input's blur first.
+      event.preventDefault();
+      this.pickHit( index , event );
+    } );
+    element.addEventListener( "dblclick" , ( event ) => {
+      if ( event.target.closest( "input" ) ) return;
+      this.addHits( [ index ] );
+    } );
+    return element;
+  },
+
+  // Click picks one, Cmd/Ctrl-click adds or drops one, Shift-click a range.
+  pickHit( index , event ) {
+    if ( event.metaKey || event.ctrlKey ) {
+      if ( this.picked.has( index ) ) this.picked.delete( index );
+      else this.picked.add( index );
+      this.pickAnchor = index;
+    } else if ( event.shiftKey && this.pickAnchor >= 0 ) {
+      const [ low , high ] = [ Math.min( this.pickAnchor , index ) , Math.max( this.pickAnchor , index ) ];
+      this.picked = new Set();
+      for ( let i = low ; i <= high ; i++ ) this.picked.add( i );
+    } else {
+      this.picked = new Set( [ index ] );
+      this.pickAnchor = index;
+    }
+    this.active = index;
+    this.drawHits();
   },
 
   closeHits() {
-    Dom.show( Dom.get( "list-add-results" ) , false );
+    Dom.show( Dom.get( "list-add-panel" ) , false );
     Dom.get( "list-add" ).setAttribute( "aria-expanded" , "false" );
   },
 
   onAddKey( event ) {
-    const open = !Dom.get( "list-add-results" ).hidden;
+    const open = !Dom.get( "list-add-panel" ).hidden;
     if ( event.key === "ArrowDown" || event.key === "ArrowUp" ) {
-      if ( !open || !this.addHits.length ) return;
+      if ( !open || !this.hits.length ) return;
       event.preventDefault();
       const step = event.key === "ArrowDown" ? 1 : -1;
-      this.addActive = ( this.addActive + step + this.addHits.length ) % this.addHits.length;
+      this.active = ( this.active + step + this.hits.length ) % this.hits.length;
+      if ( event.shiftKey ) this.picked.add( this.active );
       this.drawHits();
     } else if ( event.key === "Enter" ) {
       event.preventDefault();
-      if ( open && this.addActive >= 0 ) this.pick( this.addActive );
+      if ( !open ) return;
+      if ( this.picked.size > 1 ) this.addPicked();
+      else if ( this.active >= 0 ) this.addHits( [ this.active ] );
     } else if ( event.key === "Escape" ) {
       this.closeHits();
     }
   },
 
-  pick( index ) {
-    const paper = this.addHits[ index ];
-    if ( !paper || !this.view ) return;
-    const on = this.item( paper.key );
-    if ( on ) {
-      // Already here: show it rather than refuse.
-      this.closeHits();
-      BoardView.flash( Dom.get( "list-rows" ) , paper.key );
+  addPicked() {
+    return this.addHits( Array.from( this.picked ).sort( ( a , b ) => a - b ) );
+  },
+
+  // Adds hits as one change: each with its tags, at its position if it has
+  // one. Papers already on the list are shown rather than refused.
+  async addHits( indexes ) {
+    const papers = indexes.map( ( index ) => this.hits[ index ] ).filter( Boolean );
+    const fresh = papers.filter( ( paper ) => !this.positions.has( paper.key ) );
+    if ( fresh.length === 0 ) {
+      if ( papers[ 0 ] ) BoardView.flash( Dom.get( "list-rows" ) , papers[ 0 ].key );
       return;
     }
-    Dom.get( "list-add" ).value = "";
-    this.closeHits();
-    this.change( "undo.list_add" , [ { op: "add" , paper: paper.key } ] , [ { op: "remove" , rows: [ paper.key ] } ] , { flash: paper.key } );
+    const ops = [];
+    const back = [];
+    fresh.forEach( ( paper ) => {
+      const tags = paper.addTags.map( ( name ) => this.createTag( name , ops , back ) );
+      const op = { op: "add" , paper: paper.key };
+      if ( tags.length ) op.tags = tags;
+      const at = parseInt( paper.at , 10 );
+      if ( Number.isFinite( at ) && at > 0 ) op.at = at;
+      ops.push( op );
+    } );
+    back.unshift( { op: "remove" , rows: fresh.map( ( paper ) => paper.key ) } );
+    const added = new Set( fresh.map( ( paper ) => paper.key ) );
+    const done = await this.change( fresh.length > 1 ? "undo.list_add_many" : "undo.list_add" , ops , back , { flash: fresh[ 0 ].key } );
+    if ( !done ) return;
+    if ( this.hitsKind === "recent" ) {
+      // Recently added lists what is NOT on the list: what was added goes.
+      this.hits = this.hits.filter( ( paper ) => !added.has( paper.key ) );
+      this.recentTotal = Math.max( 0 , this.recentTotal - added.size );
+      Dom.text( Dom.get( "list-add-head" ) , this.recentHead() );
+      this.picked = new Set();
+      this.active = Math.min( this.active , this.hits.length - 1 );
+      this.drawHits();
+    } else {
+      Dom.get( "list-add" ).value = "";
+      this.closeHits();
+    }
   },
 
   // ---- live ------------------------------------------------------------------
@@ -384,14 +738,24 @@ const Lists = {
         this.loadLists().catch( () => {} );
         return;
       }
-      if ( data.slug !== this.slug || !this.view || data.rev <= this.view.rev ) return;
+      if ( data.slug !== this.slug || !this.view ) return;
+      if ( data.locked !== undefined && data.locked !== this.view.locked ) {
+        // View-only switched, here or in another tab: every row changes.
+        this.view.locked = data.locked;
+        this.draw();
+        if ( data.by && data.by !== this.me.display_name ) {
+          this.state( "" , I18n.get( data.locked ? "lists.locked_by" : "lists.unlocked_by" ).replace( "{by}" , () => data.by ) );
+        }
+        return;
+      }
+      if ( data.rev <= this.view.rev ) return;
       if ( this.sending > 0 ) {
         this.heard = Math.max( this.heard , data.rev );
         return;
       }
       this.open( data.slug ).then( () => {
         if ( data.by && data.by !== this.me.display_name ) {
-          Dom.text( Dom.get( "list-state" ) , I18n.get( "lists.changed_by" ).replace( "{by}" , () => data.by ) );
+          this.state( "" , I18n.get( "lists.changed_by" ).replace( "{by}" , () => data.by ) );
         }
       } ).catch( () => {} );
     } );

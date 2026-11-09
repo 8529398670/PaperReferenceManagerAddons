@@ -186,6 +186,7 @@ def build_routes(static_server: StaticServer, cfg: Config) -> list[BaseRoute]:
         owner("/api/owner/jobs/{name}/run", jobs.run_job, ["POST"]),
         # The Zotero library, read live. See app/library/ and routes/library.py.
         signed_in("/api/papers", library.list_papers),
+        signed_in("/api/papers/recent", library.recent_papers),
         signed_in("/api/paper", library.get_paper),
         signed_in("/api/paper/pdf", library.get_pdf),
         signed_in("/api/library/status", library.library_status),
@@ -201,6 +202,15 @@ def build_routes(static_server: StaticServer, cfg: Config) -> list[BaseRoute]:
         signed_in("/api/lists/stream", boards.stream_lists),
         signed_in("/api/lists/{slug}", boards.get_list),
         signed_in("/api/lists/{slug}/ops", boards.post_ops, ["POST"]),
+        signed_in("/api/lists/{slug}/rows", boards.get_rows),
+        signed_in("/api/lists/{slug}/export.csv", boards.get_export_csv, ["GET", "POST"]),
+        signed_in("/api/lists/{slug}/history", boards.get_history),
+        signed_in("/api/lists/{slug}/history/{rev}", boards.get_version),
+        signed_in("/api/lists/{slug}/restore", boards.post_restore, ["POST"]),
+        signed_in("/api/lists/{slug}/lock", boards.post_lock, ["POST"]),
+        signed_in("/api/cite", boards.post_cite, ["POST"]),
+        signed_in("/api/cite/styles", boards.get_cite_styles),
+        signed_in("/api/refs/parse", boards.post_refs_parse, ["POST"]),
     ]
 
     # The activity log (app/core/logs.py). Switched off in config.yaml, none

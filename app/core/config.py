@@ -173,6 +173,7 @@ class LibrarySection:
     zotero_dir: str
     watch_seconds: int
     proxy_url: str
+    cite_style: str
 
 
 @dataclass
@@ -259,6 +260,7 @@ class LibraryConfig:
     zotero_dir: Path = Path("~/Zotero")
     watch_seconds: int = 2
     proxy_url: str = ""
+    cite_style: str = ""
     index_path: Path = Path("cache/search.db")
 
 
@@ -346,7 +348,7 @@ class Config:
     rate_limit_window_seconds: int = 60
     # The separate budget for signing in and joining.
     rate_limit_signin_max: int = 60
-    body_limit_bytes: int = 1048576
+    body_limit_bytes: int = 16777216
 
     # proxy_header is believed only when trust_proxy is on *and* the
     # connection comes from an address in trusted_proxies (IPs or CIDR
@@ -1000,6 +1002,7 @@ def library_config(file: File, paths: "Paths") -> LibraryConfig:
         zotero_dir=zotero,
         watch_seconds=file.library.watch_seconds,
         proxy_url=file.library.proxy_url,
+        cite_style=file.library.cite_style,
         index_path=paths.app_dir / "cache" / "search.db",
     )
 

@@ -41,6 +41,16 @@ def get_list(call: Call) -> dict[str, Any]:
     return {"list": service.view(record)}
 
 
+def list_history(call: Call) -> dict[str, Any]:
+    args = call.bind({"slug": str}, optional={"rev": int})
+    try:
+        if "rev" in args:
+            return {"version": boards.version(call.store, args["slug"], args["rev"])}
+        return {"versions": boards.history(call.store, args["slug"])}
+    except boards.BoardError as refusal:
+        raise Refusal(str(refusal)) from None
+
+
 def list_schema(call: Call) -> dict[str, Any]:
     call.bind({})
     return schema_body()
@@ -100,6 +110,18 @@ def register(registry: Registry) -> None:
         read_only=True,
     ))
     registry.register(Tool(
+        name="list_history",
+        title="A list's past versions",
+        description=(
+            "The kept versions of a list (the last 40), newest first: rev, when, by whom, row and shelf counts. "
+            "With rev, that one version's whole document. Version N is the list as it stood before the change that made rev N+1. "
+            "Restoring is done from the page."
+        ),
+        call=list_history,
+        input_schema={"type": "object", "properties": {"slug": SLUG, "rev": {"type": "integer", "minimum": 1}}, "required": ["slug"], "additionalProperties": False},
+        read_only=True,
+    ))
+    registry.register(Tool(
         name="list_schema",
         title="List ops reference",
         description="Every op list_ops takes, with its parameters, plus how rows and positions are named. Read it before a first list_ops call.",
@@ -122,7 +144,7 @@ def register(registry: Registry) -> None:
             "type": "object",
             "properties": {
                 "slug": SLUG,
-                "ops": {"type": "array", "items": {"type": "object"}, "minItems": 1, "maxItems": 500},
+                "ops": {"type": "array", "items": {"type": "object"}, "minItems": 1, "maxItems": 5000},
                 "if_rev": {"type": "integer"},
                 "dry_run": {"type": "boolean"},
             },

@@ -7,7 +7,7 @@ import asyncio
 import json
 from typing import Any
 
-from app.boards import ops, store as boards
+from app.boards import cite, ops, refs, store as boards
 from app.core import db, sse
 from app.library.catalogue import Catalogue
 from app.search import query as q
@@ -28,9 +28,13 @@ class BoardService:
     def stop(self) -> None:
         self.hub.close()
 
-    def changed(self, slug: str, rev: int, by: str) -> None:
-        """Tell open pages. Safe from any thread."""
-        message = sse.event("list", json.dumps({"slug": slug, "rev": rev, "by": by}))
+    def changed(self, slug: str, rev: int, by: str, locked: bool | None = None) -> None:
+        """Tell open pages. Safe from any thread. locked rides along when the
+        view-only switch moved (rev does not move for that)."""
+        data: dict[str, Any] = {"slug": slug, "rev": rev, "by": by}
+        if locked is not None:
+            data["locked"] = locked
+        message = sse.event("list", json.dumps(data))
         if self._loop is None:
             return
         try:
@@ -82,8 +86,30 @@ class BoardService:
                 out[key] = {"in_library": True}
         return out
 
+    def parse_refs(self, text: str) -> list[dict[str, Any]]:
+        return refs.resolve(self.catalogue, text)
+
     def ctx(self) -> ops.Ctx:
-        return ops.Ctx(resolve=self.resolve, meta=self.meta)
+        return ops.Ctx(resolve=self.resolve, meta=self.meta, parse_refs=self.parse_refs, cite_styles=cite.usable())
+
+    # -- citations ---------------------------------------------------------------
+
+    def cite_style(self, doc: dict[str, Any] | None, default: str) -> str:
+        """The style a list's citations use: its own, then config's, then the
+        bundled default, then the first usable one."""
+        own = ((doc or {}).get("options") or {}).get("cite_style") or ""
+        return cite.resolve_style(own, default)
+
+    def cites(self, style: str, rows: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
+        """key -> {intext, full} for list rows (or bare {key} dicts)."""
+        out = {}
+        for row in rows:
+            key = row.get("key") or ""
+            if not key:
+                continue
+            paper = self.catalogue.get(key)
+            out[key] = cite.render(style, key, paper.record if paper is not None else None, row)
+        return out
 
     # -- the rows as the page draws them ---------------------------------------
 

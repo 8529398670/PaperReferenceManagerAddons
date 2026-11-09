@@ -176,13 +176,21 @@
           </div>
         </section>
 
-        <!-- Curated, ordered, tagged lists of papers. static/js/lists.js + board_view.js -->
+        <!-- Curated, ordered, tagged lists of papers. static/js/lists.js (state, sending, adding),
+             board_view.js (the rows), list_tools.js (tag bar, selection, filter, order, jump),
+             list_panels.js (the list menu's dialogs: columns, colours, history, CSV, references, shelf). -->
         <section class="card view" data-view="lists" id="lists-panel" hidden>
           <div class="card-body">
             <div class="d-flex flex-wrap align-items-center gap-2">
               <h2 class="h4 card-title mb-0 me-2" data-i18n="lists.heading"></h2>
               <label for="list-picker" class="visually-hidden" data-i18n="lists.picker_label"></label>
               <select id="list-picker" class="form-select w-auto"></select>
+              <div class="dropdown" id="list-menu-holder" hidden>
+                <button id="list-menu" type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                  <i class="bi bi-list-ul" aria-hidden="true"></i> <span data-i18n="lists.menu"></span>
+                </button>
+                <ul id="list-menu-items" class="dropdown-menu"></ul>
+              </div>
               <button id="list-new" type="button" class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-plus-lg" aria-hidden="true"></i> <span data-i18n="lists.new"></span>
               </button>
@@ -203,24 +211,116 @@
             <p id="lists-none" class="text-body-secondary mt-3" hidden data-i18n="lists.none"></p>
 
             <div id="list-body" hidden>
-              <div class="row g-2 mt-2">
-                <div class="col-lg position-relative">
-                  <label for="list-add" class="visually-hidden" data-i18n="lists.add_label"></label>
-                  <input id="list-add" class="form-control" type="search" autocomplete="off" spellcheck="false"
-                         role="combobox" aria-expanded="false" aria-controls="list-add-results"
-                         data-i18n-attr="placeholder:lists.add_placeholder" />
-                  <ul id="list-add-results" class="list-group add-results shadow-sm" role="listbox" hidden></ul>
-                </div>
-                <div class="col-lg-4">
-                  <label for="list-filter" class="visually-hidden" data-i18n="lists.filter_label"></label>
-                  <input id="list-filter" class="form-control" type="search" autocomplete="off"
-                         data-i18n-attr="placeholder:lists.filter_placeholder" />
+              <p id="list-view-only" class="alert alert-secondary py-2 mt-2 mb-0" hidden data-i18n="lists.view_only"></p>
+              <div id="list-editing" class="row g-2 mt-2">
+                <div id="list-add-wrap" class="col-lg position-relative">
+                  <div class="input-group">
+                    <label for="list-add" class="visually-hidden" data-i18n="lists.add_label"></label>
+                    <input id="list-add" class="form-control" type="search" autocomplete="off" spellcheck="false"
+                           role="combobox" aria-expanded="false" aria-controls="list-add-panel"
+                           data-i18n-attr="placeholder:lists.add_placeholder" />
+                    <label for="list-recent-days" class="visually-hidden" data-i18n="lists.recent_range"></label>
+                    <select id="list-recent-days" class="form-select flex-grow-0 w-auto">
+                      <option value="7" data-i18n="lists.recent_week"></option>
+                      <option value="14" data-i18n="lists.recent_2weeks"></option>
+                      <option value="31" data-i18n="lists.recent_month"></option>
+                    </select>
+                    <button id="list-recent" type="button" class="btn btn-outline-secondary">
+                      <i class="bi bi-clock-history" aria-hidden="true"></i> <span data-i18n="lists.recent"></span>
+                    </button>
+                  </div>
+                  <div id="list-add-panel" class="add-results card shadow-sm" hidden>
+                    <div id="list-add-head" class="small text-body-secondary px-3 pt-2"></div>
+                    <ul id="list-add-results" class="list-group list-group-flush" role="listbox" aria-multiselectable="true"></ul>
+                    <div class="d-flex flex-wrap align-items-center gap-2 px-3 py-2 border-top">
+                      <button id="list-add-picked" type="button" class="btn btn-primary btn-sm" hidden></button>
+                      <span class="form-text m-0 flex-grow-1" data-i18n="lists.add_help"></span>
+                      <button id="list-add-close" type="button" class="btn btn-link btn-sm" data-i18n="lists.close"></button>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <p class="form-text mb-0" data-i18n="lists.add_help"></p>
-              <p id="list-view-only" class="alert alert-secondary py-2 mt-2" hidden data-i18n="lists.view_only"></p>
+
+              <section id="list-shelf" class="list-shelf mt-3" hidden aria-labelledby="list-shelf-title">
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                  <h3 id="list-shelf-title" class="h6 mb-0"></h3>
+                  <div class="form-check mb-0 ms-2">
+                    <input id="list-shelf-all" class="form-check-input" type="checkbox" />
+                    <label for="list-shelf-all" class="form-check-label small" data-i18n="lists.shelf_all"></label>
+                  </div>
+                  <label for="list-shelf-tag" class="visually-hidden" data-i18n="lists.shelf_tag_label"></label>
+                  <input id="list-shelf-tag" class="form-control form-control-sm tag-input" list="list-tag-options" autocomplete="off"
+                         data-i18n-attr="placeholder:lists.shelf_tag_placeholder" />
+                  <button id="list-shelf-drop" type="button" class="btn btn-outline-danger btn-sm" data-i18n="lists.shelf_drop"></button>
+                  <button id="list-shelf-add" type="button" class="btn btn-primary btn-sm"></button>
+                  <span id="list-shelf-note" class="small text-body-secondary"></span>
+                </div>
+                <ol id="list-shelf-rows" class="list-unstyled board-rows board-shelf board-scroll mt-2"></ol>
+              </section>
+
+              <div id="list-tagbar" class="list-tagbar mt-3">
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                  <input type="checkbox" class="btn-check" id="list-filter-on" autocomplete="off" />
+                  <label class="btn btn-outline-secondary btn-sm" for="list-filter-on">
+                    <i class="bi bi-funnel" aria-hidden="true"></i> <span data-i18n="lists.filter_tags"></span>
+                  </label>
+                  <label for="list-filter-match" class="visually-hidden" data-i18n="lists.filter_match_label"></label>
+                  <select id="list-filter-match" class="form-select form-select-sm w-auto" hidden>
+                    <option value="any" data-i18n="lists.match_any"></option>
+                    <option value="all" data-i18n="lists.match_all"></option>
+                    <option value="none" data-i18n="lists.match_none"></option>
+                  </select>
+                  <label for="list-tag-find" class="visually-hidden" data-i18n="lists.tag_find_label"></label>
+                  <input id="list-tag-find" class="form-control form-control-sm w-auto" type="text" list="list-tag-options" autocomplete="off"
+                         data-i18n-attr="placeholder:lists.tag_find_placeholder" />
+                  <label for="list-filter" class="visually-hidden" data-i18n="lists.filter_label"></label>
+                  <input id="list-filter" class="form-control form-control-sm w-auto flex-grow-1" type="text" autocomplete="off"
+                         data-i18n-attr="placeholder:lists.filter_placeholder" />
+                  <span id="list-paint" class="small" hidden></span>
+                </div>
+                <div id="list-chips" class="list-chips mt-2" role="toolbar" data-i18n-attr="aria-label:lists.chips_label"></div>
+                <button id="list-chips-more" type="button" class="btn btn-link btn-sm px-0" aria-controls="list-chips" hidden></button>
+              </div>
+
+              <div id="list-tools" class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                <div class="dropdown">
+                  <button id="list-order" type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-sort-down" aria-hidden="true"></i> <span data-i18n="lists.order_by"></span>
+                  </button>
+                  <ul id="list-order-items" class="dropdown-menu"></ul>
+                </div>
+                <input type="checkbox" class="btn-check" id="list-auto-move" autocomplete="off" />
+                <label class="btn btn-outline-secondary btn-sm" for="list-auto-move" data-i18n="lists.auto_move" data-i18n-attr="title:lists.auto_move_help"></label>
+                <label for="list-add-where" class="small text-body-secondary" data-i18n="lists.add_where"></label>
+                <select id="list-add-where" class="form-select form-select-sm w-auto">
+                  <option value="bottom" data-i18n="lists.where_bottom"></option>
+                  <option value="top" data-i18n="lists.where_top"></option>
+                  <option value="placed" data-i18n="lists.where_placed"></option>
+                </select>
+                <span class="vr mx-1"></span>
+                <label for="list-jump" class="visually-hidden" data-i18n="lists.jump_label"></label>
+                <input id="list-jump" class="form-control form-control-sm board-row-num" type="text" inputmode="numeric" autocomplete="off"
+                       data-i18n-attr="placeholder:lists.jump_placeholder,title:lists.jump_label" />
+                <button id="list-to-anchor" type="button" class="btn btn-outline-secondary btn-sm" disabled>
+                  <i class="bi bi-anchor" aria-hidden="true"></i> <span data-i18n="lists.to_anchor"></span>
+                </button>
+                <button id="list-to-top" type="button" class="btn btn-outline-secondary btn-sm" data-i18n-attr="title:lists.to_top,aria-label:lists.to_top">
+                  <i class="bi bi-arrow-up" aria-hidden="true"></i>
+                </button>
+                <button id="list-to-bottom" type="button" class="btn btn-outline-secondary btn-sm" data-i18n-attr="title:lists.to_bottom,aria-label:lists.to_bottom">
+                  <i class="bi bi-arrow-down" aria-hidden="true"></i>
+                </button>
+                <span class="vr mx-1"></span>
+                <input type="checkbox" class="btn-check" id="list-extra" autocomplete="off" />
+                <label class="btn btn-outline-secondary btn-sm" for="list-extra" id="list-extra-label"></label>
+                <span id="list-selection" class="small ms-auto" hidden></span>
+              </div>
+
               <p id="list-filtered" class="small text-body-secondary mt-2 mb-0" hidden></p>
-              <ol id="list-rows" class="list-unstyled board-rows mt-2"></ol>
+              <div id="list-scroll" class="board-scroll mt-2">
+                <div id="list-head" class="board-head" aria-hidden="true"></div>
+                <ol id="list-rows" class="list-unstyled board-rows"></ol>
+              </div>
               <p id="list-empty" class="text-body-secondary mt-3" hidden data-i18n="lists.empty"></p>
               <datalist id="list-tag-options"></datalist>
             </div>
@@ -757,6 +857,23 @@
     </div>
   </div>
 
+  <!-- The list menu's dialogs (columns, colours, history, CSV, references): see ListModal in list_panels.js. -->
+  <div id="list-modal" class="modal fade" tabindex="-1" aria-labelledby="list-modal-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="list-modal-title" class="modal-title fs-5"></h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" data-i18n-attr="aria-label:nav.close"></button>
+        </div>
+        <div class="modal-body">
+          <div id="list-modal-problem" class="alert alert-danger" role="alert" hidden></div>
+          <div id="list-modal-body"></div>
+        </div>
+        <div id="list-modal-foot" class="modal-footer"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- A small form in a dialog: see Dom.form, which fills it in. -->
   <div id="form-modal" class="modal fade" tabindex="-1" aria-labelledby="form-modal-title" aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered">
@@ -800,6 +917,9 @@
   <script src="/js/library.js"></script>
   <script src="/js/board_view.js"></script>
   <script src="/js/lists.js"></script>
+  <script src="/js/list_tools.js"></script>
+  <script src="/js/list_csv.js"></script>
+  <script src="/js/list_panels.js"></script>
   <script src="/js/keys.js"></script>
   <script src="/js/sessions.js"></script>
   <script src="/js/two_factor.js"></script>

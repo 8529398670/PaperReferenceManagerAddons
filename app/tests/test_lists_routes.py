@@ -15,7 +15,10 @@ MINDALIGN = "10.48550/arXiv.2606.20696"
 WOOLRICH = "10.1006/nimg.2001.0931"
 
 
-class LibraryRoutesTest(RoutesTestCase):
+class LibraryCase(RoutesTestCase):
+    """A route test against the fake Zotero, with the library and lists
+    services pointed at it."""
+
     def setUp(self) -> None:
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
@@ -33,6 +36,9 @@ class LibraryRoutesTest(RoutesTestCase):
         library.catalogue.sync()
         self.app.state.library = library
         self.app.state.boards = BoardService(self.store, library.catalogue)
+
+
+class LibraryRoutesTest(LibraryCase):
 
     def test_signed_in_only(self) -> None:
         for path in ("/api/papers", "/api/paper?key=x", "/api/lists", "/api/version", "/api/lists/schema"):

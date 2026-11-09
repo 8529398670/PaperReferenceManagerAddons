@@ -1595,7 +1595,7 @@ def apply_op( doc , ctx , op ):
         raise OpError( "each op must be an object with an \"op\" field" )
     name = op.get( "op" )
     if name not in OPS:
-        raise OpError( f"unknown op {name!r} -- see GET /api/sort/schema" )
+        raise OpError( f"unknown op {name!r} -- see GET /api/lists/schema" )
     fn , spec = OPS[ name ]
     p = { k: v for k , v in op.items() if k != "op" }
     unknown = [ k for k in p if k not in spec ]
@@ -1610,7 +1610,7 @@ def apply_op( doc , ctx , op ):
     return fn( doc , ctx , p )
 
 
-MAX_OPS = 500
+MAX_OPS = 5000
 
 
 def apply_ops( doc , ctx , ops ):
@@ -1706,7 +1706,7 @@ def _csv_cell( v ):
     return "; ".join( t.strip() for t in s.replace( "\r\n" , "\n" ).replace( "\r" , "\n" ).split( "\n" ) if t.strip() )
 
 
-def to_csv( doc , meta=None , cites=None ):
+def to_csv( doc , meta=None , cites=None , keep=None ):
     """toCSV : # , DOI_or_Key , Cite , Title , Year , Tags , <columns> , MD_File
     -- in YOUR order. With the BOM saveCSV puts on , so Excel reads it as UTF-8.
 
@@ -1722,6 +1722,10 @@ def to_csv( doc , meta=None , cites=None ):
     w.writerow( [ "#" , "DOI_or_Key" , "Cite" , "Title" , "Year" , "Tags" ]
         + [ c[ "label" ] for c in cols ] + [ "MD_File" ] )
     for i , it in enumerate( _items( doc ) ):
+        # keep : only these keys ( the page's filter ) , each still numbered
+        # by its real position.
+        if keep is not None and it[ "key" ] not in keep:
+            continue
         m  = meta.get( it[ "key" ] ) or {}
         lk = ( m.get( "in_library" ) and m.get( "key" ) ) or it[ "key" ]
         w.writerow( [ _csv_cell( x ) for x in

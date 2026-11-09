@@ -107,7 +107,7 @@ server:
   # The largest request body accepted, and how many requests one address may
   # make per window before getting 429s. Files the page loads (/js, /css,
   # /vendor, images) do not count: index.html alone pulls in over twenty.
-  body_limit_bytes: 1048576        # 1 MiB [restart]
+  body_limit_bytes: 16777216       # 16 MiB: a whole-list CSV import is one batch [restart]
   rate_limit_max: 120              # [live]
   rate_limit_window_seconds: 60    # [live]
 
@@ -208,6 +208,10 @@ library:
   # A paper's DOI through your library's proxy, for the Proxy link. {doi} is
   # replaced by the DOI; empty hides the link. [live]
   proxy_url: "https://doi-org.ezproxy.libraries.wright.edu/{doi}"
+  # The citation style lists use unless a list picks its own: a .csl file
+  # name in config/citation-styles/ without the extension. Empty, or a style
+  # that is missing or unusable, means the-journal-of-neuroscience. [live]
+  cite_style: ""
 
 
 

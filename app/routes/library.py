@@ -77,6 +77,47 @@ async def list_papers(request: Request) -> Response:
     return JSONResponse(body)
 
 
+def recent_page(catalogue: Catalogue, store: Any, days: int, not_on: str, limit: int, offset: int) -> dict[str, Any] | None:
+    """Papers added in Zotero in the last `days`, newest first, leaving out
+    those already on list `not_on`. None when that list does not exist."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.boards import store as boards
+
+    have: set[str] = set()
+    if not_on:
+        record = boards.get_board(store, not_on)
+        if record is None:
+            return None
+        doc = record["doc"]
+        have = {row["key"] for row in (doc.get("items") or [])}
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+    rows = [p for p in catalogue.all() if (p.record.get("date_added") or "") >= since and p.key not in have]
+    rows.sort(key=lambda p: p.record.get("date_added") or "", reverse=True)
+    page = rows[offset : offset + limit]
+    end = offset + len(page)
+    return {"papers": [public(p) for p in page], "next": end if end < len(rows) else None, "total": len(rows)}
+
+
+async def recent_papers(request: Request) -> Response:
+    """"What did I save this week that isn't on this list yet?" Read from the
+    live catalogue, so a paper saved seconds ago is there."""
+    params = request.query_params
+    days = whole_number(params.get("days"), 7)
+    limit = whole_number(params.get("limit"), PAGE_DEFAULT)
+    offset = whole_number(params.get("offset"), 0)
+    if days is None or not 1 <= days <= 3650:
+        return bad_request("days must be 1-3650")
+    if limit is None or not 1 <= limit <= PAGE_MAX:
+        return bad_request("limit must be 1-1000")
+    if offset is None or offset < 0:
+        return bad_request("offset must be 0 or more")
+    body = await run(recent_page, get_catalogue(request), request.app.state.store, days, params.get("not_on", ""), limit, offset)
+    if body is None:
+        return not_found("no such list")
+    return JSONResponse(body)
+
+
 async def library_status(request: Request) -> Response:
     return JSONResponse(status_body(get_catalogue(request)))
 

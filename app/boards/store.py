@@ -175,3 +175,67 @@ def replace_doc(store: db.Store, slug: str, doc: dict[str, Any], user_name: str)
         tx.put(db.BUCKET_BOARDS, slug, record)
         _drop_old_version(tx, slug, rev)
         return rev + 1
+
+
+def _version_summary(version: dict[str, Any]) -> dict[str, Any]:
+    doc = version.get("doc") or {}
+    return {
+        "rev": version["rev"],
+        "at": version.get("at"),
+        "by": version.get("by") or "",
+        "rows": len(doc.get("items") or []),
+        "shelf": len(doc.get("staging") or []),
+    }
+
+
+def history(store: db.Store, slug: str) -> list[dict[str, Any]]:
+    """The kept versions of a list, newest first: {rev, at, by, rows, shelf}.
+    Version N is the document as it stood at rev N, before the change that
+    made rev N+1. Read by key, newest down, so it never scans the bucket."""
+    record = get_board(store, slug)
+    if record is None:
+        raise BoardError(f"no list {slug!r}", 404)
+    rev = int(record.get("rev", 0))
+    out = []
+    for older in range(rev - 1, max(0, rev - 1 - KEEP_VERSIONS), -1):
+        version = store.get(db.BUCKET_BOARD_VERSIONS, _version_key(slug, older))
+        if version is not None:
+            out.append(_version_summary(version))
+    return out
+
+
+def version(store: db.Store, slug: str, rev: int) -> dict[str, Any]:
+    """One kept version in full: its summary plus doc."""
+    if get_board(store, slug) is None:
+        raise BoardError(f"no list {slug!r}", 404)
+    found = store.get(db.BUCKET_BOARD_VERSIONS, _version_key(slug, rev))
+    if found is None:
+        raise BoardError(f"version {rev} of {slug!r} is not kept", 404)
+    return {**_version_summary(found), "doc": found.get("doc") or {}}
+
+
+def restore(store: db.Store, slug: str, rev: int, user_name: str) -> int:
+    """Put a kept version back as one NEW version (the current one is kept
+    first, so a restore is itself undoable). Refused while the list is
+    view-only. Answers the new rev."""
+    record = get_board(store, slug)
+    if record is None:
+        raise BoardError(f"no list {slug!r}", 404)
+    if record.get("locked"):
+        raise BoardError("this list is view-only -- unlock it to change it", 403)
+    old = version(store, slug, rev)
+    return replace_doc(store, slug, old["doc"], user_name)
+
+
+def set_locked(store: db.Store, slug: str, locked: bool, user_name: str) -> dict[str, Any]:
+    """Make a list view-only for everyone, or editable again. Not a change to
+    its document, so its rev stays put and no version is kept."""
+    with store.transaction() as tx:
+        record = tx.get(db.BUCKET_BOARDS, slug)
+        if record is None or record.get("deleted"):
+            raise BoardError(f"no list {slug!r}", 404)
+        record["locked"] = bool(locked)
+        record["locked_by"] = user_name
+        record["locked_at"] = to_iso(utc_now())
+        tx.put(db.BUCKET_BOARDS, slug, record)
+        return record

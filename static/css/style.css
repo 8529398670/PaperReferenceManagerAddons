@@ -427,43 +427,106 @@ th[aria-sort="descending"] .th-sort::after { content: " \2193"; }
   z-index: 20;
   left: calc(var(--bs-gutter-x) * 0.5);
   right: calc(var(--bs-gutter-x) * 0.5);
-  max-height: 24rem;
-  overflow-y: auto;
 }
+.add-results .list-group { max-height: 26rem; overflow-y: auto; }
 .add-hit { cursor: pointer; }
-.add-hit.active .paper-meta, .add-hit.active .text-success { color: inherit !important; }
+.add-hit.is-picked { background: color-mix(in srgb, var(--app-accent) 14%, var(--app-surface)); }
+.add-hit.active { outline: 2px solid var(--app-accent); outline-offset: -2px; background: color-mix(in srgb, var(--app-accent) 8%, var(--app-surface)); color: inherit; }
+.add-hit-extra { display: flex; gap: 0.4rem; margin-top: 0.3rem; }
+.add-hit-extra .board-row-num { width: 3.5rem; height: 1.55rem; padding: 0 0.3rem; font-size: 0.8rem; }
+
+/* The board: one grid for the header and every row, so the columns line up.
+   lists.js sets --board-grid (the tracks) and --board-min (their least width)
+   on .board-scroll; past that width it scrolls sideways under the pinned
+   # and Paper columns. */
+#list-body {
+  --board-side: 7.5rem;
+  --board-col: 16rem;
+}
+.board-scroll { overflow-x: auto; }
+.board-head, .board-rows > .board-row {
+  display: grid;
+  grid-template-columns: var(--board-grid, var(--board-side) minmax(18rem, 1fr) 2.25rem);
+  min-width: var(--board-min, 0);
+  column-gap: 0.75rem;
+}
+.board-head { font-size: 0.8rem; color: var(--bs-secondary-color); border-bottom: 1px solid var(--app-border); }
+.board-head-cell { position: relative; padding: 0.25rem 0.25rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.board-head-cell.board-cell-side, .board-head-cell.board-cell-paper { background: var(--app-surface); }
+.board-resize { position: absolute; top: 0; right: 0; bottom: 0; width: 0.5rem; cursor: col-resize; border-right: 2px solid transparent; touch-action: none; }
+.board-resize:hover { border-right-color: var(--app-accent); }
 
 .board-rows { margin: 0; }
 .board-row {
   /* Rows out of view skip layout and paint, so a list of a thousand papers
      scrolls and redraws as fast as a short one. */
   content-visibility: auto;
-  contain-intrinsic-size: auto 9rem;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 0.5rem 0.75rem;
+  contain-intrinsic-size: auto 8rem;
   align-items: start;
-  padding: 0.6rem 0.25rem;
+  padding: 0.5rem 0;
   border-bottom: 1px solid var(--app-border);
   border-top: 2px solid transparent;
+  background: var(--app-surface);
 }
-.board-row-side { display: flex; align-items: center; gap: 0.25rem; }
-.board-row-num { width: 3.5rem; text-align: center; font-variant-numeric: tabular-nums; }
+.board-cell-side { display: flex; align-items: center; gap: 0.15rem; padding-left: 0.25rem; }
+.board-cell-side > * { flex-shrink: 0; }
+.board-cell-side, .board-cell-paper { position: sticky; z-index: 1; background: inherit; }
+.board-cell-side { left: 0; }
+.board-cell-paper { left: var(--board-side); min-width: 0; }
+.board-cell-end { display: flex; justify-content: end; }
+.board-row-num { width: 3.25rem; text-align: center; font-variant-numeric: tabular-nums; }
 .board-row-grip { cursor: grab; color: var(--bs-secondary-color); padding: 0.25rem 0.1rem; touch-action: none; }
-.board-row-main { min-width: 0; }
+.board-row-anchor { padding: 0.1rem 0.15rem; color: var(--bs-secondary-color); opacity: 0; }
+.board-row:hover .board-row-anchor, .board-row-anchor:focus-visible, .board-row-anchor.is-on { opacity: 1; }
+.board-row-anchor.is-on { color: var(--app-accent); }
 .board-row-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; margin-top: 0.35rem; }
-.board-row-note { margin-top: 0.35rem; resize: vertical; field-sizing: content; min-height: calc(1.5em + 0.5rem + 2px); max-height: 20rem; }
 .board-row-remove { color: var(--bs-secondary-color); }
 .board-row-remove:hover, .board-row-remove:focus-visible { color: var(--bs-danger); }
+.board-cite { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.6rem; margin-top: 0.2rem; font-size: 0.85rem; }
+.board-cite-text { color: var(--bs-secondary-color); }
+.board-copy { font-size: 0.8rem; text-decoration: none; }
+.board-row.is-selected { background: color-mix(in srgb, var(--app-accent) 12%, var(--app-surface)); }
+.board-rows.is-painting > .board-row { cursor: copy; }
 .board-row.is-dragging { opacity: 0.4; }
 .board-row.drop-before { border-top-color: var(--app-accent); }
 .board-row.drop-after { border-bottom: 2px solid var(--app-accent); }
 .board-row.is-flashing { animation: row-flash 1.2s ease-out; }
 @keyframes row-flash {
-  from { background-color: color-mix(in srgb, var(--app-accent) 22%, transparent); }
-  to { background-color: transparent; }
+  from { box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--app-accent) 22%, transparent); }
+  to { box-shadow: inset 0 0 0 999px transparent; }
 }
 
+/* A cell reads as text, with live links; a click turns it into a box. */
+.board-cell {
+  min-height: 1.9rem;
+  min-width: 0;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: var(--bs-border-radius-sm);
+  font-size: 0.875rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
+  max-height: 20rem;
+  overflow-y: auto;
+}
+.board-cell:hover, .board-cell:focus-visible { border-color: var(--app-border); }
+.board-cell a { color: var(--app-link); }
+.board-cell-placeholder { color: var(--bs-secondary-color); opacity: 0.55; }
+.board-cell:has(textarea) { padding: 0; border: 0; overflow: visible; max-height: none; }
+.board-cell-edit { resize: vertical; field-sizing: content; min-height: 1.9rem; max-height: 24rem; font-size: 0.875rem; }
+.is-locked .board-cell { cursor: auto; }
+.is-locked .board-cell:hover { border-color: transparent; }
+
+.list-shelf { padding: 0.75rem; border: 1px dashed var(--app-border); border-radius: var(--bs-border-radius); background: color-mix(in srgb, var(--app-accent) 4%, var(--app-surface)); }
+.list-shelf .board-row { background: transparent; }
+.board-shelf-title { font-weight: 600; }
+.refs-preview { max-height: 18rem; overflow-y: auto; }
+.history-list { max-height: 16rem; overflow-y: auto; }
+
+.list-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+#list-add-where { max-width: 15rem; }
+.list-chips.is-folded { max-height: 5.4rem; overflow: hidden; }
 .tag-chip {
   display: inline-flex;
   align-items: center;
@@ -473,6 +536,12 @@ th[aria-sort="descending"] .th-sort::after { content: " \2193"; }
   font-size: 0.8rem;
   line-height: 1.5;
 }
+.tag-chip-bar { border: 1px solid transparent; cursor: pointer; }
+.tag-chip-bar:focus-visible { outline: 2px solid var(--app-accent); outline-offset: 1px; }
+.tag-chip-bar.is-filter { border-color: #20242c; box-shadow: 0 0 0 1px #20242c; }
+.tag-chip-bar.is-armed { box-shadow: 0 0 0 2px var(--app-accent); }
+.tag-chip-bar.is-on { font-weight: 700; }
+.tag-chip-count { margin-left: 0.3rem; opacity: 0.6; font-variant-numeric: tabular-nums; }
 .tag-chip-remove {
   border: 0;
   background: transparent;
@@ -490,10 +559,28 @@ th[aria-sort="descending"] .th-sort::after { content: " \2193"; }
   font-size: 0.8rem;
   border-radius: 999px;
 }
+.tag-swatches { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.tag-swatch { width: 1.4rem; height: 1.4rem; border-radius: 50%; border: 1px solid var(--app-border); padding: 0; }
+.tag-swatch.is-on { outline: 2px solid var(--app-text, #20242c); outline-offset: 1px; }
 
+/* A view-only list keeps its reading tools and loses its editing ones. */
+.is-locked #list-editing, .is-locked #list-order, .is-locked label[for="list-auto-move"],
+.is-locked #list-add-where, .is-locked label[for="list-add-where"],
+.is-locked #list-shelf-add, .is-locked #list-shelf-drop, .is-locked #list-shelf-tag,
+.is-locked .list-shelf .form-check { display: none !important; }
+
+@media (max-width: 767.98px) {
+  .board-head { display: none; }
+  .board-rows > .board-row { grid-template-columns: auto minmax(0, 1fr) auto; min-width: 0; }
+  .board-cell-side, .board-cell-paper { position: static; }
+  .board-rows > .board-row > .board-cell { grid-column: 2 / 3; margin-top: 0.35rem; }
+  .board-rows > .board-row > .board-cell-end { grid-column: 3; grid-row: 1; }
+}
 @media (max-width: 575.98px) {
-  .board-row { grid-template-columns: 1fr auto; }
-  .board-row-side { grid-column: 1 / -1; }
+  .board-rows > .board-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .board-rows > .board-row > .board-cell-side { grid-column: 1 / -1; }
+  .board-rows > .board-row > .board-cell-paper, .board-rows > .board-row > .board-cell { grid-column: 1 / 2; }
+  .board-rows > .board-row > .board-cell-end { grid-column: 2; grid-row: 2; }
 }
 
 /* Notches and rounded corners, once viewport-fit=cover hands the page the whole
@@ -511,4 +598,13 @@ body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-ins
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Dom.confirm asked from inside the list dialog: the question goes on top,
+   with a backdrop of its own between them. */
+#confirm-modal { z-index: 1070; }
+.modal-backdrop ~ .modal-backdrop { z-index: 1065; }
+@media (max-width: 575.98px) {
+  #list-add-wrap .input-group { flex-wrap: wrap; }
+  #list-add { flex-basis: 100%; border-radius: var(--bs-border-radius) !important; margin-bottom: 0.25rem; }
 }
