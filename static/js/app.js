@@ -188,6 +188,7 @@ const App = {
     CodeView.init();
     DatasetsView.init();
     ReviewRules.init( me );
+    ReviewView.init();
     loading.push( Keys.init( me ) );
     Mcp.init( me );
     loading.push( Sessions.init() );

@@ -47,7 +47,7 @@ const CodeView = {
       else this.stale = true;
     } , 30000 );
     Content.on( "enrich" , soon );
-    Content.on( "paper" , ( data ) => { if ( data.stage === "code" ) soon(); } );
+    Content.on( "paper" , ( data ) => { if ( data.stage === "code" || data.stage === "review" ) soon(); } );
     window.addEventListener( "hashchange" , () => {
       if ( Nav.current() === "code" && ( this.stale || !this.loaded ) ) this.load();
     } );
@@ -97,6 +97,7 @@ const CodeView = {
     if ( this.member.has( "list" ) && !row.lists.length ) return false;
     if ( this.member.has( "tier" ) && !row.tiers.length ) return false;
     if ( this.member.has( "figs" ) && !row.figs ) return false;
+    if ( this.member.has( "review" ) && row.review !== "included" ) return false;
     const text = Dom.get( "code-search" ).value.trim().toLowerCase();
     if ( !text ) return true;
     const hay = [ row.title , row.doi , ( row.mods || [] ).join( " " ) , row.lists.map( ( l ) => l.name ).join( " " ) ,
@@ -131,6 +132,7 @@ const CodeView = {
       { id: "tier" , label: "code.col_tier" , width: 7 , sort: true , value: ( row ) => ( row.tiers[ 0 ] || {} ).tier || null , cell: ( row ) => this.tiersCell( row.tiers ) ,
         text: ( row ) => row.tiers.map( ( t ) => t.tier ).join( ", " ) },
       { id: "figs" , label: "code.col_figs" , sort: true , align: "end" , width: 4.5 , value: ( row ) => row.figs || null , cell: ( row ) => row.figs ? String( row.figs ) : "" , text: ( row ) => row.figs || "" },
+      this.reviewColumn( "code.col_review" ),
       { id: "mods" , label: "table.col_modalities" , width: 9 , hide: true , sort: true , value: ( row ) => ( row.mods || [] ).join( " " ) ,
         cell: ( row ) => ( row.mods || [] ).join( ", " ) , text: ( row ) => ( row.mods || [] ).join( ", " ) },
       { id: "doi" , label: "table.col_doi" , width: 12 , hide: true , sort: true , cellClass: "small" , cell: ( row ) => row.doi || "" , text: ( row ) => row.doi || "" },
@@ -187,6 +189,21 @@ const CodeView = {
       text: m.name + ( m.confirmed ? " ✓" : " ·" ),
       attrs: { title: I18n.get( m.confirmed ? "code.confirmed_title" : "code.inferred_title" ) },
     } ) ) } );
+  },
+
+  // The Review column, shared with Datasets: the paper's verdict, linked to
+  // the Review screen. Sorted included, borderline, excluded, waiting, then
+  // papers that are no candidate.
+  reviewColumn( label ) {
+    const order = { included: 1 , borderline: 2 , excluded: 3 , waiting: 4 , failed: 5 };
+    return { id: "review" , label: label , width: 7 , sort: true , value: ( row ) => order[ row.review ] || null ,
+      cell: ( row ) => this.reviewCell( row.review ) , text: ( row ) => row.review ? I18n.get( "code.review_" + row.review ) : "" };
+  },
+
+  reviewCell( state ) {
+    if ( !state ) return Dom.el( "span" , { class: "text-body-secondary" , text: "–" , attrs: { title: I18n.get( "code.review_none_title" ) } } );
+    const tone = { included: "text-bg-success" , borderline: "text-bg-warning" , excluded: "text-bg-secondary" , failed: "text-bg-danger" }[ state ] || "text-bg-light border";
+    return Dom.el( "a" , { class: "badge text-decoration-none " + tone , text: I18n.get( "code.review_" + state ) , attrs: { href: "#review" } } );
   },
 
   listsCell( lists ) {

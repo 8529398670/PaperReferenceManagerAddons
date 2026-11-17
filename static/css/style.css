@@ -1144,3 +1144,10 @@ body.data-table-dragging, body.data-table-dragging * { cursor: col-resize !impor
 .rr-col-value { width: 8rem; }
 .rr-test #rr-test-out { overflow-wrap: anywhere; }
 
+
+/* The Review screen (static/js/review.js): a borderline card is marked down
+   its edge; a value's quote reads as a quote; a value is a button that looks
+   like the text it is. */
+.review-borderline { border-left: 4px solid var(--bs-warning) !important; }
+.review-evidence blockquote { font-size: inherit; overflow-wrap: anywhere; }
+.review-value { font-size: inherit; text-decoration: underline dotted; }

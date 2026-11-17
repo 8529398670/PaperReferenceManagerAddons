@@ -47,6 +47,8 @@ Every tool POST /mcp offers. Written by scripts/api_docs.sh from the registered 
 | [`get_list`](#get_list) | [`GET /api/lists/{slug}`](api.md#get-apilistsslug) | any key | Read a list |
 | [`get_paper`](#get_paper) | [`GET /api/paper`](api.md#get-apipaper) | any key | One paper |
 | [`get_paper_content`](#get_paper_content) | [`GET /api/paper/content`](api.md#get-apipapercontent) | any key | What is known about a paper |
+| [`get_review`](#get_review) | [`GET /api/review/paper`](api.md#get-apireviewpaper) | any key | One paper's review with its evidence |
+| [`get_review_missing_work`](#get_review_missing_work) | [`GET /api/review/missing/work`](api.md#get-apireviewmissingwork) | any key | One missing work's abstract screen |
 | [`get_screener_setup`](#get_screener_setup) | [`GET /api/review/setups/{setup}`](api.md#get-apireviewsetupssetup) | admin keys | One rule setup (admin) |
 | [`label_my_session`](#label_my_session) | [`POST /api/account/sessions/{session_id}/label`](api.md#post-apiaccountsessionssession_idlabel) | any key | Name one of your devices |
 | [`library_status`](#library_status) | [`GET /api/library/status`](api.md#get-apilibrarystatus) | any key | How the library is doing |
@@ -59,6 +61,8 @@ Every tool POST /mcp offers. Written by scripts/api_docs.sh from the registered 
 | [`list_my_sessions`](#list_my_sessions) | [`GET /api/account/sessions`](api.md#get-apiaccountsessions) | any key | Your signed-in devices |
 | [`list_ops`](#list_ops) | [`POST /api/lists/{slug}/ops`](api.md#post-apilistsslugops) | any key | Change a list |
 | [`list_remaining`](#list_remaining) | [`GET /api/lists/{slug}/remaining`](api.md#get-apilistsslugremaining) | any key | Library papers not on a list |
+| [`list_review`](#list_review) | [`GET /api/review/library`](api.md#get-apireviewlibrary) | any key | The review of your curated papers |
+| [`list_review_missing`](#list_review_missing) | [`GET /api/review/missing`](api.md#get-apireviewmissing) | any key | The review of the papers you do not have |
 | [`list_review_overrides`](#list_review_overrides) | [`GET /api/review/overrides`](api.md#get-apireviewoverrides) | admin keys | Hand-checked review values (admin) |
 | [`list_rows`](#list_rows) | [`GET /api/lists/{slug}/rows`](api.md#get-apilistsslugrows) | any key | A list as flat rows |
 | [`list_schema`](#list_schema) | [`GET /api/lists/schema`](api.md#get-apilistsschema) | any key | List ops reference |
@@ -726,6 +730,38 @@ Everything derived about one paper so far: its sections (the methods split), cod
 |---|---|---|---|---|
 | `key` | string | no |  | The paper's key, from search_library. |
 
+## get_review
+
+One candidate paper's review in full: every extracted value with the sentence it came from, and the alternatives.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/review/paper`](api.md#get-apireviewpaper) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `key` | string | no | at most 200 characters | The paper's key. |
+
+## get_review_missing_work
+
+Screens one work of the Missing pool on its abstract: the verdict with its why, and every value the abstract states with its quote.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/review/missing/work`](api.md#get-apireviewmissingwork) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `wid` | string | no | at most 20 characters | The work's OpenAlex id (W...). |
+
 ## get_screener_setup
 
 A setup's whole rules -- every word list, threshold, extraction field and dataset -- with config/review.yaml's defaults beside them and the paths where they differ.
@@ -930,6 +966,36 @@ Every library paper not on the list (or its shelf), newest added first: what imp
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
 | `slug` | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+
+## list_review
+
+Every paper on a list or with a picked figure, screened against the three inclusion criteria (fMRI dominant, decodes, attention in the authors' own model), with the values the screener extracted. Papers are screened one at a time as the content queue reaches them; those not reached yet are waiting.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/review/library`](api.md#get-apireviewlibrary) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+
+## list_review_missing
+
+The Missing pool screened on title and abstract alone with the same criteria, thresholds sized for an abstract: the works screened in, the near misses (failing exactly one criterion), the excluded tallied by reason, and how well the abstract screen agrees with the full-text one on your own papers. The pool is screened in the background as it fills; progress says how far.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/review/missing`](api.md#get-apireviewmissing) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
 
 ## list_review_overrides
 

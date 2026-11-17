@@ -1618,6 +1618,54 @@
       "title": "What is known about a paper"
     },
     {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "One paper's review with its evidence"
+      },
+      "description": "One candidate paper's review in full: every extracted value with the sentence it came from, and the alternatives.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "description": "The paper's key.",
+            "maxLength": 200,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_review",
+      "route": "GET /api/review/paper",
+      "title": "One paper's review with its evidence"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "One missing work's abstract screen"
+      },
+      "description": "Screens one work of the Missing pool on its abstract: the verdict with its why, and every value the abstract states with its quote.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "wid": {
+            "description": "The work's OpenAlex id (W...).",
+            "maxLength": 20,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_review_missing_work",
+      "route": "GET /api/review/missing/work",
+      "title": "One missing work's abstract screen"
+    },
+    {
       "adminOnly": true,
       "annotations": {
         "destructiveHint": false,
@@ -2011,6 +2059,42 @@
       "name": "list_remaining",
       "route": "GET /api/lists/{slug}/remaining",
       "title": "Library papers not on a list"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "The review of your curated papers"
+      },
+      "description": "Every paper on a list or with a picked figure, screened against the three inclusion criteria (fMRI dominant, decodes, attention in the authors' own model), with the values the screener extracted. Papers are screened one at a time as the content queue reaches them; those not reached yet are waiting.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "list_review",
+      "route": "GET /api/review/library",
+      "title": "The review of your curated papers"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "The review of the papers you do not have"
+      },
+      "description": "The Missing pool screened on title and abstract alone with the same criteria, thresholds sized for an abstract: the works screened in, the near misses (failing exactly one criterion), the excluded tallied by reason, and how well the abstract screen agrees with the full-text one on your own papers. The pool is screened in the background as it fills; progress says how far.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "list_review_missing",
+      "route": "GET /api/review/missing",
+      "title": "The review of the papers you do not have"
     },
     {
       "adminOnly": true,

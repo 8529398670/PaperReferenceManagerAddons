@@ -21,6 +21,12 @@ per-paper network files if the file is deleted):
              library.
   filled     which library paper's network is in, at which signature.
 
+Each work also keeps its abstract and its abstract-only review (the Review
+screen's Missing pool, app/review/missing.py): rv_sig is the screener rules'
+signature it was screened under, '' when it never was or its abstract
+changed, so a rules change or a new work is screened again in the
+background, a batch at a time, and nothing else is.
+
 Old: src/dashboard/indexer.py, which rebuilt all of this on `prma reindex`.
 """
 from __future__ import annotations
@@ -35,7 +41,13 @@ from typing import Any, Callable, Iterable, Sequence
 from app.search import query as q
 from app.search.index import fts_phrase
 
-POOL_VERSION = 1
+POOL_VERSION = 2
+# The abstract-only review of a work (rv_state).
+RV_OUT = 0  # excluded
+RV_IN = 1  # included
+RV_NEAR = 2  # excluded, failing exactly one criterion
+RV_NO_TEXT = 3  # no abstract to screen
+MAX_ABSTRACT = 6000  # longer is a parsing accident
 REFS = "ref"
 CITES = "cite"
 POOLS = ("all", "refs", "citing")
@@ -61,7 +73,8 @@ class Pool:
         self._db.execute("PRAGMA synchronous = NORMAL")
         self._db.execute("CREATE TABLE IF NOT EXISTS pool_meta (name TEXT PRIMARY KEY, value TEXT)")
         row = self._db.execute("SELECT value FROM pool_meta WHERE name = 'version'").fetchone()
-        if row is None or row[0] != str(POOL_VERSION):
+        upgrade = row is not None and row[0] == "1"
+        if row is None or (row[0] != str(POOL_VERSION) and not upgrade):
             for table in ("works", "edges", "works_fts", "filled"):
                 self._db.execute(f"DROP TABLE IF EXISTS {table}")
         self._db.execute(
@@ -69,10 +82,24 @@ class Pool:
             " title TEXT NOT NULL DEFAULT '', title_f TEXT NOT NULL DEFAULT '', journal TEXT NOT NULL DEFAULT '', year INTEGER,"
             " pubdate TEXT NOT NULL DEFAULT '', cited_by INTEGER NOT NULL DEFAULT 0, oa_pdf TEXT NOT NULL DEFAULT '',"
             " authors TEXT NOT NULL DEFAULT '[]', lib_cites INTEGER NOT NULL DEFAULT 0, cites_lib INTEGER NOT NULL DEFAULT 0,"
-            " in_lib INTEGER NOT NULL DEFAULT 0)"
+            " in_lib INTEGER NOT NULL DEFAULT 0, abstract TEXT NOT NULL DEFAULT '', rv_sig TEXT NOT NULL DEFAULT '', rv_state INTEGER,"
+            " rv_reason TEXT NOT NULL DEFAULT '', rv TEXT NOT NULL DEFAULT '')"
         )
+        if upgrade:
+            # Version 1 kept no abstract and no review. The columns go in where
+            # the works are, and every library paper's network is put in again
+            # (backfill, from its network file), which brings the abstracts;
+            # the Missing screen keeps working meanwhile.
+            have = {r[1] for r in self._db.execute("PRAGMA table_info(works)").fetchall()}
+            for column, kind in (("abstract", "TEXT NOT NULL DEFAULT ''"), ("rv_sig", "TEXT NOT NULL DEFAULT ''"), ("rv_state", "INTEGER"),
+                                 ("rv_reason", "TEXT NOT NULL DEFAULT ''"), ("rv", "TEXT NOT NULL DEFAULT ''")):
+                if column not in have:
+                    self._db.execute(f"ALTER TABLE works ADD COLUMN {column} {kind}")
+            self._db.execute("CREATE TABLE IF NOT EXISTS filled (lib_key TEXT PRIMARY KEY, sig TEXT NOT NULL)")
+            self._db.execute("DELETE FROM filled")
         self._db.execute("CREATE INDEX IF NOT EXISTS works_doi ON works (doi)")
         self._db.execute("CREATE INDEX IF NOT EXISTS works_title ON works (title_f)")
+        self._db.execute("CREATE INDEX IF NOT EXISTS works_rv ON works (rv_state, rv_sig)")
         self._db.execute(
             "CREATE TABLE IF NOT EXISTS edges (lib_key TEXT NOT NULL, wid TEXT NOT NULL, kind TEXT NOT NULL, PRIMARY KEY (lib_key, wid, kind))"
         )
@@ -164,24 +191,27 @@ class Pool:
         title = work.get("title") or ""
         title_f = q.fold(title)
         authors = [list(a) for a in (work.get("authors") or [])][:60]
+        abstract = str(work.get("abstract") or "").strip()[:MAX_ABSTRACT]
         values = (
             doi, title, title_f, work.get("journal") or "", work.get("year"), work.get("pubdate") or "",
             int(work.get("cited_by") or 0), work.get("oa_pdf") or "", json.dumps(authors, separators=(",", ":")),
-            self._is_lib(wid, doi, title_f),
+            self._is_lib(wid, doi, title_f), abstract,
         )
-        row = self._db.execute("SELECT id FROM works WHERE wid = ?", (wid,)).fetchone()
+        row = self._db.execute("SELECT id, title, abstract FROM works WHERE wid = ?", (wid,)).fetchone()
         if row is None:
             cursor = self._db.execute(
-                "INSERT INTO works (wid, doi, title, title_f, journal, year, pubdate, cited_by, oa_pdf, authors, in_lib) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO works (wid, doi, title, title_f, journal, year, pubdate, cited_by, oa_pdf, authors, in_lib, abstract) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (wid, *values),
             )
             work_id = cursor.lastrowid
         else:
             work_id = row[0]
+            # What the review read moved: it is screened again.
+            moved = row[1] != title or row[2] != abstract
             self._db.execute(
                 "UPDATE works SET doi = ?, title = ?, title_f = ?, journal = ?, year = ?, pubdate = ?, cited_by = ?, oa_pdf = ?, "
-                "authors = ?, in_lib = ? WHERE id = ?",
+                "authors = ?, in_lib = ?, abstract = ?" + (", rv_sig = ''" if moved else "") + " WHERE id = ?",
                 (*values, work_id),
             )
             self._db.execute("DELETE FROM works_fts WHERE rowid = ?", (work_id,))
@@ -219,6 +249,80 @@ class Pool:
                 raise
             self._db.execute("COMMIT")
             self.rev += 1
+
+    # -- the abstract-only review ------------------------------------------------------
+
+    def review_due(self, sig: str, limit: int) -> list[tuple[int, str, str]]:
+        """(id, title, abstract) of works not screened under these rules."""
+        with self._lock:
+            return self._db.execute(
+                "SELECT id, title, abstract FROM works WHERE in_lib = 0 AND rv_sig != ? LIMIT ?", (sig, limit)
+            ).fetchall()
+
+    def review_store(self, sig: str, results: Sequence[tuple[int, int, str, str]]) -> None:
+        """(id, state, reason code, summary JSON) per work screened."""
+        if not results:
+            return
+        with self._lock:
+            self._db.execute("BEGIN")
+            try:
+                self._db.executemany(
+                    "UPDATE works SET rv_sig = ?, rv_state = ?, rv_reason = ?, rv = ? WHERE id = ?",
+                    [(sig, state, reason, rv, work_id) for work_id, state, reason, rv in results],
+                )
+            except BaseException:
+                self._db.execute("ROLLBACK")
+                raise
+            self._db.execute("COMMIT")
+
+    def review_tally(self, sig: str) -> dict[str, Any]:
+        """How far the screen has got under these rules, and what it found:
+        {total, screened, by_state: {state: n}, reasons: {code: n}}."""
+        with self._lock:
+            total = self._db.execute("SELECT count(*) FROM works WHERE in_lib = 0").fetchone()[0]
+            states = self._db.execute(
+                "SELECT rv_state, count(*) FROM works WHERE in_lib = 0 AND rv_sig = ? GROUP BY rv_state", (sig,)
+            ).fetchall()
+            reasons = self._db.execute(
+                "SELECT rv_reason, count(*) FROM works WHERE in_lib = 0 AND rv_sig = ? AND rv_state IN (?, ?) GROUP BY rv_reason",
+                (sig, RV_OUT, RV_NEAR),
+            ).fetchall()
+        by_state = {int(s): n for s, n in states if s is not None}
+        return {"total": total, "screened": sum(by_state.values()), "by_state": by_state,
+                "reasons": dict(sorted(((r or "", n) for r, n in reasons), key=lambda kv: -kv[1]))}
+
+    def review_rows(self, sig: str, state: int, limit: int) -> tuple[list[dict[str, Any]], int]:
+        """The works the screen put in one state, nearest your library first
+        (connections, then citations, then newest). -> (rows, how many in all)."""
+        with self._lock:
+            n = self._db.execute(
+                "SELECT count(*) FROM works WHERE in_lib = 0 AND rv_sig = ? AND rv_state = ?", (sig, state)
+            ).fetchone()[0]
+            found = self._db.execute(
+                "SELECT wid, doi, title, journal, year, pubdate, cited_by, oa_pdf, authors, lib_cites, cites_lib, rv FROM works "
+                "WHERE in_lib = 0 AND rv_sig = ? AND rv_state = ? "
+                "ORDER BY (lib_cites + cites_lib) DESC, cited_by DESC, coalesce(year, 0) DESC, id ASC LIMIT ?",
+                (sig, state, limit),
+            ).fetchall()
+        rows = []
+        for wid, doi, title, journal, year, pubdate, cited_by, oa_pdf, authors, lib_cites, cites_lib, rv in found:
+            try:
+                summary = json.loads(rv) if rv else {}
+            except ValueError:
+                summary = {}
+            names = [a[1] for a in json.loads(authors or "[]") if len(a) > 1]
+            rows.append({
+                "wid": wid, "doi": doi, "title": title, "journal": journal, "year": year, "pubdate": pubdate, "cited_by": cited_by,
+                "oa_pdf": oa_pdf, "authors": names[:3], "n_authors": len(names), "lib_cites": lib_cites, "cites_lib": cites_lib,
+                "conn": lib_cites + cites_lib, **summary,
+            })
+        return rows, n
+
+    def work_text(self, wid: str) -> tuple[str, str] | None:
+        """(title, abstract) of a work."""
+        with self._lock:
+            row = self._db.execute("SELECT title, abstract FROM works WHERE wid = ?", (wid,)).fetchone()
+        return (row[0], row[1]) if row else None
 
     # -- searching -------------------------------------------------------------------
 

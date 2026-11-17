@@ -739,6 +739,188 @@
         ],
         "type": "object"
       },
+      "ReviewLibrary": {
+        "properties": {
+          "consensus": {
+            "description": "The dataset consensus: dataset, parameter, value, n, others, sources.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "included, borderline, excluded, waiting, failed, stale (screened under other rules).",
+            "type": "object"
+          },
+          "criteria": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "criteria_abstract": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "fields": {
+            "description": "The extraction fields in order: name, group.",
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "papers": {
+            "description": "Every candidate paper (on a list or with a picked figure): key, title, year, doi, journal, added, pubdate, cites, lists, tiers, figs, code_n, and state (included, borderline, excluded, waiting, failed). A screened paper adds current (screened under the rules in use), reason_code, reason, task, priority, attention_role, model_name, curated, datasets, notes; an excluded paper why (the tests it failed: test, detail), any other fields: {name: {value, source (auto, curated, dataset), alts, from_dataset, dataset_papers, note}} with only the fields the paper states. A field left out means the paper does not say. get_review gives one paper's quotes.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "problem": {
+            "type": "string"
+          },
+          "reasons": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "setup": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string"
+          },
+          "tasks": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "unclassified_priority": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "consensus",
+          "counts",
+          "criteria",
+          "criteria_abstract",
+          "fields",
+          "papers",
+          "problem",
+          "reasons",
+          "setup",
+          "signature",
+          "tasks",
+          "unclassified_priority"
+        ],
+        "type": "object"
+      },
+      "ReviewMissing": {
+        "properties": {
+          "calibration": {
+            "description": "The abstract screen measured against the library's full-text verdicts: recall (found of total included), precision (agreed of passed), measured_over, configured_precision (shown while nothing can be measured), caveat.",
+            "type": "object"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "included, near_misses, excluded (near misses among them), no_abstract.",
+            "type": "object"
+          },
+          "criteria": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "filling": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "filled of papers: library papers whose OpenAlex network (and so their works' abstracts) is in the pool so far. Below papers, works are still arriving and many read as having no abstract.",
+            "type": "object"
+          },
+          "near_misses": {
+            "description": "Works failing exactly one criterion: the same, with near_miss and miss_label.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "papers": {
+            "description": "The works screened in, nearest your library first (at most 4000): wid, doi, title, journal, year, pubdate, cited_by, oa_pdf, authors, n_authors, lib_cites (your papers citing it), cites_lib (your papers it cites), conn, task, priority, model_name, datasets, attention_role.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "papers_cut": {
+            "description": "Included works past the cap, not sent.",
+            "type": "integer"
+          },
+          "progress": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "screened (under the rules in use) of total works in the pool.",
+            "type": "object"
+          },
+          "reasons": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "The excluded, tallied by reason code.",
+            "type": "object"
+          },
+          "signature": {
+            "type": "string"
+          },
+          "skipped": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "calibration",
+          "counts",
+          "criteria",
+          "filling",
+          "near_misses",
+          "papers",
+          "papers_cut",
+          "progress",
+          "reasons",
+          "signature",
+          "skipped"
+        ],
+        "type": "object"
+      },
+      "ReviewMissingWork": {
+        "properties": {
+          "review": {
+            "description": "As get_review, from the abstract alone, with the abstract.",
+            "type": "object"
+          },
+          "wid": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "review",
+          "wid"
+        ],
+        "type": "object"
+      },
       "ReviewOverrides": {
         "properties": {
           "overrides": {
@@ -754,6 +936,22 @@
         },
         "required": [
           "overrides"
+        ],
+        "type": "object"
+      },
+      "ReviewPaper": {
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "review": {
+            "description": "verdict (include, borderline, reason, task_category, priority, attention_role, why, task_evidence, attention_evidence), fields: {name: {group, value, values (most-stated first), counts, evidence (the sentences each value came from), source}}, datasets, model_name, curated, override, current.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "key",
+          "review"
         ],
         "type": "object"
       },
@@ -12057,6 +12255,140 @@
         "x-required-role": "admin"
       }
     },
+    "/api/review/library": {
+      "get": {
+        "description": "Every paper on a list or with a picked figure, screened against the three inclusion criteria (fMRI dominant, decodes, attention in the authors' own model), with the values the screener extracted. Papers are screened one at a time as the content queue reaches them; those not reached yet are waiting.",
+        "operationId": "get_api_review_library",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewLibrary"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "The review of your curated papers",
+        "tags": [
+          "Review"
+        ]
+      }
+    },
+    "/api/review/missing": {
+      "get": {
+        "description": "The Missing pool screened on title and abstract alone with the same criteria, thresholds sized for an abstract: the works screened in, the near misses (failing exactly one criterion), the excluded tallied by reason, and how well the abstract screen agrees with the full-text one on your own papers. The pool is screened in the background as it fills; progress says how far.",
+        "operationId": "get_api_review_missing",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewMissing"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "The review of the papers you do not have",
+        "tags": [
+          "Review"
+        ]
+      }
+    },
+    "/api/review/missing/work": {
+      "get": {
+        "description": "Screens one work of the Missing pool on its abstract: the verdict with its why, and every value the abstract states with its quote.",
+        "operationId": "get_api_review_missing_work",
+        "parameters": [
+          {
+            "description": "The work's OpenAlex id (W...).",
+            "in": "query",
+            "name": "wid",
+            "schema": {
+              "maxLength": 20,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewMissingWork"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "One missing work's abstract screen",
+        "tags": [
+          "Review"
+        ]
+      }
+    },
     "/api/review/overrides": {
       "get": {
         "description": "Values typed in by hand, by paper: each wins over what the screener extracted, whatever the setup, and flags the paper.",
@@ -12175,6 +12507,62 @@
           "Screener"
         ],
         "x-required-role": "admin"
+      }
+    },
+    "/api/review/paper": {
+      "get": {
+        "description": "One candidate paper's review in full: every extracted value with the sentence it came from, and the alternatives.",
+        "operationId": "get_api_review_paper",
+        "parameters": [
+          {
+            "description": "The paper's key.",
+            "in": "query",
+            "name": "key",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewPaper"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "One paper's review with its evidence",
+        "tags": [
+          "Review"
+        ]
       }
     },
     "/api/review/progress": {
@@ -13365,6 +13753,9 @@
     },
     {
       "name": "Missing papers"
+    },
+    {
+      "name": "Review"
     },
     {
       "name": "Screener"

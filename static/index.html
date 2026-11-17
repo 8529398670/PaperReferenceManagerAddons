@@ -70,6 +70,7 @@
           <a class="nav-link" href="#figures" data-nav="figures"><i class="bi bi-images" aria-hidden="true"></i><span data-i18n="nav.figures"></span></a>
           <a class="nav-link" href="#code" data-nav="code"><i class="bi bi-code-slash" aria-hidden="true"></i><span data-i18n="nav.code"></span></a>
           <a class="nav-link" href="#datasets" data-nav="datasets"><i class="bi bi-database" aria-hidden="true"></i><span data-i18n="nav.datasets"></span></a>
+          <a class="nav-link" href="#review" data-nav="review"><i class="bi bi-clipboard-check" aria-hidden="true"></i><span data-i18n="nav.review"></span></a>
           <a class="nav-link" href="#review-rules" data-nav="review-rules"><i class="bi bi-funnel" aria-hidden="true"></i><span data-i18n="nav.review_rules"></span></a>
           <a class="nav-link" href="#status" data-nav="status"><i class="bi bi-activity" aria-hidden="true"></i><span data-i18n="nav.status"></span></a>
           <hr class="sidebar-rule" />
@@ -549,6 +550,7 @@
                       <div class="form-check"><input type="checkbox" class="form-check-input" id="code-on-list" data-code-member="list" /><label class="form-check-label" for="code-on-list" data-i18n="code.member_list"></label></div>
                       <div class="form-check"><input type="checkbox" class="form-check-input" id="code-in-tier" data-code-member="tier" /><label class="form-check-label" for="code-in-tier" data-i18n="code.member_tier"></label></div>
                       <div class="form-check"><input type="checkbox" class="form-check-input" id="code-has-figs" data-code-member="figs" /><label class="form-check-label" for="code-has-figs" data-i18n="code.member_figs"></label></div>
+                      <div class="form-check"><input type="checkbox" class="form-check-input" id="code-in-review" data-code-member="review" /><label class="form-check-label" for="code-in-review" data-i18n="code.review_in"></label></div>
                     </fieldset>
                     <button type="button" class="btn btn-outline-secondary btn-sm" data-filter-clear data-i18n="table.clear_filters"></button>
                   </div>
@@ -692,6 +694,125 @@
           </div>
         </section>
 
+        <!-- The review: the curated papers screened against the inclusion
+             criteria, or the missing pool on its abstracts. static/js/review.js -->
+        <section class="view" data-view="review" id="review-panel" hidden>
+          <h2 class="view-title visually-hidden" data-i18n="review.heading"></h2>
+          <section class="card mb-3">
+            <div class="card-header">
+              <ul class="nav nav-tabs card-header-tabs">
+                <li class="nav-item"><a class="nav-link active" href="#review" data-review-pool="library" aria-current="true"><span data-i18n="review.pool_library"></span></a></li>
+                <li class="nav-item"><a class="nav-link" href="#review/missing" data-review-pool="missing"><span data-i18n="review.pool_missing"></span></a></li>
+              </ul>
+            </div>
+            <div class="card-body py-2">
+              <div class="d-flex flex-wrap align-items-center gap-2 mb-2" id="review-counts" aria-live="polite"></div>
+              <p id="review-progress" class="small text-body-secondary mb-2" hidden></p>
+              <p id="review-problem" class="alert alert-warning py-2 mb-2" role="status" hidden></p>
+              <details class="mb-2">
+                <summary class="small fw-semibold" data-i18n="review.criteria"></summary>
+                <ol id="review-criteria" class="small mb-0 mt-1"></ol>
+                <p id="review-criteria-note" class="small text-body-secondary mb-0 mt-1" hidden></p>
+              </details>
+              <div class="row g-2 align-items-center" role="search">
+                <div class="col-12 col-md-6 col-xl-4">
+                  <label for="review-search" class="visually-hidden" data-i18n="review.search_label"></label>
+                  <input id="review-search" class="form-control" type="search" autocomplete="off" spellcheck="false" data-i18n-attr="placeholder:review.search_placeholder" />
+                </div>
+                <div class="col-auto dropdown">
+                  <button id="review-filter" type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    <i class="bi bi-funnel" aria-hidden="true"></i> <span data-i18n="table.filter"></span> <span class="badge text-bg-light ms-1" hidden></span>
+                  </button>
+                  <div class="dropdown-menu p-3 filter-menu">
+                    <div class="mb-3">
+                      <label for="review-priority" class="form-label" data-i18n="review.filter_priority"></label>
+                      <select id="review-priority" class="form-select form-select-sm"></select>
+                    </div>
+                    <div class="mb-3">
+                      <label for="review-task" class="form-label" data-i18n="review.filter_task"></label>
+                      <select id="review-task" class="form-select form-select-sm"></select>
+                    </div>
+                    <fieldset class="mb-3" data-review-only="library">
+                      <legend class="form-label fs-6" data-i18n="review.filter_member"></legend>
+                      <div class="form-check"><input type="checkbox" class="form-check-input" id="review-f-list" data-review-check="list" /><label class="form-check-label" for="review-f-list" data-i18n="review.f_list"></label></div>
+                      <div class="form-check"><input type="checkbox" class="form-check-input" id="review-f-figs" data-review-check="figs" /><label class="form-check-label" for="review-f-figs" data-i18n="review.f_figs"></label></div>
+                      <div class="form-check"><input type="checkbox" class="form-check-input" id="review-f-curated" data-review-check="curated" /><label class="form-check-label" for="review-f-curated" data-i18n="review.f_curated"></label></div>
+                      <div class="form-check"><input type="checkbox" class="form-check-input" id="review-f-code" data-review-check="code" /><label class="form-check-label" for="review-f-code" data-i18n="review.f_code"></label></div>
+                    </fieldset>
+                    <div class="mb-3" data-review-only="missing" hidden>
+                      <label for="review-pool-from" class="form-label" data-i18n="review.filter_from"></label>
+                      <select id="review-pool-from" class="form-select form-select-sm">
+                        <option value="" data-i18n="review.from_any"></option>
+                        <option value="refs" data-i18n="review.from_refs"></option>
+                        <option value="citing" data-i18n="review.from_citing"></option>
+                        <option value="both" data-i18n="review.from_both"></option>
+                      </select>
+                    </div>
+                    <fieldset class="mb-3" data-review-only="missing" hidden>
+                      <legend class="visually-hidden" data-i18n="review.filter_more"></legend>
+                      <div class="form-check"><input type="checkbox" class="form-check-input" id="review-f-cited2" data-review-check="cited2" /><label class="form-check-label" for="review-f-cited2" data-i18n="review.f_cited2"></label></div>
+                      <div class="form-check"><input type="checkbox" class="form-check-input" id="review-f-data" data-review-check="data" /><label class="form-check-label" for="review-f-data" data-i18n="review.f_data"></label></div>
+                      <div class="form-check"><input type="checkbox" class="form-check-input" id="review-f-oa" data-review-check="oa" /><label class="form-check-label" for="review-f-oa" data-i18n="review.f_oa"></label></div>
+                    </fieldset>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-filter-clear data-i18n="table.clear_filters"></button>
+                  </div>
+                </div>
+                <div class="col-auto">
+                  <div class="input-group">
+                    <label for="review-sort" class="input-group-text" data-i18n="review.sort"></label>
+                    <select id="review-sort" class="form-select"></select>
+                    <button id="review-reverse" type="button" class="btn btn-outline-secondary" data-i18n-attr="title:review.reverse,aria-label:review.reverse" aria-pressed="false"><i class="bi bi-arrow-down-up" aria-hidden="true"></i></button>
+                  </div>
+                </div>
+                <div class="col-auto">
+                  <input type="checkbox" class="btn-check" id="review-borderline-only" autocomplete="off" />
+                  <label class="btn btn-outline-warning" for="review-borderline-only" data-i18n="review.borderline_only"></label>
+                </div>
+                <div class="col-auto dropdown">
+                  <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-download" aria-hidden="true"></i> <span data-i18n="review.export"></span>
+                  </button>
+                  <ul class="dropdown-menu">
+                    <li><button id="review-export-json" type="button" class="dropdown-item" data-i18n="review.export_json"></button></li>
+                    <li><button id="review-export-csv" type="button" class="dropdown-item" data-i18n="review.export_csv"></button></li>
+                  </ul>
+                </div>
+                <div class="col-12 col-lg-auto ms-lg-auto small text-body-secondary" id="review-count"></div>
+              </div>
+            </div>
+          </section>
+
+          <div id="review-calibration" class="mb-3" hidden></div>
+          <div id="review-list" class="list-group mb-2"></div>
+          <p id="review-empty" class="text-body-secondary" hidden></p>
+          <div class="text-center mb-4"><button id="review-more" type="button" class="btn btn-outline-secondary" hidden></button></div>
+
+          <section id="review-excluded-card" class="card mb-3" hidden>
+            <div class="card-header"><h3 class="h6 mb-0" id="review-excluded-title"></h3></div>
+            <div class="card-body p-0">
+              <div class="table-responsive"><table class="table table-sm table-hover mb-0 align-middle" id="review-excluded"></table></div>
+            </div>
+          </section>
+          <section id="review-near-card" class="card mb-3" hidden>
+            <div class="card-header"><h3 class="h6 mb-0" id="review-near-title"></h3><p class="small text-body-secondary mb-0" data-i18n="review.near_about"></p></div>
+            <div class="card-body p-0">
+              <div class="table-responsive"><table class="table table-sm table-hover mb-0 align-middle" id="review-near"></table></div>
+            </div>
+          </section>
+          <section id="review-tally-card" class="card mb-3" hidden>
+            <div class="card-header"><h3 class="h6 mb-0" data-i18n="review.tally_title"></h3></div>
+            <div class="card-body p-0">
+              <div class="table-responsive"><table class="table table-sm mb-0 align-middle" id="review-tally"></table></div>
+            </div>
+          </section>
+          <section id="review-consensus-card" class="card mb-3" hidden>
+            <div class="card-header"><h3 class="h6 mb-0" data-i18n="review.consensus_title"></h3><p class="small text-body-secondary mb-0" data-i18n="review.consensus_about"></p></div>
+            <div class="card-body p-0">
+              <div class="table-responsive"><table class="table table-sm mb-0 align-middle" id="review-consensus"></table></div>
+            </div>
+          </section>
+        </section>
+
         <!-- What public data the library stands on. static/js/datasets.js -->
         <section class="view view-fill" data-view="datasets" id="datasets-panel" hidden>
           <h2 class="view-title visually-hidden" data-i18n="datasets.heading"></h2>
@@ -723,6 +844,7 @@
                       <div class="form-check"><input type="checkbox" class="form-check-input" id="datasets-code" data-datasets-member="code" /><label class="form-check-label" for="datasets-code" data-i18n="datasets.code_label"></label></div>
                       <div class="form-check"><input type="checkbox" class="form-check-input" id="datasets-on-list" data-datasets-member="list" /><label class="form-check-label" for="datasets-on-list" data-i18n="code.member_list"></label></div>
                       <div class="form-check"><input type="checkbox" class="form-check-input" id="datasets-in-tier" data-datasets-member="tier" /><label class="form-check-label" for="datasets-in-tier" data-i18n="code.member_tier"></label></div>
+                      <div class="form-check"><input type="checkbox" class="form-check-input" id="datasets-in-review" data-datasets-member="review" /><label class="form-check-label" for="datasets-in-review" data-i18n="code.review_in"></label></div>
                     </fieldset>
                     <label for="datasets-archive" class="form-label" data-i18n="datasets.archive_label"></label>
                     <select id="datasets-archive" class="form-select mb-3"></select>
@@ -1859,6 +1981,7 @@
   <script src="/js/code.js"></script>
   <script src="/js/datasets.js"></script>
   <script src="/js/review_rules.js"></script>
+  <script src="/js/review.js"></script>
   <script src="/js/library.js"></script>
   <script src="/js/board_view.js"></script>
   <script src="/js/board_columns.js"></script>

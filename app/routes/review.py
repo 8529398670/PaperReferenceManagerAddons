@@ -16,13 +16,13 @@ All of it is the admins', from a browser session or an admin API key.
 from __future__ import annotations
 
 import time
-from typing import Annotated, Any, ClassVar, Literal
+from typing import Annotated, Any, Callable, ClassVar, Literal
 
 from msgspec import Meta
 from starlette.requests import Request
 from starlette.responses import Response
 
-from app.apidocs import ADMIN, PATH, Reply, route
+from app.apidocs import ADMIN, PATH, QUERY, Reply, route
 from app.apidocs import Request as RequestType
 from app.content import sections
 from app.content import store as st
@@ -520,3 +520,174 @@ def set_override(request: Request, body: OverrideBody) -> OverridesReply:
     review.set_override(body.key.strip(), body.fields, actor_name(request))
     audit(request, KIND_ADMIN, "review override changed", {"key": body.key, "fields": sorted(body.fields)})
     return OverridesReply(overrides=review.overrides())
+
+
+# -- the Review screen (everyone signed in) -------------------------------------------------
+
+READ_TAG = "Review"
+
+
+class LibraryReviewReply(Reply):
+    api_name: ClassVar[str] = "ReviewLibrary"
+    papers: Annotated[list[dict[str, Any]], Meta(description=(
+        "Every candidate paper (on a list or with a picked figure): key, title, year, doi, journal, added, pubdate, cites, "
+        "lists, tiers, figs, code_n, and state (included, borderline, excluded, waiting, failed). A screened paper adds "
+        "current (screened under the rules in use), reason_code, reason, task, priority, attention_role, model_name, curated, "
+        "datasets, notes; an excluded paper why (the tests it failed: test, detail), any other fields: {name: {value, source "
+        "(auto, curated, dataset), alts, from_dataset, dataset_papers, note}} with only the fields the paper states. A field "
+        "left out means the paper does not say. get_review gives one paper's quotes."
+    ))]
+    counts: Annotated[dict[str, int], Meta(description="included, borderline, excluded, waiting, failed, stale (screened under other rules).")]
+    consensus: Annotated[list[dict[str, Any]], Meta(description="The dataset consensus: dataset, parameter, value, n, others, sources.")]
+    fields: Annotated[list[dict[str, str]], Meta(description="The extraction fields in order: name, group.")]
+    criteria: list[str]
+    criteria_abstract: list[str]
+    tasks: list[dict[str, Any]]
+    unclassified_priority: int
+    reasons: dict[str, str]
+    setup: str
+    signature: str
+    problem: str
+
+
+@route(
+    "GET /api/review/library", summary="The review of your curated papers",
+    tag=READ_TAG,
+    description=(
+        "Every paper on a list or with a picked figure, screened against the three inclusion criteria (fMRI dominant, "
+        "decodes, attention in the authors' own model), with the values the screener extracted. Papers are screened one "
+        "at a time as the content queue reaches them; those not reached yet are waiting."
+    ),
+    mcp="list_review", read_only=True,
+)
+def review_library(request: Request, body: Empty) -> LibraryReviewReply:
+    return LibraryReviewReply(**request.app.state.review_view.library())
+
+
+class ReviewKey(RequestType):
+    key: Annotated[str, QUERY, Meta(max_length=200, description="The paper's key.")] = ""
+
+
+class ReviewPaperReply(Reply):
+    api_name: ClassVar[str] = "ReviewPaper"
+    key: str
+    review: Annotated[dict[str, Any], Meta(description=(
+        "verdict (include, borderline, reason, task_category, priority, attention_role, why, task_evidence, attention_evidence), "
+        "fields: {name: {group, value, values (most-stated first), counts, evidence (the sentences each value came from), "
+        "source}}, datasets, model_name, curated, override, current."
+    ))]
+
+
+@route(
+    "GET /api/review/paper", summary="One paper's review with its evidence",
+    tag=READ_TAG, errors=(404,),
+    description="One candidate paper's review in full: every extracted value with the sentence it came from, and the alternatives.",
+    mcp="get_review", read_only=True,
+)
+def review_paper(request: Request, body: ReviewKey) -> ReviewPaperReply:
+    paper = request.app.state.library.catalogue.find(body.key)
+    if paper is None:
+        raise Refused(404, "paper_not_found")
+    found = request.app.state.review_view.paper(paper.key)
+    if found is None:
+        raise Refused(404, "review_not_screened")
+    return ReviewPaperReply(key=paper.key, review=found)
+
+
+def judged_papers(request: Request) -> tuple[Callable[[], list[tuple[str, str, bool]]], int]:
+    """The library's full-text verdicts the abstract screen is measured
+    against: (title, abstract, included) of each candidate screened in full,
+    and a number that moves when any of them does."""
+    content = request.app.state.content
+    review = get_review(request)
+    verdicts: list[tuple[str, bool]] = []
+    for key, stages in content.files.summaries(list(review.candidates())).items():
+        state, summary, _ = stages.get(st.REVIEW, ("", {}, ""))
+        if state == st.DONE and summary.get("reason") != "no_text":
+            verdicts.append((key, bool(summary.get("include"))))
+    verdicts.sort()
+
+    def judged() -> list[tuple[str, str, bool]]:
+        out = []
+        for key, included in verdicts:
+            paper = content.catalogue.get(key)
+            if paper is None:
+                continue
+            record = paper.record
+            abstract = record.get("abstract") or content._oa_abstract(key)
+            if abstract.strip():
+                out.append((record.get("title") or "", abstract, included))
+        return out
+
+    return judged, hash((review.signature, tuple(verdicts)))
+
+
+class MissingReviewReply(Reply):
+    api_name: ClassVar[str] = "ReviewMissing"
+    signature: str
+    progress: Annotated[dict[str, int], Meta(description="screened (under the rules in use) of total works in the pool.")]
+    counts: Annotated[dict[str, int], Meta(description="included, near_misses, excluded (near misses among them), no_abstract.")]
+    reasons: Annotated[dict[str, int], Meta(description="The excluded, tallied by reason code.")]
+    papers: Annotated[list[dict[str, Any]], Meta(description=(
+        "The works screened in, nearest your library first (at most 4000): wid, doi, title, journal, year, pubdate, cited_by, "
+        "oa_pdf, authors, n_authors, lib_cites (your papers citing it), cites_lib (your papers it cites), conn, task, priority, "
+        "model_name, datasets, attention_role."
+    ))]
+    papers_cut: Annotated[int, Meta(description="Included works past the cap, not sent.")]
+    near_misses: Annotated[list[dict[str, Any]], Meta(description="Works failing exactly one criterion: the same, with near_miss and miss_label.")]
+    skipped: int
+    filling: Annotated[dict[str, int], Meta(description=(
+        "filled of papers: library papers whose OpenAlex network (and so their works' abstracts) is in the pool so far. Below "
+        "papers, works are still arriving and many read as having no abstract."
+    ))]
+    calibration: Annotated[dict[str, Any], Meta(description=(
+        "The abstract screen measured against the library's full-text verdicts: recall (found of total included), precision "
+        "(agreed of passed), measured_over, configured_precision (shown while nothing can be measured), caveat."
+    ))]
+    criteria: list[str]
+
+
+@route(
+    "GET /api/review/missing", summary="The review of the papers you do not have",
+    tag=READ_TAG,
+    description=(
+        "The Missing pool screened on title and abstract alone with the same criteria, thresholds sized for an abstract: the "
+        "works screened in, the near misses (failing exactly one criterion), the excluded tallied by reason, and how well the "
+        "abstract screen agrees with the full-text one on your own papers. The pool is screened in the background as it fills; "
+        "progress says how far."
+    ),
+    mcp="list_review_missing", read_only=True,
+)
+def review_missing(request: Request, body: Empty) -> MissingReviewReply:
+    missing = request.app.state.review_missing
+    snapshot = missing.snapshot(request.app.state.content.skipped())
+    judged, rev = judged_papers(request)
+    rules = get_review(request).rules
+    content = request.app.state.content
+    papers = sum(1 for (_key, stage), (state, _sig) in content.files.rows().items() if stage == st.OPENALEX and state == st.DONE)
+    filling = {"filled": len(content.pool.filled()), "papers": papers}
+    return MissingReviewReply(**snapshot, filling=filling, calibration=missing.calibration(judged, rev),
+                              criteria=list(rules.doc.criteria_text.abstract))
+
+
+class WorkId(RequestType):
+    wid: Annotated[str, QUERY, Meta(max_length=20, description="The work's OpenAlex id (W...).")] = ""
+
+
+class MissingWorkReply(Reply):
+    api_name: ClassVar[str] = "ReviewMissingWork"
+    wid: str
+    review: Annotated[dict[str, Any], Meta(description="As get_review, from the abstract alone, with the abstract.")]
+
+
+@route(
+    "GET /api/review/missing/work", summary="One missing work's abstract screen",
+    tag=READ_TAG, errors=(404,),
+    description="Screens one work of the Missing pool on its abstract: the verdict with its why, and every value the abstract states with its quote.",
+    mcp="get_review_missing_work", read_only=True,
+)
+def review_missing_work(request: Request, body: WorkId) -> MissingWorkReply:
+    found = request.app.state.review_missing.work(body.wid, get_review(request).consensus())
+    if found is None:
+        raise Refused(404, "missing_work_not_found")
+    return MissingWorkReply(wid=body.wid, review=found)

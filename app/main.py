@@ -34,7 +34,9 @@ from app.content.figures import Figures
 from app.content.screens import Screens, memberships
 from app.content.service import ContentService
 from app.library.service import LibraryService
+from app.review.missing import MissingReview
 from app.review.service import ReviewService
+from app.review.view import ReviewView
 from app.routes import build_routes
 
 # How often config.yaml is checked for edits made outside the Settings screen.
@@ -103,6 +105,10 @@ def build_app(
     review = ReviewService(store, cfg.config_file.parent / "review.yaml", content.files)
     review.candidates_fn = lambda: set(memberships(store)) | set(figures.picks_per_paper())
     content.review = review
+    # The Review screen: the candidates as rows, and the missing pool screened
+    # on its abstracts in a lane of its own.
+    review_view = ReviewView(review, content, figures, store)
+    review_missing = MissingReview(review, content.pool)
 
     def candidates_changed() -> None:
         review.candidates_changed()
@@ -111,6 +117,7 @@ def build_app(
     boards.on_changed = candidates_changed
     figures.on_picks = candidates_changed
     screens.publish = library.publish
+    review_missing.publish = library.publish
 
     def publish(name: str, data: dict) -> None:
         library.publish(name, data)
@@ -130,6 +137,7 @@ def build_app(
         library.start(settings)
         content.start()
         screens.start()
+        review_missing.start()
         boards.start()
         registry.start()
         try:
@@ -141,6 +149,7 @@ def build_app(
             await library.stop()
             await content.stop()
             await screens.stop()
+            await review_missing.stop()
             boards.stop()
             await registry.stop()
             log_hub.close()
@@ -184,6 +193,8 @@ def build_app(
     app.state.figures = figures
     app.state.screens = screens
     app.state.review = review
+    app.state.review_view = review_view
+    app.state.review_missing = review_missing
     app.state.language = lang
     # Reported to MCP clients as serverInfo.version.
     app.state.version = version

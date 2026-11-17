@@ -59,6 +59,19 @@ def memberships(store: db.Store) -> dict[str, dict[str, list[dict[str, Any]]]]:
     return out
 
 
+def review_state(stages: dict[str, tuple[str, dict[str, Any], str]]) -> str:
+    """A paper's review, as the Code and Datasets screens' Review column says
+    it: included, borderline, excluded, waiting (a candidate the screener has
+    not reached), failed, or "" (not a candidate: on no list, no figure picked)."""
+    state, summary, _ = stages.get(st.REVIEW, ("", {}, ""))
+    if state == st.DONE:
+        summary = summary or {}
+        return "included" if summary.get("include") else "borderline" if summary.get("borderline") else "excluded"
+    if state == st.FAILED:
+        return "failed"
+    return "waiting" if state in (st.PENDING, st.RUNNING) else ""
+
+
 class Screens:
     def __init__(self, content: Any, figures: Any, enricher: Any, store: db.Store) -> None:
         self.content = content
@@ -102,6 +115,7 @@ class Screens:
             "cites": (oa or {}).get("cited_by_count") if oa_state == st.DONE else None,
             "mods": list((mods or {}).get("used") or []) if mods_state == st.DONE else [],
             "lists": member.get("lists", []), "tiers": member.get("tiers", []), "figs": figs,
+            "review": review_state(stages),
         }
 
     def _inferred(self, rows: list[dict[str, Any]]) -> dict[str, set[str]]:

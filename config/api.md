@@ -20,6 +20,7 @@ This file is generated: do not edit it. Change the docs next to the handlers and
 - [Library](#library)
 - [Lists](#lists)
 - [Missing papers](#missing-papers)
+- [Review](#review)
 - [Screener](#screener)
 - [Schemas](#schemas)
 
@@ -3422,6 +3423,91 @@ Hide works from the Missing screen (a soft hide, undone by skip false), or bring
 |---|---|---|---|---|
 | `changed` | integer | yes |  |  |
 
+## Review
+
+| Method | Path | Summary | Who may call |
+|---|---|---|---|
+| GET | [`/api/review/library`](#get-apireviewlibrary) | The review of your curated papers | browser session or API key, anyone signed in |
+| GET | [`/api/review/missing`](#get-apireviewmissing) | The review of the papers you do not have | browser session or API key, anyone signed in |
+| GET | [`/api/review/missing/work`](#get-apireviewmissingwork) | One missing work's abstract screen | browser session or API key, anyone signed in |
+| GET | [`/api/review/paper`](#get-apireviewpaper) | One paper's review with its evidence | browser session or API key, anyone signed in |
+
+### GET /api/review/library
+
+The review of your curated papers
+
+Every paper on a list or with a picked figure, screened against the three inclusion criteria (fMRI dominant, decodes, attention in the authors' own model), with the values the screener extracted. Papers are screened one at a time as the content queue reaches them; those not reached yet are waiting.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`list_review`](mcp.md#list_review) |
+| Errors | 401, 429, 503 |
+
+**Reply 200**: Success
+
+[`ReviewLibrary`](#reviewlibrary).
+
+### GET /api/review/missing
+
+The review of the papers you do not have
+
+The Missing pool screened on title and abstract alone with the same criteria, thresholds sized for an abstract: the works screened in, the near misses (failing exactly one criterion), the excluded tallied by reason, and how well the abstract screen agrees with the full-text one on your own papers. The pool is screened in the background as it fills; progress says how far.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`list_review_missing`](mcp.md#list_review_missing) |
+| Errors | 401, 429, 503 |
+
+**Reply 200**: Success
+
+[`ReviewMissing`](#reviewmissing).
+
+### GET /api/review/missing/work
+
+One missing work's abstract screen
+
+Screens one work of the Missing pool on its abstract: the verdict with its why, and every value the abstract states with its quote.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`get_review_missing_work`](mcp.md#get_review_missing_work) |
+| Errors | 400, 401, 404, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `wid` | query | string | no | at most 20 characters | The work's OpenAlex id (W...). |
+
+**Reply 200**: Success
+
+[`ReviewMissingWork`](#reviewmissingwork).
+
+### GET /api/review/paper
+
+One paper's review with its evidence
+
+One candidate paper's review in full: every extracted value with the sentence it came from, and the alternatives.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`get_review`](mcp.md#get_review) |
+| Errors | 400, 401, 404, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `key` | query | string | no | at most 200 characters | The paper's key. |
+
+**Reply 200**: Success
+
+[`ReviewPaper`](#reviewpaper).
+
 ## Screener
 
 | Method | Path | Summary | Who may call |
@@ -3964,11 +4050,58 @@ The shapes the routes above refer to by name.
 | `rescreen` | integer | yes |  | Papers using these rules would re-screen (or take a kept result for). |
 | `signature` | string | yes |  | The rules' signature; the same as the one in use means using them changes nothing. |
 
+### ReviewLibrary
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `consensus` | array of object | yes |  | The dataset consensus: dataset, parameter, value, n, others, sources. |
+| `counts` | map of integer | yes |  | included, borderline, excluded, waiting, failed, stale (screened under other rules). |
+| `criteria` | array of string | yes |  |  |
+| `criteria_abstract` | array of string | yes |  |  |
+| `fields` | array of map of string | yes |  | The extraction fields in order: name, group. |
+| `papers` | array of object | yes |  | Every candidate paper (on a list or with a picked figure): key, title, year, doi, journal, added, pubdate, cites, lists, tiers, figs, code_n, and state (included, borderline, excluded, waiting, failed). A screened paper adds current (screened under the rules in use), reason_code, reason, task, priority, attention_role, model_name, curated, datasets, notes; an excluded paper why (the tests it failed: test, detail), any other fields: {name: {value, source (auto, curated, dataset), alts, from_dataset, dataset_papers, note}} with only the fields the paper states. A field left out means the paper does not say. get_review gives one paper's quotes. |
+| `problem` | string | yes |  |  |
+| `reasons` | map of string | yes |  |  |
+| `setup` | string | yes |  |  |
+| `signature` | string | yes |  |  |
+| `tasks` | array of object | yes |  |  |
+| `unclassified_priority` | integer | yes |  |  |
+
+### ReviewMissing
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `calibration` | object | yes |  | The abstract screen measured against the library's full-text verdicts: recall (found of total included), precision (agreed of passed), measured_over, configured_precision (shown while nothing can be measured), caveat. |
+| `counts` | map of integer | yes |  | included, near_misses, excluded (near misses among them), no_abstract. |
+| `criteria` | array of string | yes |  |  |
+| `filling` | map of integer | yes |  | filled of papers: library papers whose OpenAlex network (and so their works' abstracts) is in the pool so far. Below papers, works are still arriving and many read as having no abstract. |
+| `near_misses` | array of object | yes |  | Works failing exactly one criterion: the same, with near_miss and miss_label. |
+| `papers` | array of object | yes |  | The works screened in, nearest your library first (at most 4000): wid, doi, title, journal, year, pubdate, cited_by, oa_pdf, authors, n_authors, lib_cites (your papers citing it), cites_lib (your papers it cites), conn, task, priority, model_name, datasets, attention_role. |
+| `papers_cut` | integer | yes |  | Included works past the cap, not sent. |
+| `progress` | map of integer | yes |  | screened (under the rules in use) of total works in the pool. |
+| `reasons` | map of integer | yes |  | The excluded, tallied by reason code. |
+| `signature` | string | yes |  |  |
+| `skipped` | integer | yes |  |  |
+
+### ReviewMissingWork
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `review` | object | yes |  | As get_review, from the abstract alone, with the abstract. |
+| `wid` | string | yes |  |  |
+
 ### ReviewOverrides
 
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
 | `overrides` | map of map of string | yes |  | Paper key (or DOI) -> {field: value}. |
+
+### ReviewPaper
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `key` | string | yes |  |  |
+| `review` | object | yes |  | verdict (include, borderline, reason, task_category, priority, attention_role, why, task_evidence, attention_evidence), fields: {name: {group, value, values (most-stated first), counts, evidence (the sentences each value came from), source}}, datasets, model_name, curated, override, current. |
 
 ### ReviewProgress
 

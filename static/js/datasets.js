@@ -68,7 +68,7 @@ const DatasetsView = {
       else this.stale = true;
     } , 30000 );
     Content.on( "enrich" , soon );
-    Content.on( "paper" , ( data ) => { if ( data.stage === "datasets" ) soon(); } );
+    Content.on( "paper" , ( data ) => { if ( data.stage === "datasets" || data.stage === "review" ) soon(); } );
     window.addEventListener( "hashchange" , () => {
       if ( Nav.current() === "datasets" && ( this.stale || !this.loaded ) ) this.load();
     } );
@@ -140,6 +140,7 @@ const DatasetsView = {
     if ( this.member.has( "code" ) && !paper.code_n ) return false;
     if ( this.member.has( "list" ) && !paper.lists.length ) return false;
     if ( this.member.has( "tier" ) && !paper.tiers.length ) return false;
+    if ( this.member.has( "review" ) && paper.review !== "included" ) return false;
     if ( this.archive && !paper.data.some( ( link ) => link.host === this.archive ) ) return false;
     return true;
   },
@@ -259,6 +260,7 @@ const DatasetsView = {
       { id: "tier" , label: "datasets.col_tier" , width: 7 , sort: true , value: ( row ) => ( row.tiers[ 0 ] || {} ).tier || null , cell: ( row ) => CodeView.tiersCell( row.tiers ) ,
         text: ( row ) => row.tiers.map( ( t ) => t.tier ).join( ", " ) },
       { id: "figs" , label: "datasets.col_figs" , sort: true , align: "end" , width: 4.5 , value: ( row ) => row.figs || null , cell: ( row ) => row.figs ? String( row.figs ) : "" , text: ( row ) => row.figs || "" },
+      CodeView.reviewColumn( "datasets.col_review" ),
       { id: "doi" , label: "table.col_doi" , width: 12 , hide: true , sort: true , cellClass: "small" , cell: ( row ) => row.doi || "" , text: ( row ) => row.doi || "" },
     ];
   },
