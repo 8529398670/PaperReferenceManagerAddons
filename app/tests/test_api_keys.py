@@ -60,6 +60,29 @@ class MintForTest(RoutesTestCase):
         self.assertIsNone(api_keys.APIKey.from_record(record).created_by)
 
 
+class BearerWinsTest(RoutesTestCase):
+    def test_a_bearer_header_wins_over_the_cookie(self) -> None:
+        """S7: a request carrying both a signed-in cookie and a key acts as
+        the key. It used to act as the cookie, so a script using a narrow key
+        from a signed-in browser quietly ran with the full account."""
+        narrow, _ = api_keys.issue_api_key(self.store, self.user.id, "narrow", users.ROLE_USER, 3600)
+        status, reply = self.call("GET", "/api/me", cookie=self.owner_cookie, key=narrow)
+        self.assertEqual((status, reply.get("id")), (200, self.user.id), reply)
+        # A bad key is no one, not the signed-in account.
+        self.assertEqual(self.call("GET", "/api/me", cookie=self.owner_cookie, key="nope.nope")[0], 401)
+
+        # S16: any Authorization header is an attempt at a key. "Bearer<TAB>key"
+        # used to fall back to the cookie and run as the signed-in owner.
+        def header(value: str) -> tuple[int, dict]:
+            response = self.client.get("/api/me", headers={"cookie": self.owner_cookie, "authorization": value})
+            return response.status_code, response.json()
+
+        status, reply = header("Bearer\t" + narrow)
+        self.assertEqual((status, reply.get("id")), (200, self.user.id), reply)
+        for value in ("Bearer\tnope.nope", "Basic abc", "Bearer", "nonsense"):
+            self.assertEqual(header(value)[0], 401, value)
+
+
 class EditKeyTest(RoutesTestCase):
     def post(self, cookie: str, path: str, **body: object) -> tuple[int, dict]:
         return self.call("POST", path, cookie=cookie, body={"csrf_token": self.csrf(cookie), **body})
@@ -91,6 +114,58 @@ class EditKeyTest(RoutesTestCase):
         self.assertEqual(self.post(self.user_cookie, path, name="retired")[0], 200)
         api_keys.delete_api_key(self.store, key.id, self.user.id)
         self.assertEqual(self.post(self.user_cookie, path, name="gone")[0], 404)
+
+    def test_only_the_owner_touches_an_admins_keys(self) -> None:
+        """S3: revoking, deleting and restoring someone else's key follow the
+        owner rule for the key's account. Before, any admin could kill another
+        admin's keys, or bring back a key the owner had deleted."""
+        third = users.create_user(self.store, "Third admin", users.ROLE_ADMIN)
+        for verb in ("revoke", "delete"):
+            for holder in (self.owner.id, third.id):
+                with self.subTest(verb=verb, holder=holder):
+                    key = self.issued(holder)
+                    status, reply = self.post(self.admin_cookie, f"/api/admin/keys/{key.id}/{verb}")
+                    self.assertEqual(status, 403, reply)
+                    self.assertTrue(api_keys.get_api_key(self.store, key.id).live)
+            self.assertEqual(self.post(self.admin_cookie, f"/api/admin/keys/{self.issued(self.user.id).id}/{verb}")[0], 200)
+            self.assertEqual(self.post(self.owner_cookie, f"/api/admin/keys/{self.issued(third.id).id}/{verb}")[0], 200)
+
+    def test_restoring_a_key_follows_its_account(self) -> None:
+        key = self.issued(self.owner.id)
+        self.assertEqual(self.post(self.owner_cookie, f"/api/keys/{key.id}/delete")[0], 200)
+        status, reply = self.post(self.admin_cookie, f"/api/admin/keys/{key.id}/restore")
+        self.assertEqual(status, 403, reply)
+        self.assertTrue(api_keys.get_api_key(self.store, key.id).deleted)
+        self.assertEqual(self.post(self.owner_cookie, f"/api/keys/{key.id}/restore")[0], 200)
+
+    def test_only_the_owner_renames_an_admins_key(self) -> None:
+        """S14: an admin who is not the owner renames neither the owner's key
+        nor another admin's. A non-owner admin renamed the owner's prod-deploy
+        key to unused-delete-me, which could lead the owner to revoke the
+        wrong one."""
+        third = users.create_user(self.store, "Third admin", users.ROLE_ADMIN)
+        for holder in (self.owner.id, third.id):
+            with self.subTest(holder=holder):
+                key = self.issued(holder)
+                status, reply = self.post(self.admin_cookie, f"/api/admin/keys/{key.id}/rename", name="unused-delete-me")
+                self.assertEqual(status, 403, reply)
+                self.assertNotEqual(api_keys.get_api_key(self.store, key.id).name, "unused-delete-me")
+                self.assertEqual(self.post(self.owner_cookie, f"/api/admin/keys/{key.id}/rename", name="kept")[0], 200)
+        key = self.issued(self.user.id)
+        self.assertEqual(self.post(self.admin_cookie, f"/api/admin/keys/{key.id}/rename", name="ci-2")[0], 200)
+
+    def test_what_the_owner_deleted_only_the_owner_restores(self) -> None:
+        """S14: the owner deleted admin Bob's key, Bob restored it, and it was
+        live again. What Bob deleted himself, he may still put back."""
+        key = self.issued(self.admin.id)
+        self.assertEqual(self.post(self.owner_cookie, f"/api/admin/keys/{key.id}/delete")[0], 200)
+        for path in (f"/api/keys/{key.id}/restore", f"/api/admin/keys/{key.id}/restore"):
+            status, reply = self.post(self.admin_cookie, path)
+            self.assertEqual(status, 403, (path, reply))
+        self.assertTrue(api_keys.get_api_key(self.store, key.id).deleted)
+        self.assertEqual(self.post(self.owner_cookie, f"/api/admin/keys/{key.id}/restore")[0], 200)
+        self.assertEqual(self.post(self.admin_cookie, f"/api/keys/{key.id}/delete")[0], 200)
+        self.assertEqual(self.post(self.admin_cookie, f"/api/keys/{key.id}/restore")[0], 200)
 
     def test_who_may_change_a_keys_expiry(self) -> None:
         third = users.create_user(self.store, "Third admin", users.ROLE_ADMIN)

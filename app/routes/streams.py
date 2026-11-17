@@ -24,7 +24,7 @@ def still_signed_in(request: Request) -> Callable[[], Awaitable[bool]]:
         def check() -> bool:
             return load_api_key(store, credential) is not None
     else:
-        credential = decrypt_cookie(cfg, request.cookies.get(cfg.cookie_name, ""))
+        credential = decrypt_cookie(cfg, request.cookies.get(cfg.session_cookie_name, ""))
 
         def check() -> bool:
             return load_session(store, credential) is not None

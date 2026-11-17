@@ -1,34 +1,46 @@
-"""The URL map -- the only place that knows every route this server answers.
-Read build_routes top to bottom to see the whole surface.
+"""The URL map. Every API route is declared beside its handler, in its
+module's @route("METHOD /path", ...), and build_routes mounts each one in
+MODULES, the most specific path first, behind the guards its declaration
+implies:
 
-The API stays deliberately small: it covers logging in, managing who can log
-in, issuing the API keys that let non-browser callers in, and reading the UI's
-text. Everything else an app does belongs in a new module in this package
-(server side) and in static/js/ (browser side) -- see
-references/architecture.md for where the line sits and why.
+- Anyone signed in, by a browser session or an API key, is the default.
+  role=ADMIN is the admins, and role=OWNER the owner from a browser session;
+  everyone else gets the 404 an unknown route gets.
+- access=SESSION_ONLY turns an API key away. It guards what a key must not
+  reach: minting and managing API keys, your own password, PIN and
+  two-factor, other people's files. A key that could do those could turn
+  itself into a session or carry off every account's files.
+- An admin-scoped key may manage accounts and hand out login and invite links.
+  Every link records the key that made it, and revoking or deleting that key
+  voids the links it made that can still be used, so revoking a leaked key
+  still ends what it could hand out. Who may delete or demote whom is in the
+  models.
+- access=PUBLIC needs no sign-in: logging in, the UI's text, health.
+- A feature that can be switched off while the server runs has a switch in
+  FEATURE_GUARDS: its routes answer 404 while it is off, before anything else
+  is asked.
 
-Protection comes from where a route is registered. group() attaches guards to
-each route it builds, so a protected route cannot be written without its
-guard, and the list below is a complete statement of who may call what.
-Guards attach per route (Starlette's Route(middleware=...)), not per path
-prefix, so a group never leaks onto routes outside it.
+The Go template's server/routes/routes_generated.go is the same table, written
+by its generator from the same rules. Only the pages a link opens and the
+catch-alls are written out here.
 """
 from __future__ import annotations
 
-from typing import Callable, Sequence
+import re
+from typing import Any
 
 from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.routing import BaseRoute, Route
 
-from app.core.config import Config
+from app.apidocs import ADMIN, KEY_ONLY, OWNER, PUBLIC, SESSION_ONLY
+from app.apidocs.route import Declared, declared_of
 from app.core.security import RequireAdmin, RequireLogin, RequireSession
 from app.core.security import Guard
-from app.core.security import RequireOwner
 from app.core.security import RequireAPIKey
+from app.core.security import RequireOwner
 from app.core.static_files import StaticServer
-from app.mcp.protocol import Server as MCPServer
 from app.routes import (
     account,
     admin,
@@ -38,7 +50,7 @@ from app.routes import (
     library,
     jobs,
     logs,
-    mcp_tools,
+    mcp_manifest,
     meta,
     openapi,
     sessions,
@@ -49,7 +61,8 @@ from app.routes import (
     two_factor,
 )
 from app.routes.api_keys import RequireAPIKeys
-from app.routes.helpers import get_config, not_found
+from app.routes.helpers import get_config
+from app.routes.helpers import not_found
 
 
 class RequireMCP(Guard):
@@ -57,6 +70,8 @@ class RequireMCP(Guard):
     exactly what an unregistered route would say. Checked per request rather
     than by registering /mcp or not, because both can be switched while the
     server runs."""
+
+    statuses = (404,)
 
     def refuse(self, request: Request) -> Response | None:
         cfg = get_config(request)
@@ -69,189 +84,152 @@ class RequireTwoFactor(Guard):
     """The same for setting up 2FA while auth.two_factor is off. Finishing a
     sign-in is not behind this: one already under way may as well end."""
 
+    statuses = (404,)
+
     def refuse(self, request: Request) -> Response | None:
         return None if get_config(request).two_factor_enabled else not_found("not found")
 
 
-def group(*guards: type) -> Callable[..., Route]:
-    """A route builder whose routes all run behind the given guards, in
-    order. Usage: signed_in = group(RequireLogin); signed_in("/api/me", me)."""
-    middleware = [Middleware(guard) for guard in guards]
+class RequireLogs(Guard):
+    """Makes the activity log's routes answer 404 while the log is off
+    (logs.enabled). Per request, like RequireWebhooks."""
 
-    def route(path: str, endpoint: Callable, methods: Sequence[str] = ("GET",)) -> Route:
-        return Route(path, endpoint, methods=list(methods), middleware=middleware)
+    statuses = (404,)
 
-    return route
+    def refuse(self, request: Request) -> Response | None:
+        logger = getattr(request.app.state, "logs", None)
+        return None if logger is not None and logger.enabled else not_found("not found")
 
 
-def build_routes(static_server: StaticServer, cfg: Config) -> list[BaseRoute]:
-    """cfg is the configuration the server started with: it decides only
-    what is set up once (the activity log's routes). Everything a request
-    reads, it reads from the running configuration."""
-    public = group()
-    signed_in = group(RequireLogin)
-    sessions_only = group(RequireLogin, RequireSession)
-    # API keys: any signed-in user manages their own, from a browser session.
-    my_keys = group(RequireAPIKeys, RequireLogin, RequireSession)
-    # Admin only: deciding who gets in.
-    admins = group(RequireAdmin)
-    # The two admin routes that hand out a login link also require a browser
-    # session. A login link becomes a session, and a session can mint API
-    # keys -- so if an admin-scoped key could create accounts or reissue
-    # links, a leaked key could turn itself into a fresh session and a fresh
-    # key, and revoking the leaked one would not end the compromise. The rule
-    # is: an API key may use what an account can do, but it never creates
-    # credentials. See RequireSession.
-    #
-    # Deleting an account requires a session too, for a different reason: it
-    # cannot be undone. A leaked admin key can disable accounts, which an
-    # admin can reverse; it must not be able to erase them. Who may delete
-    # whom (the owner rules) is enforced in credentials.delete_user.
-    admin_sessions = group(RequireAdmin, RequireSession)
-    # Admin view of every key in the app -- "who has standing access" -- and
-    # the ability to revoke or delete someone else's.
-    admin_keys = group(RequireAPIKeys, RequireAdmin, RequireSession)
-    # The activity log and the Settings screen: the owner only, from a
-    # browser session -- not other admins, not any API key, not the signed
-    # out; all of them get 404 (see RequireOwner).
-    owner = group(RequireOwner)
-    # Passwords and 2FA change how an account signs in, so setting them needs
-    # a browser session, like the PIN: a key that could set a password could
-    # turn itself into a session.
-    my_two_factor = group(RequireTwoFactor, RequireLogin, RequireSession)
+# Every module with declared routes, in the order the docs list ties.
+MODULES = [
+    account,
+    admin,
+    api_keys,
+    auth,
+    boards,
+    jobs,
+    library,
+    logs,
+    mcp_manifest,
+    meta,
+    openapi,
+    sessions,
+    settings,
+    shortcuts,
+    team,
+    themes,
+    two_factor,
+]
 
+# The switches of the features that can be off while the server runs, by
+# feature name: a route whose op says feature=x answers 404 while x is off,
+# exactly what an unregistered route would say. It goes in front of every
+# other guard. Go's featureGuards (server/routes/routes.go) is the same map.
+FEATURE_GUARDS: dict[str, type[Guard]] = {
+    "two_factor": RequireTwoFactor,
+    "api_keys": RequireAPIKeys,
+    "mcp": RequireMCP,
+    "logs": RequireLogs,
+}
+
+
+def guards_of(declared: Declared) -> tuple[type, ...]:
+    """The guards in front of a route, in order: its feature's switch, who may
+    call it, a session for SESSION_ONLY, then its own use=[...]."""
+    op = declared.op
+    guards: list[type] = []
+    if op.feature in FEATURE_GUARDS and not declared.no_switch:
+        guards.append(FEATURE_GUARDS[op.feature])
+    if op.access == KEY_ONLY:
+        guards.append(RequireAPIKey)
+        if op.role == ADMIN:
+            guards.append(RequireAdmin)
+    elif op.access != PUBLIC:
+        guards.append(RequireAdmin if op.role == ADMIN else RequireOwner if op.role == OWNER else RequireLogin)
+    if op.access == SESSION_ONLY and op.role != OWNER:
+        guards.append(RequireSession)
+    guards.extend(declared.use)
+    return tuple(guards)
+
+
+def errors_of(declared: Declared) -> tuple[int, ...]:
+    """Every error status the docs list for a route: its guards', the
+    request checks' (400 for a request with fields, and 400 and 403 for a
+    csrf token to check), and the handler's own errors=(...)."""
+    op = declared.op
+    statuses = set(op.errors)
+    for guard in declared.guards:
+        statuses.update(getattr(guard, "statuses", ()))
+    if declared.method != "GET" and op.access != PUBLIC and not op.no_csrf and op.raw_body is None:
+        statuses.update((400, 403))
+    if declared.input.fields:
+        statuses.add(400)
+    return tuple(sorted(statuses))
+
+
+PARAMETER = re.compile(r"^\{\w+\}$")
+
+
+def _segments(path: str) -> list[str]:
+    return [part for part in path.strip("/").split("/") if part]
+
+
+def _order(declared: Declared) -> Any:
+    """Most specific first: at the first segment where two differ, a literal
+    before a {param}, then literals in order; a shorter path before a longer
+    one it starts; then by method. Go's generator sorts the same way."""
+    return ([(1, "") if PARAMETER.match(part) else (0, part) for part in _segments(declared.path)], declared.path, declared.method)
+
+
+def _ambiguous(a: Declared, b: Declared) -> bool:
+    """One URL could match both, with neither the more specific."""
+    left, right = _segments(a.path), _segments(b.path)
+    if a.method != b.method or len(left) != len(right):
+        return False
+    left_wins = right_wins = False
+    for one, other in zip(left, right):
+        one_param, other_param = bool(PARAMETER.match(one)), bool(PARAMETER.match(other))
+        if not one_param and not other_param and one != other:
+            return False
+        left_wins |= not one_param and other_param
+        right_wins |= one_param and not other_param
+    return left_wins == right_wins
+
+
+def declared_routes() -> list[Declared]:
+    """Every route declared in MODULES, in the order they are mounted, with
+    their guards and error statuses filled in. A clash is a mistake to fix,
+    not something to resolve by order."""
+    found: list[Declared] = []
+    for module in MODULES:
+        for value in vars(module).values():
+            declared = declared_of(value)
+            if declared is not None and declared.endpoint is value and declared not in found:
+                found.append(declared)
+                if declared.bulk is not None:
+                    found.append(declared.bulk)
+    ordered = sorted(found, key=_order)
+    for index, one in enumerate(ordered):
+        for other in ordered[index + 1:]:
+            if _ambiguous(one, other):
+                raise TypeError(f"{one.method} {one.path} and {other.method} {other.path} can match the same request")
+    for declared in ordered:
+        declared.guards = guards_of(declared)
+        declared.errors = errors_of(declared)
+    return ordered
+
+
+def build_routes(static_server: StaticServer) -> list[BaseRoute]:
     routes: list[BaseRoute] = [
-        # Public: the login link's page and the call it makes, the UI's text
-        # (needed to render the signed-out page at all), and the healthcheck.
-        # Opening a login link only shows a page; the link is spent by the
-        # POST that page sends when the person confirms. See auth.py.
-        public("/login/{credential:path}", static_server.serve_login_page),
-        public("/api/login", auth.redeem_login_link, ["POST"]),
-        public("/api/login/two-factor", two_factor.finish_sign_in, ["POST"]),
-        public("/api/language", meta.get_language),
-        public("/api/health", meta.get_health),
-        public("/api/ready", meta.get_ready),
-        # Any signed-in user.
-        signed_in("/api/me", account.me),
-        signed_in("/api/account/rename", account.rename, ["POST"]),
-        signed_in("/api/account/shortcuts", shortcuts.set_my_shortcuts, ["POST"]),
-        signed_in("/api/account/themes", themes.set_my_themes, ["POST"]),
-        signed_in("/api/account/theme", themes.set_my_theme, ["POST"]),
-        # A session only, for the same reason as every route that hands out
-        # a login link: the link becomes a session. See admin_sessions above.
-        sessions_only("/api/account/login-link", account.create_my_login_link, ["POST"]),
-        signed_in("/api/account/login-link/cancel", account.cancel_my_login_link, ["POST"]),
-        # The account's own sessions. A session only: a key has none, and
-        # signing devices out is a person's decision.
-        sessions_only("/api/account/sessions", sessions.list_my_sessions),
-        sessions_only("/api/account/sessions/revoke-others", sessions.revoke_others, ["POST"]),
-        sessions_only("/api/account/sessions/{session_id}/label", sessions.label_one, ["POST"]),
-        sessions_only("/api/account/sessions/{session_id}/revoke", sessions.revoke_one, ["POST"]),
-        my_two_factor("/api/account/two-factor/start", two_factor.start_setup, ["POST"]),
-        my_two_factor("/api/account/two-factor/confirm", two_factor.confirm_setup, ["POST"]),
-        my_two_factor("/api/account/two-factor/disable", two_factor.disable, ["POST"]),
-        signed_in("/api/logout", account.logout, ["POST"]),
-        signed_in("/api/team", team.list_team),
-        signed_in("/api/openapi.json", openapi.get_openapi),
-        my_keys("/api/keys", api_keys.list_my_keys),
-        my_keys("/api/keys", api_keys.create_my_key, ["POST"]),
-        my_keys("/api/keys/{key_id}/rename", api_keys.rename_my_key, ["POST"]),
-        my_keys("/api/keys/{key_id}/expiry", api_keys.set_my_key_expiry, ["POST"]),
-        my_keys("/api/keys/{key_id}/revoke", api_keys.revoke_my_key, ["POST"]),
-        my_keys("/api/keys/{key_id}/delete", api_keys.delete_my_key, ["POST"]),
-        my_keys("/api/keys/{key_id}/restore", api_keys.restore_my_key, ["POST"]),
-        admins("/api/admin/users", admin.list_users),
-        admin_sessions("/api/admin/users", admin.create_user, ["POST"]),
-        admin_sessions("/api/admin/users/{user_id}/reissue-login", admin.reissue_login, ["POST"]),
-        admins("/api/admin/users/{user_id}/cancel-login-link", admin.cancel_login_link, ["POST"]),
-        admins("/api/admin/users/{user_id}/disabled", admin.set_user_disabled, ["POST"]),
-        admins("/api/admin/users/{user_id}/revoke-access", admin.revoke_access, ["POST"]),
-        admin_sessions("/api/admin/users/{user_id}/rename", admin.rename_user, ["POST"]),
-        admin_sessions("/api/admin/users/{user_id}/role", admin.set_user_role, ["POST"]),
-        admin_sessions("/api/admin/users/{user_id}/delete", admin.delete_user, ["POST"]),
-        admin_sessions("/api/admin/users/{user_id}/reset-two-factor", admin.reset_two_factor, ["POST"]),
-        # A session only, like your own devices list: a key that could end
-        # sessions could end the one that would revoke it.
-        admin_sessions("/api/admin/users/{user_id}/sessions", sessions.list_user_sessions),
-        admin_sessions("/api/admin/users/{user_id}/sessions/{session_id}/revoke", sessions.revoke_user_session, ["POST"]),
-        # The themes everyone starts from. Not a credential, so a key may.
-        admins("/api/admin/theme-defaults", themes.get_theme_defaults),
-        admins("/api/admin/theme-defaults", themes.set_theme_defaults, ["POST"]),
-        admin_keys("/api/admin/keys", api_keys.list_all_keys),
-        admin_keys("/api/admin/keys", api_keys.create_key_for_user, ["POST"]),
-        admin_keys("/api/admin/keys/{key_id}/rename", api_keys.rename_any_key, ["POST"]),
-        admin_keys("/api/admin/keys/{key_id}/expiry", api_keys.set_any_key_expiry, ["POST"]),
-        admin_keys("/api/admin/keys/{key_id}/revoke", api_keys.revoke_any_key, ["POST"]),
-        admin_keys("/api/admin/keys/{key_id}/delete", api_keys.delete_any_key, ["POST"]),
-        admin_keys("/api/admin/keys/{key_id}/restore", api_keys.restore_any_key, ["POST"]),
-        # config.yaml, as the owner's Settings screen. See settings.py.
-        owner("/api/owner/settings", settings.get_settings),
-        owner("/api/owner/settings", settings.save_settings, ["POST"]),
-        # Background jobs. See app/core/jobs.py.
-        owner("/api/owner/jobs", jobs.list_jobs),
-        owner("/api/owner/jobs/{name}/run", jobs.run_job, ["POST"]),
-        # The Zotero library, read live. See app/library/ and routes/library.py.
-        signed_in("/api/papers", library.list_papers),
-        signed_in("/api/papers/recent", library.recent_papers),
-        signed_in("/api/paper", library.get_paper),
-        signed_in("/api/paper/pdf", library.get_pdf),
-        signed_in("/api/library/status", library.library_status),
-        signed_in("/api/library/links", library.get_config_links),
-        signed_in("/api/library/stream", library.stream_library),
-        # The userscripts' "do I have this paper", with an API key.
-        signed_in("/api/exists", library.post_exists, ["POST"]),
-        signed_in("/api/version", library.get_version),
-        # The lists. Every change is a batch of ops. See app/boards/.
-        signed_in("/api/lists", boards.list_lists),
-        signed_in("/api/lists", boards.create_list, ["POST"]),
-        signed_in("/api/lists/schema", boards.get_schema),
-        signed_in("/api/lists/stream", boards.stream_lists),
-        signed_in("/api/lists/{slug}", boards.get_list),
-        signed_in("/api/lists/{slug}/ops", boards.post_ops, ["POST"]),
-        signed_in("/api/lists/{slug}/rows", boards.get_rows),
-        signed_in("/api/lists/{slug}/export.csv", boards.get_export_csv, ["GET", "POST"]),
-        signed_in("/api/lists/{slug}/history", boards.get_history),
-        signed_in("/api/lists/{slug}/history/{rev}", boards.get_version),
-        signed_in("/api/lists/{slug}/restore", boards.post_restore, ["POST"]),
-        signed_in("/api/lists/{slug}/lock", boards.post_lock, ["POST"]),
-        signed_in("/api/cite", boards.post_cite, ["POST"]),
-        signed_in("/api/cite/styles", boards.get_cite_styles),
-        signed_in("/api/refs/parse", boards.post_refs_parse, ["POST"]),
+        # The pages a login link and an invite link open. Opening one only
+        # shows a page; the link is spent by the POST that page sends when the
+        # person confirms. See auth.py and join.py.
+        Route("/login/{credential:path}", static_server.serve_login_page),
     ]
-
-    # The activity log (app/core/logs.py). Switched off in config.yaml, none
-    # of it exists and track.js sends nothing.
-    if cfg.logs.enabled:
-        routes += [
-            # What someone did on the page, sent by track.js. Theirs to send,
-            # the owner's to read.
-            signed_in("/api/logs/events", logs.record_ui_events, ["POST"]),
-            owner("/api/owner/logs/days", logs.list_log_days),
-            owner("/api/owner/logs/days/{date}", logs.get_log_day),
-            owner("/api/owner/logs/days/{date}/download", logs.download_log_day),
-            owner("/api/owner/logs/days/{date}/delete", logs.delete_log_day, ["POST"]),
-            owner("/api/owner/logs/prune", logs.prune_logs, ["POST"]),
-            owner("/api/owner/logs/ip-names", logs.list_ip_names),
-            owner("/api/owner/logs/ip-names", logs.set_ip_name, ["POST"]),
-            owner("/api/owner/logs/ip-names/delete", logs.delete_ip_name, ["POST"]),
-            owner("/api/owner/logs/stream", logs.stream_log_changes),
-        ]
-
-    # MCP: agents calling the app with an API key (see app/mcp and
-    # mcp_tools.py). Keys only -- RequireAPIKey turns a browser session away --
-    # and every tool runs at the key's effective role, so this is the API above
-    # in another shape, not a wider one.
-    #
-    # Always registered: server.mcp and auth.api_keys can be switched while
-    # the server runs, so RequireMCP checks them per request and answers 404
-    # when either is off -- without API keys nothing could authenticate to it.
-    mcp = MCPServer(mcp_tools.build_registry())
-    routes += [
-        group(RequireMCP, RequireAPIKey)("/mcp", mcp.endpoint, ["POST"]),
-        group(RequireMCP)("/mcp", mcp.method_not_allowed, ["GET", "DELETE"]),
-    ]
-
-
+    for declared in declared_routes():
+        middleware = [Middleware(guard) for guard in declared.guards]
+        routes.append(Route(declared.path, declared.endpoint, methods=[declared.method], middleware=middleware))
     return routes + [
         # Any other /api/ path is a JSON 404, not the index.html fallback.
         Route("/api/{rest:path}", meta.unknown_api),

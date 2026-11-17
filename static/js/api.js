@@ -104,13 +104,13 @@ const Api = {
   },
   // The whole set of changed keys; {} puts them all back. See shortcuts.js.
   setShortcuts( shortcuts )    { return this.post( "/api/account/shortcuts" , { shortcuts: shortcuts } ); },
-  // Your whole list of themes (null: back to the defaults) and the one you
-  // use; or only the one you use. See theme.js.
-  setThemes( themes , id )     { return this.post( "/api/account/themes" , { themes: themes , theme_id: id } ); },
+  // Your whole list of themes (null: back to the defaults), the built-in
+  // themes it has seen and the one you use; or only the one you use. See theme.js.
+  setThemes( themes , id , builtins ) { return this.post( "/api/account/themes" , { themes: themes , theme_id: id , builtins: builtins || 0 } ); },
   setTheme( id )               { return this.post( "/api/account/theme" , { theme_id: id } ); },
-  // The themes everyone without their own list sees; null is the built-in ones. // feature:appearance
-  themeDefaults()              { return this.request( "/api/admin/theme-defaults" ); }, // feature:appearance
-  setThemeDefaults( themes )   { return this.post( "/api/admin/theme-defaults" , { themes: themes } ); }, // feature:appearance
+  // The themes everyone without their own list sees; null is the built-in ones.
+  themeDefaults()              { return this.request( "/api/admin/theme-defaults" ); },
+  setThemeDefaults( themes , builtins ) { return this.post( "/api/admin/theme-defaults" , { themes: themes , builtins: builtins || 0 } ); },
   startTwoFactor()             { return this.post( "/api/account/two-factor/start" ); },
   confirmTwoFactor( code )     { return this.post( "/api/account/two-factor/confirm" , { code: code } ); },
   disableTwoFactor( code )     { return this.post( "/api/account/two-factor/disable" , { code: code } ); },
@@ -148,6 +148,10 @@ const Api = {
   },
   setKeyExpiry( keyId , days ) {
     return this.post( "/api/keys/" + encodeURIComponent( keyId ) + "/expiry" , { expires_in_days: days } );
+  },
+  // Whether one of your own keys may make a login link for your account.
+  setKeySignIn( keyId , on ) {
+    return this.post( "/api/keys/" + encodeURIComponent( keyId ) + "/sign-in" , { may_sign_in: on } );
   },
   revokeKey( keyId )           { return this.post( "/api/keys/" + encodeURIComponent( keyId ) + "/revoke" ); },
   deleteKey( keyId )           { return this.post( "/api/keys/" + encodeURIComponent( keyId ) + "/delete" ); },

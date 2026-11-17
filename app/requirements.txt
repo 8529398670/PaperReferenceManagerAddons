@@ -5,6 +5,10 @@
 #
 # Plain uvicorn, not uvicorn[standard]: uvloop and httptools would add speed
 # this app does not need, and more native code to trust.
+#
+# msgspec is each route's request and reply types: it parses and checks the
+# request, encodes the reply, and gives the JSON Schema the API docs and the
+# MCP tools are written from (app/apidocs/route.py).
 starlette==1.9.0
 uvicorn==0.54.0
 PyYAML==6.0.3
@@ -16,3 +20,4 @@ rapidfuzz==3.14.3
 lxml==6.1.3
 # CSL citations (app/boards/cite.py). Pure Python; lxml ships musllinux wheels.
 citeproc-py==0.12.1
+msgspec==0.22.0

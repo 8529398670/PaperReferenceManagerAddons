@@ -182,7 +182,9 @@ const App = {
     loading.push( Library.init( me ) );
     loading.push( Lists.init( me ) );
     loading.push( Keys.init( me ) );
+    Mcp.init( me );
     loading.push( Sessions.init() );
+    About.init( me );
 
     if ( me.role === "admin" ) {
       Dom.show( Dom.get( "admin-panel" ) , true );

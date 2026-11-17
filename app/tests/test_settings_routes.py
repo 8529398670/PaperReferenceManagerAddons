@@ -51,7 +51,7 @@ class SettingsRoutesTest(unittest.TestCase):
     def session(store: db.Store, cfg, user_id: int) -> str:
         login = login_tokens.issue_login_token(store, user_id, 3600)
         credential = login_tokens.redeem_login_token(store, login, SignInRules(3600)).session_credential
-        return f"{cfg.cookie_name}={encryption.xchacha_encrypt_string(cfg.secret_key, credential)}"
+        return f"{cfg.session_cookie_name}={encryption.xchacha_encrypt_string(encryption.subkey(cfg.secret_key, encryption.PURPOSE_COOKIE), credential)}"
 
     def call(self, method: str, path: str, cookie: str = "", key: str = "", body: dict | None = None) -> tuple[int, dict]:
         headers = {"content-type": "application/json"}
@@ -94,6 +94,21 @@ class SettingsRoutesTest(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertEqual(reply["error"], "invalid_settings")
         self.assertTrue(reply["problems"][0].startswith("server.port"))
+
+    def test_settings_never_change_a_path(self) -> None:
+        """S2: a path is never set from Settings, inside a container or out.
+        Before, the owner's screen could point static_dir at the config
+        folder, and the static handler then served secret.key to anyone."""
+        for key in ("server.static_dir", "server.language_file", "server.app_dir", "docker.data_dir"):
+            with self.subTest(key=key):
+                version = self.call("GET", "/api/owner/settings", cookie=self.owner)[1]["version"]
+                body = {"csrf_token": self.csrf, "version": version, "changes": {key: "/s2-probe"}}
+                status, reply = self.call("POST", "/api/owner/settings", cookie=self.owner, body=body)
+                self.assertEqual((status, reply.get("error")), (403, "settings_file_only"), reply)
+        self.assertNotIn("s2-probe", self.path.read_text())
+        _, snapshot = self.call("GET", "/api/owner/settings", cookie=self.owner)
+        marked = {state["key"] for section in snapshot["sections"] for state in section["keys"] if state.get("file_only")}
+        self.assertIn("server.static_dir", marked)
 
     def test_mcp_follows_the_setting(self) -> None:
         ping = {"jsonrpc": "2.0", "id": 1, "method": "ping", "params": {}}

@@ -2,23 +2,33 @@
 named operations applied atomically (app/boards/ops.py has every op and its
 parameters; GET /api/lists/schema lists them). The page, a script and an MCP
 agent all speak the same ops, so there is one set of rules.
+
+Creating, restoring and locking whole lists has no MCP tool: an agent edits
+lists, it does not decide which exist or which may change.
 """
 from __future__ import annotations
 
-from typing import Any
+import base64
+import binascii
+from typing import Annotated, Any, Callable, ClassVar, Literal
 
+from msgspec import Meta
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import Response
 
-from app.boards import cite, refparse
-
-from app.boards import ops, store as boards
+from app.apidocs import PATH, QUERY, Reply, route
+from app.apidocs import Request as RequestType
+from app.boards import cite, ops, refparse
+from app.boards import store as boards
 from app.boards.service import BoardService
 from app.core import sse
-from app.core.security import actor_from, check_csrf
-from app.routes.helpers import PAGE_MAX, bad_request, error, forbidden, get_config, get_store, not_found, read_json, run, send_page, whole_number
 from app.core.logs import KIND_ADMIN
+from app.core.security import actor_from
+from app.mcp.registry import Call
+from app.routes.helpers import Page, Paged, Refused, cut_page, error, get_config, get_store
 from app.routes.logs import audit
+
+TAG = "Lists"
 
 
 def get_service(request: Request) -> BoardService:
@@ -32,46 +42,76 @@ def actor_name(request: Request) -> str:
     return actor.user.display_name + (" (API key)" if actor.via_api_key else "")
 
 
-def board_refused(refusal: boards.BoardError) -> JSONResponse:
-    return JSONResponse({"error": str(refusal), **refusal.extra}, status_code=refusal.status)
+def board_refused(refusal: boards.BoardError) -> Refused:
+    return Refused(refusal.status, str(refusal), **refusal.extra)
 
 
-async def list_lists(request: Request) -> Response:
-    return send_page(request, "lists", await run(boards.list_boards, get_store(request)))
+Slug = Annotated[str, PATH, Meta(description='The list\'s slug, from GET /api/lists (the main list is "main").')]
 
 
-async def create_list(request: Request) -> Response:
-    body = await read_json(request)
-    if body is None:
-        return error(400, "malformed request body")
-    if not check_csrf(request, body.get("csrf_token")):
-        return forbidden("missing or invalid csrf_token")
-    name = body.get("name")
-    if not isinstance(name, str):
-        return error(400, "name must be text")
+class SlugPath(RequestType):
+    slug: Slug
+
+
+class ListsReply(Paged):
+    lists: list[dict[str, Any]]
+
+
+@route(
+    "GET /api/lists", summary="List the lists",
+    tag=TAG,
+    description="Every curated list, the main one first: slug, name, rev (its version number), how many papers it holds, and whether it is view-only.",
+    mcp="list_lists", read_only=True,
+)
+def list_lists(request: Request, body: Page) -> ListsReply:
+    page = cut_page(boards.list_boards(get_store(request)), body)
+    return ListsReply(lists=page.pop("rows"), **page)
+
+
+class CreateList(RequestType):
+    name: Annotated[str, Meta(description="The new list's name.", extra={"error": "name must be text"})]
+
+
+class ListReply(Reply):
+    list: dict[str, Any]
+
+
+@route(
+    "POST /api/lists", summary="Make a new list",
+    tag=TAG,
+    description="A new, empty list.",
+    mcp_http="An agent edits lists; which lists exist is a person's decision.",
+)
+def create_list(request: Request, body: CreateList) -> ListReply:
+    name = actor_name(request)
     try:
-        record = await run(boards.create_board, get_store(request), name, actor_name(request))
+        record = boards.create_board(get_store(request), body.name, name)
     except boards.BoardError as refusal:
-        return board_refused(refusal)
+        raise board_refused(refusal) from None
     audit(request, KIND_ADMIN, "list created", {"slug": record["slug"], "name": record["name"]})
-    get_service(request).changed(record["slug"], record["rev"], actor_name(request))
-    return JSONResponse({"list": boards.summary(record)})
+    get_service(request).changed(record["slug"], record["rev"], name)
+    return ListReply(list=boards.summary(record))
 
 
-def view_or_none(service: BoardService, slug: str) -> dict[str, Any] | None:
-    record = boards.get_board(service.store, slug)
-    return None if record is None else service.view(record)
-
-
-async def get_list(request: Request) -> Response:
-    view = await run(view_or_none, get_service(request), request.path_params["slug"])
-    if view is None:
-        return not_found("no such list")
-    return JSONResponse({"list": view})
+@route(
+    "GET /api/lists/{slug}", summary="Read a list",
+    tag=TAG, errors=(404,),
+    description=(
+        "One list in full: its document (rows in order, each with key, title, year, tags and cells; columns; the "
+        "tag vocabulary with colours), its rev, and what the library knows of each row."
+    ),
+    mcp="get_list", read_only=True,
+)
+def get_list(request: Request, body: SlugPath) -> ListReply:
+    service = get_service(request)
+    record = boards.get_board(service.store, body.slug)
+    if record is None:
+        raise Refused(404, "no such list")
+    return ListReply(list=service.view(record))
 
 
 def run_ops(service: BoardService, slug: str, batch: Any, user_name: str, if_rev: int | None, dry_run: bool) -> dict[str, Any]:
-    """Shared with the MCP list_ops tool. Raises BoardError."""
+    """Raises BoardError."""
     applied = boards.apply_ops(service.store, slug, batch, service.ctx(), user_name, if_rev=if_rev, dry_run=dry_run)
     if applied.changed:
         service.changed(slug, applied.rev, user_name)
@@ -83,28 +123,55 @@ def run_ops(service: BoardService, slug: str, batch: Any, user_name: str, if_rev
     return body
 
 
-async def post_ops(request: Request) -> Response:
-    body = await read_json(request)
-    if body is None:
-        return error(400, "malformed request body")
-    if not check_csrf(request, body.get("csrf_token")):
-        return forbidden("missing or invalid csrf_token")
-    if_rev = body.get("if_rev")
-    if if_rev is not None and (not isinstance(if_rev, int) or isinstance(if_rev, bool)):
-        return error(400, "if_rev must be a whole number")
-    dry_run = body.get("dry_run", False)
-    if not isinstance(dry_run, bool):
-        return error(400, "dry_run must be true or false")
+class RunOps(RequestType):
+    slug: Slug
+    ops: Annotated[list[dict[str, Any]], Meta(description="The ops, in order: {op, ...} each. GET /api/lists/schema names them all.")]
+    if_rev: Annotated[int | None, Meta(description="Refuse the batch when the list has moved past this rev since you read it.", extra={"error": "if_rev must be a whole number"})] = None
+    dry_run: Annotated[bool, Meta(description="Preview: run the ops and answer, but save nothing.", extra={"error": "dry_run must be true or false"})] = False
+
+
+Results = list[Any]
+
+
+class OpsReply(Reply):
+    ok: bool
+    rev: int
+    changed: bool
+    results: Results
+    list: Annotated[dict[str, Any] | None, Meta(description="The list afterwards. Left out of the MCP tool's answer: get_list has it.")] = None
+
+
+def without_list(call: Call, body: Any, serve: Callable[[Any, Any], Any]) -> dict[str, Any]:
+    """The MCP list_ops tool's answer stays small: the whole document is in
+    get_list."""
+    reply = serve(call.request, body)
+    return {"ok": reply.ok, "rev": reply.rev, "changed": reply.changed, "results": reply.results}
+
+
+@route(
+    "POST /api/lists/{slug}/ops", summary="Change a list",
+    tag=TAG, errors=(403, 404, 409),
+    description=(
+        "Run a batch of ops against a list, atomically: every op succeeds and the list is saved once, or nothing is "
+        "saved and the answer names the op that failed. Rows are named by key, DOI or \"#N\" (position). "
+        "Examples: {\"op\":\"add\",\"paper\":\"<key or DOI or title>\",\"at\":\"top\"}, {\"op\":\"move\",\"row\":\"#12\",\"to\":1}, "
+        "{\"op\":\"tag\",\"rows\":[\"#1\",\"#2\"],\"add\":[\"premier\"]}, {\"op\":\"set_cell\",\"row\":\"#1\",\"col\":\"Notes\",\"value\":\"key paper\",\"mode\":\"append\"}. "
+        "dry_run previews; if_rev refuses the batch when the list moved since you read it. Every change keeps the "
+        "previous version, so a removal can be put back."
+    ),
+    mcp="list_ops", destructive=True, call=without_list,
+)
+def post_ops(request: Request, body: RunOps) -> OpsReply:
     try:
-        answer = await run(run_ops, get_service(request), request.path_params["slug"], body.get("ops"), actor_name(request), if_rev, dry_run)
+        answer = run_ops(get_service(request), body.slug, body.ops, actor_name(request), body.if_rev, body.dry_run)
     except boards.BoardError as refusal:
-        return board_refused(refusal)
-    return JSONResponse(answer)
+        raise board_refused(refusal) from None
+    return OpsReply(**answer)
 
 
 def schema_body() -> dict[str, Any]:
     """The ported ops schema, with this app's routes in place of the old
-    app's. Shared with the MCP list_schema tool."""
+    app's."""
     body = ops.schema()
     body["about"] = (
         "Edit a list one named operation at a time. POST /api/lists/<slug>/ops runs a batch atomically: "
@@ -131,13 +198,37 @@ def schema_body() -> dict[str, Any]:
     return body
 
 
-async def get_schema(request: Request) -> Response:
-    """Every op, its parameters and what it does."""
-    return JSONResponse(schema_body())
+class SchemaReply(Reply):
+    about: str
+    auth: str
+    endpoints: dict[str, str]
+    responses: Any = None
+    row_selector: Any = None
+    position: Any = None
+    ops: Any = None
+    examples: Any = None
 
 
+@route(
+    "GET /api/lists/schema", summary="List ops reference",
+    tag=TAG,
+    description="Every op POST /api/lists/{slug}/ops takes, with its parameters, plus how rows and positions are named.",
+    mcp_note="Read it before a first list_ops call.",
+    mcp="list_schema", read_only=True,
+)
+def get_schema(request: Request) -> SchemaReply:
+    body = schema_body()
+    known = set(SchemaReply.__struct_fields__)
+    return SchemaReply(**{key: value for key, value in body.items() if key in known})
+
+
+@route(
+    "GET /api/lists/stream", summary="When a list changes",
+    tag=TAG, reply_type="text/event-stream",
+    description="Server-sent events: \"list\" {slug, rev, by} whenever any list changes.",
+    mcp_http="A live event stream for the page; get_list's rev says the same when asked.",
+)
 async def stream_lists(request: Request) -> Response:
-    """"list" {slug, rev, by} whenever any list changes."""
     if request.method == "HEAD":
         return Response(headers=sse.HEADERS)
     from app.routes.streams import still_signed_in
@@ -154,27 +245,49 @@ async def stream_lists(request: Request) -> Response:
 ROWS_MAX = 500
 
 
-async def get_rows(request: Request) -> Response:
-    """The list as flat rows, filtered like the page's filter and tag bar."""
-    params = request.query_params
-    match = params.get("match", "any")
-    if match not in ops.MATCHES:
-        return bad_request("match must be any, all or none")
-    limit = whole_number(params.get("limit"), ROWS_MAX)
-    offset = whole_number(params.get("offset"), 0)
-    if limit is None or not 1 <= limit <= ROWS_MAX:
-        return bad_request(f"limit must be 1-{ROWS_MAX}")
-    if offset is None or offset < 0:
-        return bad_request("offset must be 0 or more")
-    tags = [t.strip() for t in params.get("tags", "").split(",") if t.strip()]
+class GetRows(RequestType):
+    slug: Slug
+    q: Annotated[str, QUERY, Meta(description="A text filter. Read up to 500 characters.")] = ""
+    tags: Annotated[str, QUERY, Meta(description="Tags to filter by, comma-separated.")] = ""
+    match: Annotated[Literal["any", "all", "none"], QUERY, Meta(description="How the tags combine. Default any.", extra={"error": "match must be any, all or none"})] = "any"
+    shelf: Annotated[str, QUERY, Meta(description="1 or true: the staging shelf instead of the list.")] = ""
+    limit: Annotated[int, QUERY, Meta(ge=1, le=ROWS_MAX, description="Rows to return. Default 500.", extra={"error": f"limit must be 1-{ROWS_MAX}"})] = ROWS_MAX
+    offset: Annotated[int, QUERY, Meta(ge=0, description="Rows to skip.", extra={"error": "offset must be 0 or more"})] = 0
+
+
+Rows = list[dict[str, Any]]
+
+
+class RowsReply(Reply):
+    slug: str
+    rev: int
+    total: int
+    offset: int
+    rows: Rows
+    columns: Rows
+    tags: Rows
+    options: dict[str, Any]
+    list: Annotated[int, Meta(description="How many rows the list holds.")]
+    shelf: Annotated[int, Meta(description="How many rows are on its staging shelf.")]
+
+
+@route(
+    "GET /api/lists/{slug}/rows", summary="A list as flat rows",
+    tag=TAG, errors=(404,),
+    description="The list as flat rows, each with its position and its cells under their column labels, filtered like the page's filter and tag bar.",
+    mcp="list_rows", read_only=True,
+)
+def get_rows(request: Request, body: GetRows) -> RowsReply:
+    tags = [t.strip() for t in body.tags.split(",") if t.strip()]
     service = get_service(request)
-    record = await run(boards.get_board, service.store, request.path_params["slug"])
+    record = boards.get_board(service.store, body.slug)
     if record is None:
-        return not_found("no such list")
+        raise Refused(404, "no such list")
     doc = record["doc"]
     meta = service.meta([row["key"] for row in (doc.get("items") or []) + (doc.get("staging") or [])])
-    body = ops.rows_view(doc, meta=meta, q=params.get("q", "")[:500], tags=tags, match=match, shelf=params.get("shelf") in ("1", "true"), limit=limit, offset=offset)
-    return JSONResponse({**body, "slug": record["slug"], "rev": record.get("rev", 0)})
+    view = ops.rows_view(doc, meta=meta, q=body.q[:500], tags=tags, match=body.match, shelf=body.shelf in ("1", "true"), limit=body.limit, offset=body.offset)
+    known = set(RowsReply.__struct_fields__)
+    return RowsReply(**{key: value for key, value in view.items() if key in known}, slug=record["slug"], rev=record.get("rev", 0))
 
 
 def export_csv(service: BoardService, record: dict[str, Any], default_style: str, keep: set[str] | None) -> str:
@@ -185,159 +298,247 @@ def export_csv(service: BoardService, record: dict[str, Any], default_style: str
     return ops.to_csv(doc, meta=service.meta([row["key"] for row in items]), cites=cites, keep=keep)
 
 
-async def get_export_csv(request: Request) -> Response:
+def csv_response(request: Request, slug: str, keep: set[str] | None) -> Response:
     service = get_service(request)
-    record = await run(boards.get_board, service.store, request.path_params["slug"])
+    record = boards.get_board(service.store, slug)
     if record is None:
-        return not_found("no such list")
-    if request.method == "POST":
-        # The page's filter can be thousands of keys: too long for a URL.
-        body = await read_json(request)
-        if body is None:
-            return error(400, "malformed request body")
-        if not check_csrf(request, body.get("csrf_token")):
-            return forbidden("missing or invalid csrf_token")
-        keys = body.get("keys")
-        if keys is not None and (not isinstance(keys, list) or not all(isinstance(k, str) for k in keys)):
-            return bad_request("keys must be a list of row keys")
-        keep = None if keys is None else set(keys)
-    else:
-        raw = request.query_params.get("keys")
-        keep = None if raw is None else {k for k in raw.split(",") if k}
-    text = await run(export_csv, service, record, get_config(request).library.cite_style, keep)
+        raise Refused(404, "no such list")
+    text = export_csv(service, record, get_config(request).library.cite_style, keep)
     filename = f"{record['slug']}.csv"
     return Response(text.encode("utf-8"), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
+EXPORT_DESCRIPTION = "The list as CSV in its order: #, DOI_or_Key, Cite, Title, Year, Tags, <columns>, MD_File."
+
+
+class ExportQuery(RequestType):
+    slug: Slug
+    keys: Annotated[str, QUERY, Meta(description="Only these rows: their keys, comma-separated. Leave out for every row.")] = ""
+
+
+@route(
+    "GET /api/lists/{slug}/export.csv", summary="A list as CSV",
+    tag=TAG, errors=(404,), reply_type="text/csv",
+    description=EXPORT_DESCRIPTION,
+    mcp_http="A file to download; list_rows gives the same rows as data.",
+)
+def get_export_csv(request: Request, body: ExportQuery) -> Response:
+    keep = {k for k in body.keys.split(",") if k} if "keys" in request.query_params else None
+    return csv_response(request, body.slug, keep)
+
+
+class ExportBody(RequestType):
+    slug: Slug
+    keys: Annotated[list[str] | None, Meta(description="Only these rows, by key: the page's filter can be thousands, too long for a URL.", extra={"error": "keys must be a list of row keys"})] = None
+
+
+@route(
+    "POST /api/lists/{slug}/export.csv", summary="Some of a list as CSV",
+    tag=TAG, errors=(404,), reply_type="text/csv",
+    description=EXPORT_DESCRIPTION + " The rows to export are in the body.",
+    mcp_http="A file to download; list_rows gives the same rows as data.",
+)
+def post_export_csv(request: Request, body: ExportBody) -> Response:
+    return csv_response(request, body.slug, None if body.keys is None else set(body.keys))
+
+
 # -- versions and the view-only switch ------------------------------------------
 
-async def get_history(request: Request) -> Response:
+class HistoryReply(Paged):
+    versions: list[dict[str, Any]]
+
+
+class GetHistory(RequestType):
+    slug: Slug
+    limit: Annotated[int, QUERY, Meta(ge=1, le=1000, description="Versions to return. Default 200.", extra={"error": "limit must be 1-1000"})] = 200
+    offset: Annotated[int, QUERY, Meta(ge=0, description="Versions to skip.", extra={"error": "offset must be 0 or more"})] = 0
+
+
+@route(
+    "GET /api/lists/{slug}/history", summary="A list's past versions",
+    tag=TAG, errors=(404,),
+    description=(
+        "The kept versions of a list (the last 40), newest first: rev, when, by whom, row and shelf counts. "
+        "Version N is the list as it stood before the change that made rev N+1."
+    ),
+    mcp_note="list_version reads one in full. Restoring is done from the page.",
+    mcp="list_history", read_only=True,
+)
+def get_history(request: Request, body: GetHistory) -> HistoryReply:
     try:
-        rows = await run(boards.history, get_store(request), request.path_params["slug"])
+        rows = boards.history(get_store(request), body.slug)
     except boards.BoardError as refusal:
-        return board_refused(refusal)
-    return send_page(request, "versions", rows)
+        raise board_refused(refusal) from None
+    page = cut_page(rows, Page(limit=body.limit, offset=body.offset))
+    return HistoryReply(versions=page.pop("rows"), **page)
 
 
-async def get_version(request: Request) -> Response:
-    rev = whole_number(request.path_params["rev"], -1)
-    if rev is None or rev < 1:
-        return not_found("no such version")
+class VersionPath(RequestType):
+    slug: Slug
+    rev: Annotated[int, PATH, Meta(ge=1, description="The version's rev, from list_history.", extra={"error": "no such version"})]
+
+
+class VersionReply(Reply):
+    version: dict[str, Any]
+
+
+@route(
+    "GET /api/lists/{slug}/history/{rev}", summary="One past version of a list",
+    tag=TAG, errors=(404,),
+    description="One kept version of a list, with its whole document.",
+    mcp="list_version", read_only=True,
+)
+def get_version(request: Request, body: VersionPath) -> VersionReply:
     try:
-        found = await run(boards.version, get_store(request), request.path_params["slug"], rev)
+        found = boards.version(get_store(request), body.slug, body.rev)
     except boards.BoardError as refusal:
-        return board_refused(refusal)
-    return JSONResponse({"version": found})
+        raise board_refused(refusal) from None
+    return VersionReply(version=found)
 
 
-async def post_restore(request: Request) -> Response:
-    body = await read_json(request)
-    if body is None:
-        return error(400, "malformed request body")
-    if not check_csrf(request, body.get("csrf_token")):
-        return forbidden("missing or invalid csrf_token")
-    rev = body.get("rev")
-    if not isinstance(rev, int) or isinstance(rev, bool):
-        return bad_request("rev must be a whole number")
+class RestoreBody(RequestType):
+    slug: Slug
+    rev: Annotated[int, Meta(description="The kept version to put back.", extra={"error": "rev must be a whole number"})]
+
+
+class RestoreReply(Reply):
+    ok: bool
+    rev: int
+    list: dict[str, Any] | None
+
+
+@route(
+    "POST /api/lists/{slug}/restore", summary="Put a past version back",
+    tag=TAG, errors=(403, 404),
+    description="Put a kept version back as a new version, so it can be undone too. Refused while the list is view-only.",
+    mcp_http="Restoring is done from the page, by a person.",
+)
+def post_restore(request: Request, body: RestoreBody) -> RestoreReply:
     service = get_service(request)
-    slug = request.path_params["slug"]
     name = actor_name(request)
     try:
-        new_rev = await run(boards.restore, service.store, slug, rev, name)
+        new_rev = boards.restore(service.store, body.slug, body.rev, name)
     except boards.BoardError as refusal:
-        return board_refused(refusal)
-    audit(request, KIND_ADMIN, "list version restored", {"slug": slug, "rev": rev, "new_rev": new_rev})
-    service.changed(slug, new_rev, name)
-    record = await run(boards.get_board, service.store, slug)
-    return JSONResponse({"ok": True, "rev": new_rev, "list": service.view(record) if record else None})
+        raise board_refused(refusal) from None
+    audit(request, KIND_ADMIN, "list version restored", {"slug": body.slug, "rev": body.rev, "new_rev": new_rev})
+    service.changed(body.slug, new_rev, name)
+    record = boards.get_board(service.store, body.slug)
+    return RestoreReply(ok=True, rev=new_rev, list=service.view(record) if record else None)
 
 
-async def post_lock(request: Request) -> Response:
-    body = await read_json(request)
-    if body is None:
-        return error(400, "malformed request body")
-    if not check_csrf(request, body.get("csrf_token")):
-        return forbidden("missing or invalid csrf_token")
-    locked = body.get("locked")
-    if not isinstance(locked, bool):
-        return bad_request("locked must be true or false")
+class LockBody(RequestType):
+    slug: Slug
+    locked: Annotated[bool, Meta(description="true: view-only for everyone; ops then answer 403.", extra={"error": "locked must be true or false"})]
+
+
+class LockReply(Reply):
+    ok: bool
+    list: dict[str, Any]
+
+
+@route(
+    "POST /api/lists/{slug}/lock", summary="Make a list view-only, or editable",
+    tag=TAG, errors=(404,),
+    description="View-only for everyone: ops then answer 403 (dry runs still work). Not a change to its document, so its rev stays put.",
+    mcp_http="Which lists may change is a person's decision.",
+)
+def post_lock(request: Request, body: LockBody) -> LockReply:
     service = get_service(request)
-    slug = request.path_params["slug"]
     name = actor_name(request)
     try:
-        record = await run(boards.set_locked, service.store, slug, locked, name)
+        record = boards.set_locked(service.store, body.slug, body.locked, name)
     except boards.BoardError as refusal:
-        return board_refused(refusal)
-    audit(request, KIND_ADMIN, "list locked" if locked else "list unlocked", {"slug": slug})
-    service.changed(slug, record.get("rev", 0), name, locked=locked)
-    return JSONResponse({"ok": True, "list": boards.summary(record)})
+        raise board_refused(refusal) from None
+    audit(request, KIND_ADMIN, "list locked" if body.locked else "list unlocked", {"slug": body.slug})
+    service.changed(body.slug, record.get("rev", 0), name, locked=body.locked)
+    return LockReply(ok=True, list=boards.summary(record))
 
 
 # -- citations and reference lists -------------------------------------------
 
 MAX_CITE_KEYS = 5000
+Keys = list[str]
 
 
-async def post_cite(request: Request) -> Response:
-    """{keys, style?} -> {style, cites: {key: {intext, full}}}. Papers not in
-    the library are cited from their row on `list` when one is named."""
-    body = await read_json(request)
-    if body is None:
-        return error(400, "malformed request body")
-    if not check_csrf(request, body.get("csrf_token")):
-        return forbidden("missing or invalid csrf_token")
-    keys = body.get("keys")
-    if not isinstance(keys, list) or not all(isinstance(k, str) for k in keys):
-        return bad_request("keys must be a list of paper keys")
-    if len(keys) > MAX_CITE_KEYS:
-        return error(413, f"at most {MAX_CITE_KEYS} keys at once")
+class CiteBody(RequestType):
+    keys: Annotated[Keys, Meta(description="The papers' keys. At most 5000.", extra={"error": "keys must be a list of paper keys"})]
+    list: Annotated[str, Meta(description="A list's slug: papers not in the library are cited from their row on it.")] = ""
+    style: Annotated[str, Meta(description="A CSL style from GET /api/cite/styles. Default: the list's, else library.cite_style.")] = ""
+
+
+class CiteReply(Reply):
+    style: str
+    cites: Annotated[dict[str, Any], Meta(description="{key: {intext, full}}.")]
+
+
+@route(
+    "POST /api/cite", summary="Cite papers",
+    tag=TAG,
+    description="Each paper's in-text and full citation in a CSL style.",
+    mcp="cite_papers", read_only=True,
+)
+def post_cite(request: Request, body: CiteBody) -> CiteReply:
+    if len(body.keys) > MAX_CITE_KEYS:
+        raise Refused(400, f"at most {MAX_CITE_KEYS} keys at once")
     service = get_service(request)
     doc = None
-    slug = body.get("list")
-    if isinstance(slug, str) and slug:
-        record = await run(boards.get_board, service.store, slug)
+    if body.list:
+        record = boards.get_board(service.store, body.list)
         doc = record["doc"] if record else None
-    style = body.get("style") if isinstance(body.get("style"), str) else ""
-    resolved = cite.resolve_style(style, ((doc or {}).get("options") or {}).get("cite_style") or "", get_config(request).library.cite_style)
+    resolved = cite.resolve_style(body.style, ((doc or {}).get("options") or {}).get("cite_style") or "", get_config(request).library.cite_style)
     rows_by_key = {row["key"]: row for row in ((doc or {}).get("items") or []) + ((doc or {}).get("staging") or [])}
-    rows = [rows_by_key.get(k) or {"key": k} for k in keys]
-    cites = await run(service.cites, resolved, rows)
-    return JSONResponse({"style": resolved, "cites": cites})
+    rows = [rows_by_key.get(k) or {"key": k} for k in body.keys]
+    return CiteReply(style=resolved, cites=service.cites(resolved, rows))
 
 
-async def get_cite_styles(request: Request) -> Response:
-    styles = await run(cite.list_styles)
-    return JSONResponse({"styles": styles, "default": cite.resolve_style(get_config(request).library.cite_style)})
+class StylesReply(Reply):
+    styles: list[Any]
+    default: str
+
+
+@route(
+    "GET /api/cite/styles", summary="The citation styles",
+    tag=TAG,
+    description="The CSL styles on this server, usable or not (with why), and the default.",
+    mcp="cite_styles", read_only=True,
+)
+def get_cite_styles(request: Request) -> StylesReply:
+    return StylesReply(styles=cite.list_styles(), default=cite.resolve_style(get_config(request).library.cite_style))
 
 
 MAX_UPLOAD = 10 * 1024 * 1024
 
 
-async def post_refs_parse(request: Request) -> Response:
-    """A pasted or dropped reference list, read and matched: a preview of what
-    the stage op puts on the shelf. {text} or {file: base64}."""
-    import base64
-    import binascii
+class ParseRefs(RequestType):
+    text: Annotated[str, Meta(description="A pasted reference list.")] = ""
+    file: Annotated[str, Meta(description="Or a .docx or .txt file, base64. At most 10 MB.")] = ""
 
-    body = await read_json(request)
-    if body is None:
-        return error(400, "malformed request body")
-    if not check_csrf(request, body.get("csrf_token")):
-        return forbidden("missing or invalid csrf_token")
-    text = body.get("text")
-    if isinstance(body.get("file"), str):
+
+class ParseRefsReply(Reply):
+    refs: list[Any]
+    max: int
+    text: Annotated[str, Meta(description="What was read, so a dropped file can go on to the stage op.")]
+
+
+@route(
+    "POST /api/refs/parse", summary="Read a reference list",
+    tag=TAG,
+    description="A pasted or dropped reference list, read and matched to the library: a preview of what the stage op puts on the shelf.",
+    mcp="parse_refs", read_only=True,
+)
+def post_refs_parse(request: Request, body: ParseRefs) -> ParseRefsReply:
+    text = body.text
+    if body.file:
         try:
-            data = base64.b64decode(body["file"], validate=True)
+            data = base64.b64decode(body.file, validate=True)
         except (binascii.Error, ValueError):
-            return bad_request("file must be base64")
+            raise Refused(400, "file must be base64") from None
         if len(data) > MAX_UPLOAD:
-            return error(413, "that file is over 10 MB")
+            raise Refused(400, "that file is over 10 MB")
         try:
             text = refparse.text_from_upload(data)
         except ValueError as wrong:
-            return bad_request(str(wrong))
-    if not isinstance(text, str) or not text.strip():
-        return bad_request("send {text} or {file}")
-    found = await run(get_service(request).parse_refs, text)
-    # text: what was read, so a dropped file can go on to the stage op.
-    return JSONResponse({"refs": found, "max": refparse.MAX_REFS, "text": text})
+            raise Refused(400, str(wrong)) from None
+    if not text.strip():
+        raise Refused(400, "send {text} or {file}")
+    return ParseRefsReply(refs=get_service(request).parse_refs(text), max=refparse.MAX_REFS, text=text)

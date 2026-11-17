@@ -3,6 +3,8 @@ per-account block, every way of signing in being asked for a code, and the
 answers that must not say which part was wrong."""
 from __future__ import annotations
 
+import asyncio
+import json
 import tempfile
 import time
 import unittest
@@ -87,7 +89,7 @@ class TwoFactorTest(AuthRoutesTestCase):
         # This store has encrypt_at_rest off, so the record is plain JSON.
         record = self.store.get(db.BUCKET_USERS, self.alice.id)
         self.assertNotIn(secret, str(record))
-        self.assertEqual(encryption.xchacha_decrypt_string(self.cfg.secret_key, record["totp_secret"]), secret)
+        self.assertEqual(encryption.xchacha_decrypt_string(encryption.subkey(self.cfg.secret_key, encryption.PURPOSE_TOTP), record["totp_secret"]), secret)
 
     def test_a_login_link_asks_for_the_code(self) -> None:
         alice = self.sign_in_with_link(self.alice.id)
@@ -146,6 +148,44 @@ class TwoFactorTest(AuthRoutesTestCase):
             self.finish(challenge, "000000")
         self.assertEqual(self.finish(challenge, code_for(secret, 1)).json(), {"error": "two_factor_locked"})
 
+    def test_parallel_wrong_codes_cannot_pass_the_lockout(self) -> None:
+        """S4: twenty wrong codes sent at once get at most five evaluated. The
+        lockout used to be checked before the code and recorded after it, so
+        parallel guesses all slipped past the check."""
+        alice = self.sign_in_with_link(self.alice.id)
+        self.enrol(alice)
+        challenge = self.new_challenge()
+        body = json.dumps({"challenge": challenge, "code": "000000"}).encode()
+
+        async def post() -> int:
+            sent: list[dict] = []
+            received = False
+
+            async def receive() -> dict:
+                nonlocal received
+                if received:
+                    await asyncio.sleep(3600)
+                received = True
+                return {"type": "http.request", "body": body, "more_body": False}
+
+            async def send(message: dict) -> None:
+                sent.append(message)
+
+            scope = {
+                "type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": "POST",
+                "scheme": "https", "path": "/api/login/two-factor", "raw_path": b"/api/login/two-factor",
+                "query_string": b"", "root_path": "", "client": ("127.0.0.1", 50000), "server": ("testserver", 443),
+                "headers": [(b"content-type", b"application/json"), (b"host", b"testserver")],
+            }
+            await self.app(scope, receive, send)
+            return sent[0]["status"]
+
+        async def all_at_once() -> list[int]:
+            return await asyncio.gather(*(post() for _ in range(20)))
+
+        statuses = asyncio.run(all_at_once())
+        self.assertLessEqual(statuses.count(403), 5, statuses)
+
     def test_turning_it_off_needs_a_code(self) -> None:
         alice = self.sign_in_with_link(self.alice.id)
         secret, _ = self.enrol(alice)
@@ -173,6 +213,25 @@ class TwoFactorTest(AuthRoutesTestCase):
         challenge = self.new_challenge()
         credentials.set_user_disabled(self.store, self.alice.id, True)
         self.assertEqual(self.finish(challenge, code_for(secret, 1)).json(), {"error": "challenge_invalid"})
+
+    def test_turning_two_factor_on_ends_other_sessions(self) -> None:
+        """S15: an attacker's session stayed signed in after the victim
+        enrolled. The session that turned it on stays."""
+        attacker = self.sign_in_with_link(self.alice.id)
+        victim = self.sign_in_with_link(self.alice.id)
+        self.enrol(victim)
+        self.assertEqual(attacker.get("/api/me").status_code, 401)
+        self.assertEqual(victim.get("/api/me").status_code, 200)
+
+    def test_resetting_two_factor_ends_every_session(self) -> None:
+        """S15: an admin resetting someone's two-factor ends every session
+        that account holds."""
+        alice = self.sign_in_with_link(self.alice.id)
+        self.enrol(alice)
+        owner = self.sign_in_with_link(self.owner.id)
+        path = f"/api/admin/users/{self.alice.id}/reset-two-factor"
+        self.assertEqual(owner.post(path, json={"csrf_token": self.csrf(owner)}).status_code, 200)
+        self.assertEqual(alice.get("/api/me").status_code, 401)
 
     def test_reset_rules(self) -> None:
         second_admin = users.create_user(self.store, "Second", users.ROLE_ADMIN)

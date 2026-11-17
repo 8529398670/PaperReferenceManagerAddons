@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import tempfile
 import unittest
 from dataclasses import replace
@@ -20,6 +21,9 @@ try:
 except (ImportError, RuntimeError) as missing:  # Starlette raises RuntimeError
     raise unittest.SkipTest(f"needs httpx2 (pip install httpx2): {missing}")
 
+from app import apidocs
+from app.apidocs.check import check
+from app.apidocs.generate import documented_routes
 from app.core import assets, db, encryption, language
 from app.core.static_files import StaticServer
 from app.main import build_app
@@ -27,6 +31,16 @@ from app.models import login_tokens, users
 from app.models import api_keys
 from app.models.sign_in import SignInRules
 from app.tests.support import new_holder
+
+
+def spec_path(spec: dict[str, Any], method: str, path: str) -> str:
+    """The spec's path for a request's: /api/users/7 is /api/users/{user_id}.
+    A literal segment wins over a parameter."""
+    candidates = []
+    for template, item in spec.get("paths", {}).items():
+        if method.lower() in item and re.fullmatch(re.sub(r"\\\{\w+\\\}", "[^/]+", re.escape(template)), path):
+            candidates.append(template)
+    return min(candidates, key=lambda template: template.count("{"), default="")
 
 
 class RoutesTestCase(unittest.TestCase):
@@ -69,7 +83,7 @@ class RoutesTestCase(unittest.TestCase):
     def session(self, user_id: int) -> str:
         login = login_tokens.issue_login_token(self.store, user_id, 3600)
         credential = login_tokens.redeem_login_token(self.store, login, SignInRules(3600)).session_credential
-        return f"{self.cfg.cookie_name}={encryption.xchacha_encrypt_string(self.cfg.secret_key, credential)}"
+        return f"{self.cfg.session_cookie_name}={encryption.xchacha_encrypt_string(encryption.subkey(self.cfg.secret_key, encryption.PURPOSE_COOKIE), credential)}"
 
     def csrf(self, cookie: str) -> str:
         return self.call("GET", "/api/me", cookie=cookie)[1]["csrf_token"]
@@ -81,7 +95,21 @@ class RoutesTestCase(unittest.TestCase):
         if key:
             headers["authorization"] = "Bearer " + key
         content = json.dumps(body) if body is not None else None
-        return (client or self.client).request(method, path, headers=headers, content=content)
+        response = (client or self.client).request(method, path, headers=headers, content=content)
+        self.check_reply(method, path, response)
+        return response
+
+    def check_reply(self, method: str, path: str, response: Any) -> None:
+        """Holds every success reply a test gets against the API docs, so docs
+        that say something a handler does not do fail a test."""
+        if not 200 <= response.status_code < 300 or not response.headers.get("content-type", "").startswith("application/json"):
+            return
+        if getattr(self, "_api_spec", None) is None:
+            self._api_spec, _ = apidocs.build(documented_routes(self.app.routes))
+        path = path.split("?", 1)[0]
+        template = spec_path(self._api_spec, method, path)
+        problems = check(self._api_spec, method, template, response.status_code, response.content)
+        self.assertEqual(problems, [], f"{method} {template}")
 
     def call(self, method: str, path: str, cookie: str = "", key: str = "", body: dict | None = None, client: Any = None) -> tuple[int, Any]:
         response = self.request(method, path, cookie, key, body, client)

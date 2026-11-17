@@ -1,0 +1,2192 @@
+{
+  "auth": "Authorization: Bearer <API key>",
+  "description": "Every tool POST /mcp offers. Written by scripts/api_docs.sh from the registered tools; do not edit by hand. A key sees the tools its role allows (adminOnly ones need an admin key), and a tool whose feature is switched off answers like one that does not exist. route is the HTTP route the tool stands for, with the same rules; http_only are the routes a key may call that have no tool, and why.",
+  "endpoint": "/mcp",
+  "http_only": [
+    {
+      "reason": "The API reference itself; GET /api/mcp.json is the MCP one.",
+      "route": "GET /api/api.json"
+    },
+    {
+      "reason": "Settings for drawing the page's links, not something an agent acts on.",
+      "route": "GET /api/library/links"
+    },
+    {
+      "reason": "A live event stream for the page; library_version is the polling equivalent.",
+      "route": "GET /api/library/stream"
+    },
+    {
+      "reason": "A live event stream for the page; get_list's rev says the same when asked.",
+      "route": "GET /api/lists/stream"
+    },
+    {
+      "reason": "A file to download; list_rows gives the same rows as data.",
+      "route": "GET /api/lists/{slug}/export.csv"
+    },
+    {
+      "reason": "The MCP reference itself; tools/list gives the same list.",
+      "route": "GET /api/mcp.json"
+    },
+    {
+      "reason": "The file itself, for a browser to show.",
+      "route": "GET /api/paper/pdf"
+    },
+    {
+      "reason": "An agent edits lists; which lists exist is a person's decision.",
+      "route": "POST /api/lists"
+    },
+    {
+      "reason": "A file to download; list_rows gives the same rows as data.",
+      "route": "POST /api/lists/{slug}/export.csv"
+    },
+    {
+      "reason": "Which lists may change is a person's decision.",
+      "route": "POST /api/lists/{slug}/lock"
+    },
+    {
+      "reason": "Restoring is done from the page, by a person.",
+      "route": "POST /api/lists/{slug}/restore"
+    },
+    {
+      "reason": "Ends a browser session; a key has none to end.",
+      "route": "POST /api/logout"
+    },
+    {
+      "reason": "The browser's own activity reports (track.js), not an action.",
+      "route": "POST /api/logs/events"
+    },
+    {
+      "reason": "The MCP endpoint itself.",
+      "route": "POST /mcp"
+    }
+  ],
+  "protocolVersions": [
+    "2025-11-25",
+    "2025-06-18",
+    "2025-03-26"
+  ],
+  "tools": [
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Stop an account's login link working (admin)"
+      },
+      "description": "Void an account's live login link without making a new one: a link that went somewhere it should not have. Devices it already signed in stay signed in; admin_revoke_access ends those too. Answers with removed: 0 or 1.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "user_id": {
+            "description": "The account's id, from GET /api/admin/users (admin_list_users over MCP).",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "type": "object"
+      },
+      "name": "admin_cancel_login_link",
+      "route": "POST /api/admin/users/{user_id}/cancel-login-link",
+      "title": "Stop an account's login link working (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Stop an account's login link working, for many at once (admin)"
+      },
+      "description": "Runs admin_cancel_login_link once per item: items holds each call's arguments, shared the arguments they have in common (an item's own win). In order; one failing does not stop the rest, and the reply says how each went. At most 100 items.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "One entry per thing to change: its id, and any field that differs from shared.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "user_id": {
+                  "description": "The account's id, from GET /api/admin/users (admin_list_users over MCP).",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "user_id"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          },
+          "shared": {
+            "additionalProperties": false,
+            "description": "Fields every item gets, unless the item sets its own.",
+            "properties": {},
+            "type": "object"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "name": "admin_cancel_login_link_bulk",
+      "route": "POST /api/bulk/admin/users/cancel-login-link",
+      "title": "Stop an account's login link working, for many at once (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Create an account (admin)"
+      },
+      "description": "Make a new account and its first login link, to hand to the person. role is admin or user. Answers with user_id and the link. Answers with login_url (open it to sign in; it works once unless max_uses says otherwise), expires_at and max_uses. Any older link the account could still use stops working; its signed-in devices stay signed in. Revoking or deleting this API key voids the link while it is unused, and signs out every device it signed in.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "display_name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          },
+          "expires_in_minutes": {
+            "description": "0 never expires. Default auth.login_token_ttl_seconds for a link that works once, auth.multi_use_login_token_ttl_seconds otherwise.",
+            "maximum": 525600,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "max_uses": {
+            "description": "Sign-ins the link allows: 1-1000, or 0 for unlimited. Default 1.",
+            "maximum": 1000,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "user"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "display_name",
+          "role"
+        ],
+        "type": "object"
+      },
+      "name": "admin_create_user",
+      "route": "POST /api/admin/users",
+      "title": "Create an account (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Delete an account (admin)"
+      },
+      "description": "Remove an account for good, with its sessions, login link and API keys. Cannot be undone: admin_set_user_disabled is the reversible version. Only the owner deletes an admin; nobody deletes the owner or themselves.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "user_id": {
+            "description": "The account's id, from GET /api/admin/users (admin_list_users over MCP).",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "type": "object"
+      },
+      "name": "admin_delete_user",
+      "route": "POST /api/admin/users/{user_id}/delete",
+      "title": "Delete an account (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Delete an account, for many at once (admin)"
+      },
+      "description": "Runs admin_delete_user once per item: items holds each call's arguments, shared the arguments they have in common (an item's own win). In order; one failing does not stop the rest, and the reply says how each went. At most 100 items.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "One entry per thing to change: its id, and any field that differs from shared.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "user_id": {
+                  "description": "The account's id, from GET /api/admin/users (admin_list_users over MCP).",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "user_id"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          },
+          "shared": {
+            "additionalProperties": false,
+            "description": "Fields every item gets, unless the item sets its own.",
+            "properties": {},
+            "type": "object"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "name": "admin_delete_user_bulk",
+      "route": "POST /api/bulk/admin/users/delete",
+      "title": "Delete an account, for many at once (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Default themes (admin)"
+      },
+      "description": "The theme list everyone without their own list sees. themes is null while the built-in ones apply.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "admin_get_theme_defaults",
+      "route": "GET /api/admin/theme-defaults",
+      "title": "Default themes (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "An account's signed-in devices (admin)"
+      },
+      "description": "Where an account is signed in: every session, with when it started and was last seen. Addresses are shown to the owner only, and only the owner sees the owner's.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "default": 200,
+            "description": "Rows to return. Default 200.",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Rows to skip: the next value of the previous page.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "user_id": {
+            "description": "The account's id, from GET /api/admin/users (admin_list_users over MCP).",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "type": "object"
+      },
+      "name": "admin_list_user_sessions",
+      "route": "GET /api/admin/users/{user_id}/sessions",
+      "title": "An account's signed-in devices (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "List users (admin)"
+      },
+      "description": "Accounts, a page at a time, including disabled ones, with each one's role and which is the owner. next is the offset of the following page, or null on the last one.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "dir": {
+            "description": "Default asc.",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "type": "string"
+          },
+          "limit": {
+            "default": 200,
+            "description": "Rows to return. Default 200.",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Rows to skip: the next value of the previous page.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "q": {
+            "description": "Keep accounts whose name or username contains this, in any case.",
+            "type": "string"
+          },
+          "sort": {
+            "description": "Field to sort the whole list by. Rows without it go last.",
+            "enum": [
+              "display_name",
+              "role",
+              "disabled",
+              "created_at"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "admin_list_users",
+      "route": "GET /api/admin/users",
+      "title": "List users (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "A new login link for an account (admin)"
+      },
+      "description": "For someone who lost their device or their link: a fresh login link for their account. Answers with login_url (open it to sign in; it works once unless max_uses says otherwise), expires_at and max_uses. Any older link the account could still use stops working; its signed-in devices stay signed in. Revoking or deleting this API key voids the link while it is unused, and signs out every device it signed in.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "expires_in_minutes": {
+            "description": "0 never expires. Default auth.login_token_ttl_seconds for a link that works once, auth.multi_use_login_token_ttl_seconds otherwise.",
+            "maximum": 525600,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "max_uses": {
+            "description": "Sign-ins the link allows: 1-1000, or 0 for unlimited. Default 1.",
+            "maximum": 1000,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "user_id": {
+            "description": "The account's id, from GET /api/admin/users (admin_list_users over MCP).",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "type": "object"
+      },
+      "name": "admin_reissue_login",
+      "route": "POST /api/admin/users/{user_id}/reissue-login",
+      "title": "A new login link for an account (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Rename someone (admin)"
+      },
+      "description": "Change another account's display name (1-80 characters). Only the owner renames an admin. expect, when given, is the name you think it has now; if it changed meanwhile the rename is refused with the current name.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "display_name": {
+            "description": "1-80 characters.",
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          },
+          "expect": {
+            "description": "The name you think they have. Answers 409 if it is another.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user_id": {
+            "description": "The account's id, from GET /api/admin/users (admin_list_users over MCP).",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "display_name",
+          "user_id"
+        ],
+        "type": "object"
+      },
+      "name": "admin_rename_user",
+      "route": "POST /api/admin/users/{user_id}/rename",
+      "title": "Rename someone (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Turn off an account's two-factor (admin)"
+      },
+      "description": "For someone who lost both their phone and their recovery codes: switches their two-factor sign-in off so a login link lets them in again. Only the owner resets an admin's; the owner's is reset from a shell.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "user_id": {
+            "description": "The account's id, from GET /api/admin/users (admin_list_users over MCP).",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "type": "object"
+      },
+      "name": "admin_reset_two_factor",
+      "route": "POST /api/admin/users/{user_id}/reset-two-factor",
+      "title": "Turn off an account's two-factor (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Turn off an account's two-factor, for many at once (admin)"
+      },
+      "description": "Runs admin_reset_two_factor once per item: items holds each call's arguments, shared the arguments they have in common (an item's own win). In order; one failing does not stop the rest, and the reply says how each went. At most 100 items.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "One entry per thing to change: its id, and any field that differs from shared.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "user_id": {
+                  "description": "The account's id, from GET /api/admin/users (admin_list_users over MCP).",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "user_id"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          },
+          "shared": {
+            "additionalProperties": false,
+            "description": "Fields every item gets, unless the item sets its own.",
+            "properties": {},
+            "type": "object"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "name": "admin_reset_two_factor_bulk",
+      "route": "POST /api/bulk/admin/users/reset-two-factor",
+      "title": "Turn off an account's two-factor, for many at once (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Revoke a user's access (admin)"
+      },
+      "description": "For an account that may be compromised: ends every session and voids its live login link and every API key it holds, at once. The account stays enabled; admin_reissue_login lets its owner back in. The owner and your own account cannot be revoked.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "user_id": {
+            "description": "The account's id, from GET /api/admin/users (admin_list_users over MCP).",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "type": "object"
+      },
+      "name": "admin_revoke_access",
+      "route": "POST /api/admin/users/{user_id}/revoke-access",
+      "title": "Revoke a user's access (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Revoke a user's access, for many at once (admin)"
+      },
+      "description": "Runs admin_revoke_access once per item: items holds each call's arguments, shared the arguments they have in common (an item's own win). In order; one failing does not stop the rest, and the reply says how each went. At most 100 items.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "One entry per thing to change: its id, and any field that differs from shared.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "user_id": {
+                  "description": "The account's id, from GET /api/admin/users (admin_list_users over MCP).",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "user_id"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          },
+          "shared": {
+            "additionalProperties": false,
+            "description": "Fields every item gets, unless the item sets its own.",
+            "properties": {},
+            "type": "object"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "name": "admin_revoke_access_bulk",
+      "route": "POST /api/bulk/admin/users/revoke-access",
+      "title": "Revoke a user's access, for many at once (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Sign out one of an account's devices (admin)"
+      },
+      "description": "End one of an account's sessions, rather than all of them with admin_revoke_access.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "description": "The device's id, from GET /api/account/sessions or GET /api/admin/users/{user_id}/sessions (list_my_sessions or admin_list_user_sessions over MCP).",
+            "type": "string"
+          },
+          "user_id": {
+            "description": "The account's id, from GET /api/admin/users (admin_list_users over MCP).",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "session_id",
+          "user_id"
+        ],
+        "type": "object"
+      },
+      "name": "admin_revoke_user_session",
+      "route": "POST /api/admin/users/{user_id}/sessions/{session_id}/revoke",
+      "title": "Sign out one of an account's devices (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Sign out one of an account's devices, for many at once (admin)"
+      },
+      "description": "Runs admin_revoke_user_session once per item: items holds each call's arguments, shared the arguments they have in common (an item's own win). In order; one failing does not stop the rest, and the reply says how each went. At most 100 items.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "One entry per thing to change: its id, and any field that differs from shared.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "session_id": {
+                  "description": "The device's id, from GET /api/account/sessions or GET /api/admin/users/{user_id}/sessions (list_my_sessions or admin_list_user_sessions over MCP).",
+                  "type": "string"
+                },
+                "user_id": {
+                  "description": "The account's id, from GET /api/admin/users (admin_list_users over MCP).",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "session_id",
+                "user_id"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          },
+          "shared": {
+            "additionalProperties": false,
+            "description": "Fields every item gets, unless the item sets its own.",
+            "properties": {},
+            "type": "object"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "name": "admin_revoke_user_session_bulk",
+      "route": "POST /api/bulk/admin/users/sessions/revoke",
+      "title": "Sign out one of an account's devices, for many at once (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Replace the default themes (admin)"
+      },
+      "description": "Replace the theme list everyone without their own list sees, 1 to 40 themes in the Theme schema of the API reference. null puts the built-in themes back.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "builtins": {
+            "description": "Which built-in themes this list has seen: the highest since in Theme.builtIn (static/js/theme.js) when it was saved. Built-in themes added after that join the list the browser shows. Left out: 0, the first ones.",
+            "type": "integer"
+          },
+          "themes": {
+            "description": "1 to 40 themes. null goes back to the built-in ones.",
+            "oneOf": [
+              {
+                "items": {
+                  "description": "A color scheme on the Appearance screen. Colors are #rrggbb. Anything not given is worked out by static/js/theme.js at readable contrast.",
+                  "properties": {
+                    "accent": {
+                      "description": "The main color: what you can press.",
+                      "type": "string"
+                    },
+                    "background": {
+                      "description": "The page. Left out: the mode's own.",
+                      "type": "string"
+                    },
+                    "button": {
+                      "description": "How the theme's buttons look. A choice left out is the default (rounded, normal, raised, normal).",
+                      "oneOf": [
+                        {
+                          "properties": {
+                            "case": {
+                              "enum": [
+                                "normal",
+                                "upper"
+                              ],
+                              "type": "string"
+                            },
+                            "depth": {
+                              "enum": [
+                                "flat",
+                                "raised",
+                                "glossy"
+                              ],
+                              "type": "string"
+                            },
+                            "shape": {
+                              "enum": [
+                                "square",
+                                "soft",
+                                "rounded",
+                                "pill"
+                              ],
+                              "type": "string"
+                            },
+                            "weight": {
+                              "enum": [
+                                "normal",
+                                "medium",
+                                "bold"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "dark": {
+                      "description": "A light theme's colors for dark mode, kept while it is light. Switching the theme to dark swaps them in. A light theme's light (or a dark theme's dark) is dropped.",
+                      "oneOf": [
+                        {
+                          "properties": {
+                            "accent": {
+                              "description": "The main color: what you can press.",
+                              "type": "string"
+                            },
+                            "background": {
+                              "description": "The page. Left out: the mode's own.",
+                              "type": "string"
+                            },
+                            "overrides": {
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "description": "Worked-out colors replaced by name: text, accent, accentFg, accentText, second, secondFg, secondText, link, navLink, background, surface, nested, chrome, info, infoBorder, border, and for each button variant V (Secondary, Success, Danger, Warning, Info, Light, Dark) btnV, btnVFg and btnVText. Leaving one out puts the readable color back.",
+                              "type": "object"
+                            },
+                            "second": {
+                              "description": "Says where you are: active nav item, headings, info.",
+                              "type": "string"
+                            },
+                            "surface": {
+                              "description": "Cards. Left out: the mode's own.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "accent",
+                            "second"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "description": "Lower-case letters, digits, - and _, up to 32.",
+                      "type": "string"
+                    },
+                    "light": {
+                      "description": "A dark theme's colors for light mode, kept while it is dark. Switching the theme to light swaps them in.",
+                      "oneOf": [
+                        {
+                          "properties": {
+                            "accent": {
+                              "description": "The main color: what you can press.",
+                              "type": "string"
+                            },
+                            "background": {
+                              "description": "The page. Left out: the mode's own.",
+                              "type": "string"
+                            },
+                            "overrides": {
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "description": "Worked-out colors replaced by name: text, accent, accentFg, accentText, second, secondFg, secondText, link, navLink, background, surface, nested, chrome, info, infoBorder, border, and for each button variant V (Secondary, Success, Danger, Warning, Info, Light, Dark) btnV, btnVFg and btnVText. Leaving one out puts the readable color back.",
+                              "type": "object"
+                            },
+                            "second": {
+                              "description": "Says where you are: active nav item, headings, info.",
+                              "type": "string"
+                            },
+                            "surface": {
+                              "description": "Cards. Left out: the mode's own.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "accent",
+                            "second"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "mode": {
+                      "enum": [
+                        "light",
+                        "dark"
+                      ],
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "1 to 60 characters.",
+                      "type": "string"
+                    },
+                    "overrides": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "description": "Worked-out colors replaced by name: text, accent, accentFg, accentText, second, secondFg, secondText, link, navLink, background, surface, nested, chrome, info, infoBorder, border, and for each button variant V (Secondary, Success, Danger, Warning, Info, Light, Dark) btnV, btnVFg and btnVText. Leaving one out puts the readable color back.",
+                      "type": "object"
+                    },
+                    "second": {
+                      "description": "Says where you are: active nav item, headings, info.",
+                      "type": "string"
+                    },
+                    "surface": {
+                      "description": "Cards. Left out: the mode's own.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "accent",
+                    "id",
+                    "mode",
+                    "name",
+                    "second"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "name": "admin_set_theme_defaults",
+      "route": "POST /api/admin/theme-defaults",
+      "title": "Replace the default themes (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Disable or enable a user (admin)"
+      },
+      "description": "Switch an account off (disabled: true) or back on (false). Disabling signs it out everywhere and voids its live login link; its API keys stop working while it is off. Reversible. The owner and your own account cannot be disabled.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "disabled": {
+            "type": "boolean"
+          },
+          "user_id": {
+            "description": "The account's id, from GET /api/admin/users (admin_list_users over MCP).",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "disabled",
+          "user_id"
+        ],
+        "type": "object"
+      },
+      "name": "admin_set_user_disabled",
+      "route": "POST /api/admin/users/{user_id}/disabled",
+      "title": "Disable or enable a user (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Disable or enable a user, for many at once (admin)"
+      },
+      "description": "Runs admin_set_user_disabled once per item: items holds each call's arguments, shared the arguments they have in common (an item's own win). In order; one failing does not stop the rest, and the reply says how each went. At most 100 items.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "One entry per thing to change: its id, and any field that differs from shared.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "disabled": {
+                  "type": "boolean"
+                },
+                "user_id": {
+                  "description": "The account's id, from GET /api/admin/users (admin_list_users over MCP).",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "user_id"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          },
+          "shared": {
+            "additionalProperties": false,
+            "description": "Fields every item gets, unless the item sets its own.",
+            "properties": {
+              "disabled": {
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "name": "admin_set_user_disabled_bulk",
+      "route": "POST /api/bulk/admin/users/disabled",
+      "title": "Disable or enable a user, for many at once (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Change an account's role (admin)"
+      },
+      "description": "Make an account an admin or an ordinary user. Only the owner takes an admin's rights away; the owner is always an admin, and nobody changes their own role. Becoming an admin ends the account's sessions and live login link.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "role": {
+            "enum": [
+              "admin",
+              "user"
+            ],
+            "type": "string"
+          },
+          "user_id": {
+            "description": "The account's id, from GET /api/admin/users (admin_list_users over MCP).",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "role",
+          "user_id"
+        ],
+        "type": "object"
+      },
+      "name": "admin_set_user_role",
+      "route": "POST /api/admin/users/{user_id}/role",
+      "title": "Change an account's role (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Change an account's role, for many at once (admin)"
+      },
+      "description": "Runs admin_set_user_role once per item: items holds each call's arguments, shared the arguments they have in common (an item's own win). In order; one failing does not stop the rest, and the reply says how each went. At most 100 items.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "One entry per thing to change: its id, and any field that differs from shared.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "role": {
+                  "enum": [
+                    "admin",
+                    "user"
+                  ],
+                  "type": "string"
+                },
+                "user_id": {
+                  "description": "The account's id, from GET /api/admin/users (admin_list_users over MCP).",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "user_id"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          },
+          "shared": {
+            "additionalProperties": false,
+            "description": "Fields every item gets, unless the item sets its own.",
+            "properties": {
+              "role": {
+                "enum": [
+                  "admin",
+                  "user"
+                ],
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "name": "admin_set_user_role_bulk",
+      "route": "POST /api/bulk/admin/users/role",
+      "title": "Change an account's role, for many at once (admin)"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Stop your own login link working"
+      },
+      "description": "Void your account's live login link without making a new one. Devices it already signed in stay signed in. Answers with removed: 0 or 1.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "cancel_my_login_link",
+      "route": "POST /api/account/login-link/cancel",
+      "title": "Stop your own login link working"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Cite papers"
+      },
+      "description": "Each paper's in-text and full citation in a CSL style.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "keys": {
+            "description": "The papers' keys. At most 5000.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "list": {
+            "description": "A list's slug: papers not in the library are cited from their row on it.",
+            "type": "string"
+          },
+          "style": {
+            "description": "A CSL style from GET /api/cite/styles. Default: the list's, else library.cite_style.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "keys"
+        ],
+        "type": "object"
+      },
+      "name": "cite_papers",
+      "route": "POST /api/cite",
+      "title": "Cite papers"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "The citation styles"
+      },
+      "description": "The CSL styles on this server, usable or not (with why), and the default.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "cite_styles",
+      "route": "GET /api/cite/styles",
+      "title": "The citation styles"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "A login link for yourself"
+      },
+      "description": "A link that signs your own account in on a browser or another device. An API key may ask only if your account let it, from a browser session (POST /api/keys/{key_id}/sign-in); its link works once, for at most 15 minutes. Only works if this key was allowed to make sign-in links, on the API keys card. Answers with login_url (open it to sign in; it works once, for at most 15 minutes), expires_at and max_uses. Any older link the account could still use stops working; its signed-in devices stay signed in. Revoking or deleting this API key voids the link while it is unused, and signs out every device it signed in.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "expires_in_minutes": {
+            "description": "0 never expires. Default auth.login_token_ttl_seconds for a link that works once, auth.multi_use_login_token_ttl_seconds otherwise.",
+            "maximum": 525600,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "max_uses": {
+            "description": "Sign-ins the link allows: 1-1000, or 0 for unlimited. Default 1.",
+            "maximum": 1000,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "name": "create_my_login_link",
+      "route": "POST /api/account/login-link",
+      "title": "A login link for yourself"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Read a list"
+      },
+      "description": "One list in full: its document (rows in order, each with key, title, year, tags and cells; columns; the tag vocabulary with colours), its rev, and what the library knows of each row.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "slug": {
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug"
+        ],
+        "type": "object"
+      },
+      "name": "get_list",
+      "route": "GET /api/lists/{slug}",
+      "title": "Read a list"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "One paper"
+      },
+      "description": "One paper in full: everything the library knows of it.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "description": "The paper's Zotero key, from search_library.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_paper",
+      "route": "GET /api/paper",
+      "title": "One paper"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Name one of your devices"
+      },
+      "description": "Give one of your devices a name (at most 80 characters; empty clears it). expect, when given, is the name you think it has now.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "expect": {
+            "description": "The name you think it has. Answers 409 if it has another.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "label": {
+            "description": "At most 80 characters.",
+            "maxLength": 80,
+            "type": "string"
+          },
+          "session_id": {
+            "description": "The device's id, from GET /api/account/sessions or GET /api/admin/users/{user_id}/sessions (list_my_sessions or admin_list_user_sessions over MCP).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "session_id"
+        ],
+        "type": "object"
+      },
+      "name": "label_my_session",
+      "route": "POST /api/account/sessions/{session_id}/label",
+      "title": "Name one of your devices"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "How the library is doing"
+      },
+      "description": "Whether the catalogue has read Zotero yet, how many papers it holds, how many have their text indexed, and any error.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "library_status",
+      "route": "GET /api/library/status",
+      "title": "How the library is doing"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "The library's version token"
+      },
+      "description": "A token that changes whenever the library does, so a userscript can poll cheaply and re-ask only then.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "library_version",
+      "route": "GET /api/version",
+      "title": "The library's version token"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "A list's past versions"
+      },
+      "description": "The kept versions of a list (the last 40), newest first: rev, when, by whom, row and shelf counts. Version N is the list as it stood before the change that made rev N+1. list_version reads one in full. Restoring is done from the page.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "default": 200,
+            "description": "Versions to return. Default 200.",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Versions to skip.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "slug": {
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug"
+        ],
+        "type": "object"
+      },
+      "name": "list_history",
+      "route": "GET /api/lists/{slug}/history",
+      "title": "A list's past versions"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "List the lists"
+      },
+      "description": "Every curated list, the main one first: slug, name, rev (its version number), how many papers it holds, and whether it is view-only.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "default": 200,
+            "description": "Rows to return. Default 200.",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Rows to skip: the next value of the previous page.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_lists",
+      "route": "GET /api/lists",
+      "title": "List the lists"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Your signed-in devices"
+      },
+      "description": "Where your account is signed in, a page at a time: id, when it started and was last seen, the browser, and the name you gave it. Through an API key no device is current. next is the offset of the following page, or null on the last one.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "default": 200,
+            "description": "Rows to return. Default 200.",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Rows to skip: the next value of the previous page.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_my_sessions",
+      "route": "GET /api/account/sessions",
+      "title": "Your signed-in devices"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Change a list"
+      },
+      "description": "Run a batch of ops against a list, atomically: every op succeeds and the list is saved once, or nothing is saved and the answer names the op that failed. Rows are named by key, DOI or \"#N\" (position). Examples: {\"op\":\"add\",\"paper\":\"<key or DOI or title>\",\"at\":\"top\"}, {\"op\":\"move\",\"row\":\"#12\",\"to\":1}, {\"op\":\"tag\",\"rows\":[\"#1\",\"#2\"],\"add\":[\"premier\"]}, {\"op\":\"set_cell\",\"row\":\"#1\",\"col\":\"Notes\",\"value\":\"key paper\",\"mode\":\"append\"}. dry_run previews; if_rev refuses the batch when the list moved since you read it. Every change keeps the previous version, so a removal can be put back.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "description": "Preview: run the ops and answer, but save nothing.",
+            "type": "boolean"
+          },
+          "if_rev": {
+            "description": "Refuse the batch when the list has moved past this rev since you read it.",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "ops": {
+            "description": "The ops, in order: {op, ...} each. GET /api/lists/schema names them all.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "slug": {
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ops",
+          "slug"
+        ],
+        "type": "object"
+      },
+      "name": "list_ops",
+      "route": "POST /api/lists/{slug}/ops",
+      "title": "Change a list"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "A list as flat rows"
+      },
+      "description": "The list as flat rows, each with its position and its cells under their column labels, filtered like the page's filter and tag bar.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "default": 500,
+            "description": "Rows to return. Default 500.",
+            "maximum": 500,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "match": {
+            "default": "any",
+            "description": "How the tags combine. Default any.",
+            "enum": [
+              "any",
+              "all",
+              "none"
+            ],
+            "type": "string"
+          },
+          "offset": {
+            "description": "Rows to skip.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "q": {
+            "description": "A text filter. Read up to 500 characters.",
+            "type": "string"
+          },
+          "shelf": {
+            "description": "1 or true: the staging shelf instead of the list.",
+            "type": "string"
+          },
+          "slug": {
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "type": "string"
+          },
+          "tags": {
+            "description": "Tags to filter by, comma-separated.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug"
+        ],
+        "type": "object"
+      },
+      "name": "list_rows",
+      "route": "GET /api/lists/{slug}/rows",
+      "title": "A list as flat rows"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "List ops reference"
+      },
+      "description": "Every op POST /api/lists/{slug}/ops takes, with its parameters, plus how rows and positions are named. Read it before a first list_ops call.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "list_schema",
+      "route": "GET /api/lists/schema",
+      "title": "List ops reference"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "List team"
+      },
+      "description": "People with an active account, a page at a time: id and display name. Use the id wherever another tool asks for a user. next is the offset of the following page, or null on the last one.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "default": 200,
+            "description": "Rows to return. Default 200.",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Rows to skip: the next value of the previous page.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_team",
+      "route": "GET /api/team",
+      "title": "List team"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "One past version of a list"
+      },
+      "description": "One kept version of a list, with its whole document.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "rev": {
+            "description": "The version's rev, from list_history.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "slug": {
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rev",
+          "slug"
+        ],
+        "type": "object"
+      },
+      "name": "list_version",
+      "route": "GET /api/lists/{slug}/history/{rev}",
+      "title": "One past version of a list"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Which of these papers are in the library"
+      },
+      "description": "The userscripts' question: which of these papers is in the library. A DOI settles it; a title is matched only without one. Called with an API key (Authorization: Bearer), so it needs no csrf_token; a browser session sends one like any other POST.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "queries": {
+            "description": "The papers to look for: {\"id\", \"title\", \"doi\"} each. At most 5000.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "queries"
+        ],
+        "type": "object"
+      },
+      "name": "papers_exist",
+      "route": "POST /api/exists",
+      "title": "Which of these papers are in the library"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Read a reference list"
+      },
+      "description": "A pasted or dropped reference list, read and matched to the library: a preview of what the stage op puts on the shelf.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "description": "Or a .docx or .txt file, base64. At most 10 MB.",
+            "type": "string"
+          },
+          "text": {
+            "description": "A pasted reference list.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "parse_refs",
+      "route": "POST /api/refs/parse",
+      "title": "Read a reference list"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Papers added lately"
+      },
+      "description": "Papers added in Zotero in the last days, newest first, leaving out those already on the list not_on names: \"what did I save this week that isn't on this list yet?\". Read from the live catalogue, so a paper saved seconds ago is there.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "default": 7,
+            "description": "How far back. Default 7.",
+            "maximum": 3650,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "limit": {
+            "default": 50,
+            "description": "Papers to return. Default 50.",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "not_on": {
+            "description": "A list's slug: leave out the papers already on it.",
+            "type": "string"
+          },
+          "offset": {
+            "description": "Papers to skip: the next value of the previous page.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "recent_papers",
+      "route": "GET /api/papers/recent",
+      "title": "Papers added lately"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Rename your account"
+      },
+      "description": "Change your own display name (1-80 characters). expect, when given, is the name you think it has now; if someone changed it meanwhile the rename is refused with the current name, so nothing is overwritten unseen.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "display_name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          },
+          "expect": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "display_name"
+        ],
+        "type": "object"
+      },
+      "name": "rename_account",
+      "route": "POST /api/account/rename",
+      "title": "Rename your account"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Sign out all your devices"
+      },
+      "description": "End every session your account has: through an API key there is no current device to keep, so every browser signs in again. API keys keep working. Answers with how many were removed.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "revoke_my_other_sessions",
+      "route": "POST /api/account/sessions/revoke-others",
+      "title": "Sign out all your devices"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Sign out one of your devices"
+      },
+      "description": "End one of your signed-in sessions; that browser has to sign in again.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "description": "The device's id, from GET /api/account/sessions or GET /api/admin/users/{user_id}/sessions (list_my_sessions or admin_list_user_sessions over MCP).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "type": "object"
+      },
+      "name": "revoke_my_session",
+      "route": "POST /api/account/sessions/{session_id}/revoke",
+      "title": "Sign out one of your devices"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Sign out one of your devices, for many at once"
+      },
+      "description": "Runs revoke_my_session once per item: items holds each call's arguments, shared the arguments they have in common (an item's own win). In order; one failing does not stop the rest, and the reply says how each went. At most 100 items.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "One entry per thing to change: its id, and any field that differs from shared.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "session_id": {
+                  "description": "The device's id, from GET /api/account/sessions or GET /api/admin/users/{user_id}/sessions (list_my_sessions or admin_list_user_sessions over MCP).",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "session_id"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          },
+          "shared": {
+            "additionalProperties": false,
+            "description": "Fields every item gets, unless the item sets its own.",
+            "properties": {},
+            "type": "object"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "name": "revoke_my_session_bulk",
+      "route": "POST /api/bulk/account/sessions/revoke",
+      "title": "Sign out one of your devices, for many at once"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Search the library"
+      },
+      "description": "Search the papers in the Zotero library, a page at a time. mode \"text\" (default) is boolean full-text search over title, authors, abstract and the PDF's text: words are ANDed, OR between alternatives, -word or NOT word excludes, \"a phrase\" is literal. mode \"title\" finds a half-remembered title, typos and all, or a pasted DOI. Each paper's key is what list_ops' add takes.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "dir": {
+            "default": "desc",
+            "description": "Default desc.",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "type": "string"
+          },
+          "limit": {
+            "default": 50,
+            "description": "Papers to return. Default 50.",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "mode": {
+            "default": "text",
+            "description": "\"text\" (default): boolean full-text search. \"title\": a half-remembered title, typos and all, or a DOI.",
+            "enum": [
+              "text",
+              "title"
+            ],
+            "type": "string"
+          },
+          "offset": {
+            "description": "Papers to skip: the next value of the previous page.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "q": {
+            "description": "The search. Empty lists every paper. Read up to 500 characters.",
+            "type": "string"
+          },
+          "sort": {
+            "default": "relevance",
+            "description": "Default relevance.",
+            "enum": [
+              "relevance",
+              "added",
+              "year",
+              "title"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "search_library",
+      "route": "GET /api/papers",
+      "title": "Search the library"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Change your keyboard shortcuts"
+      },
+      "description": "Replace your changed keyboard shortcuts: action name to binding, such as \"search\": \"Mod+K\" (Mod is Cmd on a Mac, Ctrl elsewhere). Send the whole set; an empty binding switches a key off, and {} puts every key back to its default. whoami shows the current set.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "shortcuts": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Action name to binding, such as \"search\": \"Mod+K\". Mod is Cmd on a Mac and Ctrl elsewhere. Only changed shortcuts are listed; an empty binding switches that key off. Replaces the whole set; {} puts every key back to its default.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "shortcuts"
+        ],
+        "type": "object"
+      },
+      "name": "set_shortcuts",
+      "route": "POST /api/account/shortcuts",
+      "title": "Change your keyboard shortcuts"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Pick your theme"
+      },
+      "description": "Switch to another theme from your list (or the defaults), by its id.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "theme_id": {
+            "description": "A theme's id. Empty for the first in the list.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "theme_id"
+        ],
+        "type": "object"
+      },
+      "name": "set_theme",
+      "route": "POST /api/account/theme",
+      "title": "Pick your theme"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Replace your own themes"
+      },
+      "description": "Replace your whole list of color themes (1 to 40) and pick the one you use. themes: null goes back to following the app's defaults. A theme is the Theme schema in the API reference (config/api.json): id, name, mode light|dark, accent, second, and optional colors as #rrggbb. whoami shows the current list.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "builtins": {
+            "description": "Which built-in themes this list has seen: the highest since in Theme.builtIn (static/js/theme.js) when it was saved. Built-in themes added after that join the list the browser shows. Left out: 0, the first ones.",
+            "type": "integer"
+          },
+          "theme_id": {
+            "description": "The theme you use.",
+            "type": "string"
+          },
+          "themes": {
+            "description": "Your whole list, 1 to 40 themes. null goes back to following the app's defaults.",
+            "oneOf": [
+              {
+                "items": {
+                  "description": "A color scheme on the Appearance screen. Colors are #rrggbb. Anything not given is worked out by static/js/theme.js at readable contrast.",
+                  "properties": {
+                    "accent": {
+                      "description": "The main color: what you can press.",
+                      "type": "string"
+                    },
+                    "background": {
+                      "description": "The page. Left out: the mode's own.",
+                      "type": "string"
+                    },
+                    "button": {
+                      "description": "How the theme's buttons look. A choice left out is the default (rounded, normal, raised, normal).",
+                      "oneOf": [
+                        {
+                          "properties": {
+                            "case": {
+                              "enum": [
+                                "normal",
+                                "upper"
+                              ],
+                              "type": "string"
+                            },
+                            "depth": {
+                              "enum": [
+                                "flat",
+                                "raised",
+                                "glossy"
+                              ],
+                              "type": "string"
+                            },
+                            "shape": {
+                              "enum": [
+                                "square",
+                                "soft",
+                                "rounded",
+                                "pill"
+                              ],
+                              "type": "string"
+                            },
+                            "weight": {
+                              "enum": [
+                                "normal",
+                                "medium",
+                                "bold"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "dark": {
+                      "description": "A light theme's colors for dark mode, kept while it is light. Switching the theme to dark swaps them in. A light theme's light (or a dark theme's dark) is dropped.",
+                      "oneOf": [
+                        {
+                          "properties": {
+                            "accent": {
+                              "description": "The main color: what you can press.",
+                              "type": "string"
+                            },
+                            "background": {
+                              "description": "The page. Left out: the mode's own.",
+                              "type": "string"
+                            },
+                            "overrides": {
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "description": "Worked-out colors replaced by name: text, accent, accentFg, accentText, second, secondFg, secondText, link, navLink, background, surface, nested, chrome, info, infoBorder, border, and for each button variant V (Secondary, Success, Danger, Warning, Info, Light, Dark) btnV, btnVFg and btnVText. Leaving one out puts the readable color back.",
+                              "type": "object"
+                            },
+                            "second": {
+                              "description": "Says where you are: active nav item, headings, info.",
+                              "type": "string"
+                            },
+                            "surface": {
+                              "description": "Cards. Left out: the mode's own.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "accent",
+                            "second"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "description": "Lower-case letters, digits, - and _, up to 32.",
+                      "type": "string"
+                    },
+                    "light": {
+                      "description": "A dark theme's colors for light mode, kept while it is dark. Switching the theme to light swaps them in.",
+                      "oneOf": [
+                        {
+                          "properties": {
+                            "accent": {
+                              "description": "The main color: what you can press.",
+                              "type": "string"
+                            },
+                            "background": {
+                              "description": "The page. Left out: the mode's own.",
+                              "type": "string"
+                            },
+                            "overrides": {
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "description": "Worked-out colors replaced by name: text, accent, accentFg, accentText, second, secondFg, secondText, link, navLink, background, surface, nested, chrome, info, infoBorder, border, and for each button variant V (Secondary, Success, Danger, Warning, Info, Light, Dark) btnV, btnVFg and btnVText. Leaving one out puts the readable color back.",
+                              "type": "object"
+                            },
+                            "second": {
+                              "description": "Says where you are: active nav item, headings, info.",
+                              "type": "string"
+                            },
+                            "surface": {
+                              "description": "Cards. Left out: the mode's own.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "accent",
+                            "second"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "mode": {
+                      "enum": [
+                        "light",
+                        "dark"
+                      ],
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "1 to 60 characters.",
+                      "type": "string"
+                    },
+                    "overrides": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "description": "Worked-out colors replaced by name: text, accent, accentFg, accentText, second, secondFg, secondText, link, navLink, background, surface, nested, chrome, info, infoBorder, border, and for each button variant V (Secondary, Success, Danger, Warning, Info, Light, Dark) btnV, btnVFg and btnVText. Leaving one out puts the readable color back.",
+                      "type": "object"
+                    },
+                    "second": {
+                      "description": "Says where you are: active nav item, headings, info.",
+                      "type": "string"
+                    },
+                    "surface": {
+                      "description": "Cards. Left out: the mode's own.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "accent",
+                    "id",
+                    "mode",
+                    "name",
+                    "second"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "name": "set_themes",
+      "route": "POST /api/account/themes",
+      "title": "Replace your own themes"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Who am I"
+      },
+      "description": "The account this API key belongs to, the role it acts with (role -- never higher than the key's own scope), and the account's own role.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "whoami",
+      "route": "GET /api/me",
+      "title": "Who am I"
+    }
+  ],
+  "transport": "Streamable HTTP, stateless: one JSON-RPC message per POST, a JSON reply"
+}

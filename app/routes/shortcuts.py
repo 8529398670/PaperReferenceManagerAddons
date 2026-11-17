@@ -2,30 +2,48 @@
 (static/js/shortcuts.js). See app/models/shortcuts.py."""
 from __future__ import annotations
 
-from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from typing import Annotated
 
+from msgspec import Meta
+from starlette.requests import Request
+
+from app.apidocs import Reply, route
+from app.apidocs import Request as RequestType
 from app.core.logs import KIND_AUTH
-from app.core.security import actor_from, check_csrf
+from app.core.security import actor_from
 from app.models import shortcuts
-from app.routes.helpers import bad_request, forbidden, get_store, read_json, run, server_error
+from app.routes.helpers import Refused, get_store
 from app.routes.logs import audit
 
 
-async def set_my_shortcuts(request: Request) -> Response:
-    """Replaces the caller's changed shortcuts. The whole set is sent each
-    time, so an undo is the same call with the set from before; {} puts every
-    key back to its default."""
-    body = await read_json(request)
-    if body is None:
-        return bad_request("malformed request body")
-    if not check_csrf(request, body.get("csrf_token")):
-        return forbidden("invalid csrf token")
+class SetMyShortcuts(RequestType):
+    shortcuts: Annotated[dict[str, str], Meta(description="Action name to binding, such as \"search\": \"Mod+K\". Mod is Cmd on a Mac and Ctrl elsewhere. Only changed shortcuts are listed; an empty binding switches that key off. Replaces the whole set; {} puts every key back to its default.")]
+
+
+class SetMyShortcutsReply(Reply):
+    ok: bool
+    shortcuts: dict[str, str]
+
+
+@route(
+    "POST /api/account/shortcuts", summary="Change your keyboard shortcuts",
+    tag="Account", feature="shortcuts",
+    description='Replace your changed keyboard shortcuts: action name to binding, such as "search": "Mod+K" '
+    '(Mod is Cmd on a Mac, Ctrl elsewhere). Send the whole set; an empty binding switches a key off, and {} '
+    'puts every key back to its default.',
+    mcp_note="whoami shows the current set.",
+    mcp="set_shortcuts",
+)
+def set_my_shortcuts(request: Request, body: SetMyShortcuts) -> SetMyShortcutsReply:
+    """Replaces the caller's changed shortcuts, over HTTP or the MCP
+    set_shortcuts tool. The whole set is sent each time, so an undo is the
+    same call with the set from before; {} puts every key back to its
+    default."""
     try:
-        wanted = shortcuts.check(body.get("shortcuts") if body.get("shortcuts") is not None else {})
+        wanted = shortcuts.check(body.shortcuts)
     except shortcuts.ShortcutsError as invalid:
-        return bad_request(str(invalid))
-    if not await run(shortcuts.set_shortcuts, get_store(request), actor_from(request).user.id, wanted):
-        return server_error(request, "shortcuts: the signed-in account has no record")
+        raise Refused(400, str(invalid)) from None
+    if not shortcuts.set_shortcuts(get_store(request), actor_from(request).user.id, wanted):
+        raise Refused.internal("shortcuts: the signed-in account has no record")
     audit(request, KIND_AUTH, "changed own shortcuts", {"count": len(wanted)})
-    return JSONResponse({"ok": True, "shortcuts": wanted})
+    return SetMyShortcutsReply(ok=True, shortcuts=wanted)

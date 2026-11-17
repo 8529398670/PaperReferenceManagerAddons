@@ -60,6 +60,13 @@ class Actor:
         return self.api_key is not None
 
     @property
+    def key_id(self) -> str:
+        """The id of the API key this request came with, or "" for a browser
+        session. A login link or invite link a key makes records it, so
+        revoking the key voids them (see login_tokens.void_links_minted_by_key)."""
+        return self.api_key.id if self.api_key is not None else ""
+
+    @property
     def method(self) -> str:
         return METHOD_API_KEY if self.via_api_key else METHOD_SESSION
 
@@ -75,14 +82,14 @@ def set_session_cookie(response: Response, cfg: Config, credential: str) -> None
     not what makes the session unforgeable -- it means the cookie is opaque to
     anyone reading it out of a browser profile or a proxy log, and that a
     tampered cookie fails to decrypt instead of reaching the lookup."""
-    _write_session_cookie(response, cfg, encryption.xchacha_encrypt_string(cfg.secret_key, credential), cfg.session_ttl_seconds)
+    _write_session_cookie(response, cfg, encryption.xchacha_encrypt_string(encryption.subkey(cfg.secret_key, encryption.PURPOSE_COOKIE), credential), cfg.session_ttl_seconds)
 
 
 def _write_session_cookie(response: Response, cfg: Config, sealed: str, max_age: int) -> None:
     """The one place the cookie's attributes are spelled, so the copy sent when
     a session extends cannot drift from the one sent at sign-in."""
     response.set_cookie(
-        cfg.cookie_name,
+        cfg.session_cookie_name,
         sealed,
         max_age=max_age,
         path="/",
@@ -93,7 +100,10 @@ def _write_session_cookie(response: Response, cfg: Config, sealed: str, max_age:
 
 
 def clear_session_cookie(response: Response, cfg: Config) -> None:
-    response.delete_cookie(cfg.cookie_name, path="/", secure=cfg.secure_cookies, httponly=True, samesite="strict")
+    response.delete_cookie(cfg.session_cookie_name, path="/", secure=cfg.secure_cookies, httponly=True, samesite="strict")
+    if cfg.secure_cookies:
+        # A cookie from before the __Host- prefix goes too.
+        response.delete_cookie(cfg.cookie_name, path="/", secure=True, httponly=True, samesite="strict")
 
 
 def decrypt_cookie(cfg: Config, raw: str) -> str:
@@ -101,7 +111,7 @@ def decrypt_cookie(cfg: Config, raw: str) -> str:
     logging out has to destroy the server-side record, not just drop the
     cookie -- otherwise a copy of the cookie taken earlier still works.
     Raises encryption.CipherTextError for anything that is not ours."""
-    return encryption.xchacha_decrypt_string(cfg.secret_key, raw)
+    return encryption.xchacha_decrypt_string(encryption.subkey(cfg.secret_key, encryption.PURPOSE_COOKIE), raw)
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +120,7 @@ def decrypt_cookie(cfg: Config, raw: str) -> str:
 
 
 def _resolve_session(store: Store, cfg: Config, cookies: dict[str, str]) -> Actor | None:
-    raw = cookies.get(cfg.cookie_name, "")
+    raw = cookies.get(cfg.session_cookie_name, "")
     if raw == "":
         return None
     try:
@@ -137,11 +147,11 @@ def _resolve_api_key(store: Store, cfg: Config, authorization: str) -> Actor | N
     stops being believed at all, and existing keys stop authenticating."""
     if not cfg.api_keys_enabled:
         return None
-    header = authorization.strip()
-    scheme, _, credential = header.partition(" ")
-    if scheme.lower() != "bearer" or credential.strip() == "":
+    # The scheme and the key, split on any whitespace, and nothing else.
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
         return None
-    loaded = load_api_key(store, credential.strip())
+    loaded = load_api_key(store, parts[1])
     if loaded is None:
         return None
     key, user = loaded
@@ -150,13 +160,28 @@ def _resolve_api_key(store: Store, cfg: Config, authorization: str) -> Actor | N
     return Actor(user=user, role=narrow_role(user.role, key.role), api_key=key)
 
 
+def _has_bearer(authorization: str) -> bool:
+    """True when the request carries any Authorization header. Any at all is
+    an attempt at a key, and one that does not hold a good key is nobody
+    (_resolve_api_key): it never falls back to the cookie. Splitting only on a
+    space let "Bearer<TAB>key" fall back and run as the signed-in account
+    (S16)."""
+    return authorization.strip() != ""
+
+
 def resolve_actor(store: Store, cfg: Config, cookies: dict[str, str], authorization: str) -> Actor | None:
-    """The cookie is tried first and an API key only if there is no live
-    session. Either order is safe, but this one keeps the CSRF rule below
-    unambiguous: a request that arrives with ambient browser credentials is
-    always held to the token check, and cannot opt out of it by also carrying
-    a key."""
-    return _resolve_session(store, cfg, cookies) or _resolve_api_key(store, cfg, authorization)
+    """An Authorization: Bearer header decides it: the request is that key or
+    no one, and the cookie is not read. Otherwise the cookie. A script using
+    a narrow key must not quietly run as the full account whose cookie
+    happens to be in the jar, and a bad key is no one, not the cookie.
+
+    The CSRF rule below stays sound: a header is never ambient -- a page on
+    another site cannot add one without a CORS preflight this server does not
+    answer -- and a request that skips the token check by carrying a key
+    needed that key to begin with."""
+    if _has_bearer(authorization):
+        return _resolve_api_key(store, cfg, authorization)
+    return _resolve_session(store, cfg, cookies)
 
 
 class LoadActor:
@@ -184,7 +209,7 @@ class LoadActor:
             )
             request.state.actor = actor
             if actor is not None and actor.session_extended:
-                send = self._sending_cookie(send, request.cookies[self.settings.get().cookie_name], actor.session)
+                send = self._sending_cookie(send, request.cookies[self.settings.get().session_cookie_name], actor.session)
         await self.app(scope, receive, send)
 
     def _sending_cookie(self, send: Send, sealed: str, session: Session) -> Send:
@@ -197,7 +222,7 @@ class LoadActor:
         carrier = Response()
         _write_session_cookie(carrier, cfg, sealed, int((session.expires_at - utc_now()).total_seconds()))
         header = next(item for item in carrier.raw_headers if item[0] == b"set-cookie")
-        name = cfg.cookie_name.encode("latin-1") + b"="
+        name = cfg.session_cookie_name.encode("latin-1") + b"="
 
         async def send_with_cookie(message: Message) -> None:
             if message["type"] == "http.response.start":
@@ -233,6 +258,9 @@ class Guard:
     """Base for the guards: subclasses return a refusal, or None to let the
     request through."""
 
+    # The error statuses it can answer with, for the API docs.
+    statuses: tuple[int, ...] = ()
+
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
 
@@ -248,6 +276,8 @@ class Guard:
 
 
 class RequireLogin(Guard):
+    statuses = (401,)
+
     def refuse(self, request: Request) -> Response | None:
         if actor_from(request) is None:
             return _refuse(401, "not authenticated")
@@ -255,6 +285,8 @@ class RequireLogin(Guard):
 
 
 class RequireAdmin(Guard):
+    statuses = (401, 403)
+
     def refuse(self, request: Request) -> Response | None:
         actor = actor_from(request)
         if actor is None:
@@ -266,26 +298,28 @@ class RequireAdmin(Guard):
 
 class RequireSession(Guard):
     """Refuses a request that authenticated with an API key, even a correctly
-    scoped one. It guards every route that creates a credential: minting and
-    revoking API keys, creating an account, and reissuing a login link (see
-    app/routes/__init__.py).
+    scoped one. It guards what a key must not reach (see
+    app/routes/__init__.py): minting, renaming and revoking API keys, your own
+    password, PIN and two-factor, other people's files, and the owner's
+    screens.
 
-    The reasoning is containment rather than privilege. A key is a bearer
-    credential that lives in a config file or a CI secret; if a leaked key
-    could create another credential -- a key directly, or a login link that
-    becomes a session that mints a key -- revoking it would not end the
-    compromise, because what it created while you were not looking survives.
-    Requiring a browser session for all of these means every credential
-    traces back to a person signing in, and revoking a key actually revokes
-    it.
+    Accounts and ways in are not on that list. An admin key may create and
+    delete accounts, change roles and hand out login links and invite links.
+    A key makes its own account a login link only once that account switched
+    it on from a session (APIKey.may_sign_in), and then one that works once,
+    for at most 15 minutes. What keeps revoking a leaked key meaningful is
+    that every link records the key that made it, and revoking or deleting
+    the key voids those still usable and ends every session one of its login
+    links signed in (login_tokens.void_links_minted_by_key). Disabling or
+    demoting the key's account does the same for all its keys. What it does
+    not undo is anything such a session did meanwhile, or the accounts made
+    through an invite link it handed out: those show in the activity log and
+    the user list.
 
-    What a leaked admin-scoped key can still do is everything else an admin
-    can: list and disable accounts, revoke access. That is why admin keys have
-    to be asked for, and why the admin key list exists.
+    Keys themselves stay browser-only: a key that could mint a key would leave
+    a successor behind with nothing to tie it to the one revoked."""
 
-    Drop this from a route if an app genuinely needs to provision accounts or
-    keys programmatically -- but do it knowingly: such a key can then mint its
-    own successors, and that app's docs should say so."""
+    statuses = (401, 403)
 
     def refuse(self, request: Request) -> Response | None:
         actor = actor_from(request)
@@ -302,6 +336,8 @@ class RequireAPIKey(Guard):
     header credential there means no ambient cookie can ride along on a
     request some other page caused, so the endpoint needs no CSRF token and
     the no-credentials rule for keys covers everything it can do."""
+
+    statuses = (401, 403)
 
     def refuse(self, request: Request) -> Response | None:
         actor = actor_from(request)
@@ -328,6 +364,8 @@ class RequireOwner(Guard):
 
     Finding the owner reads SQLite, so unlike the guards above this one runs
     its check in a worker thread."""
+
+    statuses = (404,)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         request = Request(scope)

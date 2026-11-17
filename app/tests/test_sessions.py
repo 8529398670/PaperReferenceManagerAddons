@@ -12,6 +12,7 @@ from app.core import db, encryption, security
 from app.core import logs
 from app.models import login_tokens, sessions, to_iso, users, utc_now
 from app.models import credentials
+from app.models import api_keys
 from app.models.sign_in import SignInRules
 from app.tests.route_support import RoutesTestCase, TestClient
 
@@ -64,7 +65,7 @@ class TouchTest(RoutesTestCase):
 
     def test_a_request_touches_at_most_every_interval(self) -> None:
         credential, session_id = self.credential()
-        cookie = {self.cfg.cookie_name: encryption.xchacha_encrypt_string(self.cfg.secret_key, credential)}
+        cookie = {self.cfg.session_cookie_name: encryption.xchacha_encrypt_string(encryption.subkey(self.cfg.secret_key, encryption.PURPOSE_COOKIE), credential)}
         security.resolve_actor(self.store, self.cfg, cookie, "")
         first = self.record(session_id)["last_seen_at"]
 
@@ -86,10 +87,10 @@ class TouchTest(RoutesTestCase):
         ))
 
     def sealed(self, credential: str) -> str:
-        return f"{self.cfg.cookie_name}={encryption.xchacha_encrypt_string(self.cfg.secret_key, credential)}"
+        return f"{self.cfg.session_cookie_name}={encryption.xchacha_encrypt_string(encryption.subkey(self.cfg.secret_key, encryption.PURPOSE_COOKIE), credential)}"
 
     def session_cookies(self, response) -> list[str]:
-        name = self.cfg.cookie_name + "="
+        name = self.cfg.session_cookie_name + "="
         return [value for value in response.headers.get_list("set-cookie") if value.startswith(name)]
 
     def test_use_extends_the_record_and_the_cookie(self) -> None:
@@ -147,7 +148,7 @@ class TouchTest(RoutesTestCase):
 
     def test_a_failed_touch_does_not_fail_the_request(self) -> None:
         credential, _ = self.credential()
-        cookie = {self.cfg.cookie_name: encryption.xchacha_encrypt_string(self.cfg.secret_key, credential)}
+        cookie = {self.cfg.session_cookie_name: encryption.xchacha_encrypt_string(encryption.subkey(self.cfg.secret_key, encryption.PURPOSE_COOKIE), credential)}
         with mock.patch.object(self.store, "update_value", side_effect=RuntimeError("locked")):
             self.assertIsNotNone(security.resolve_actor(self.store, self.cfg, cookie, ""))
 
@@ -206,11 +207,24 @@ class ListTest(RoutesTestCase):
         self.assertEqual(status, 200)
         return reply["sessions"]
 
-    def test_needs_a_session(self) -> None:
+    def test_needs_a_sign_in(self) -> None:
         self.assertEqual(self.call("GET", "/api/account/sessions")[0], 401)
-        self.assertEqual(self.call("GET", "/api/account/sessions", key=self.admin_key)[0], 403)
-        self.assertEqual(self.call("POST", "/api/account/sessions/revoke-others", key=self.admin_key, body={})[0], 403)
-        self.assertEqual(self.call("POST", "/api/account/sessions/x/revoke", key=self.admin_key, body={})[0], 403)
+
+    def test_a_key_manages_devices(self) -> None:
+        laptop = self.session(self.user.id)
+        key, _ = api_keys.issue_api_key(self.store, self.user.id, "script", users.ROLE_USER, 3600)
+        status, page = self.call("GET", "/api/account/sessions", key=key)
+        self.assertEqual((status, page["total"]), (200, 2))
+        self.assertEqual([row["current"] for row in page["sessions"]], [False, False])
+        chosen = page["sessions"][0]["id"]
+        self.assertEqual(self.call("POST", f"/api/account/sessions/{chosen}/label", key=key, body={"label": "Phone"})[0], 200)
+
+        # No device is "this one" through a key, so revoke-others ends them all.
+        status, reply = self.call("POST", "/api/account/sessions/revoke-others", key=key, body={})
+        self.assertEqual((status, reply["removed"]), (200, 2))
+        for cookie in (self.user_cookie, laptop):
+            self.assertEqual(self.call("GET", "/api/me", cookie=cookie)[0], 401)
+
 
     def test_shows_only_your_own_newest_first_and_marks_this_one(self) -> None:
         second = self.session(self.owner.id)
@@ -342,16 +356,32 @@ class LabelTest(RoutesTestCase):
         status, page = self.call("GET", f"/api/admin/users/{self.user.id}/sessions", cookie=self.owner_cookie)
         self.assertEqual((status, page["sessions"][0]["label"]), (200, "Phone"))
 
-    def test_a_key_cannot_name_a_device(self) -> None:
-        session_id = self.current(self.user_cookie)
-        status, _ = self.call("POST", f"/api/account/sessions/{session_id}/label", key=self.user_key, body={"label": "x"})
-        self.assertEqual(status, 403)
-
-
 class CredentialsStillEndSessionsTest(RoutesTestCase):
     def test_disabling_an_account_empties_its_list(self) -> None:
         credentials.set_user_disabled(self.store, self.user.id, True)
         self.assertEqual(sessions.list_sessions(self.store, self.user.id), [])
+
+
+class HostCookieTest(RoutesTestCase):
+    def test_the_session_cookie_is_host_prefixed_when_secure(self) -> None:
+        """S16: with secure cookies the session cookie is __Host-<cookie_name>,
+        which a page on a sibling subdomain cannot plant: a browser takes a
+        __Host- cookie only when it is Secure, has Path=/ and names no Domain."""
+        self.set_config(secure_cookies=True)
+        cfg = self.holder.get()
+        credential = login_tokens.issue_login_token(self.store, self.user.id, 3600)
+        response = self.client.post("/api/login", json={"credential": credential})
+        self.assertEqual(response.status_code, 200)
+        header = next(value for name, value in response.headers.multi_items() if name == "set-cookie" and value.startswith("__Host-"))
+        self.assertTrue(header.startswith(f"__Host-{cfg.cookie_name}="), header)
+        self.assertIn("Secure", header)
+        self.assertIn("Path=/", header)
+        self.assertNotIn("Domain", header)
+        sealed = header.split(";", 1)[0].split("=", 1)[1]
+        me = self.client.get("/api/me", headers={"cookie": f"__Host-{cfg.cookie_name}={sealed}"})
+        self.assertEqual(me.status_code, 200)
+        plain = self.client.get("/api/me", headers={"cookie": f"{cfg.cookie_name}={sealed}"})
+        self.assertEqual(plain.status_code, 401)
 
 
 if __name__ == "__main__":
@@ -391,10 +421,20 @@ class AdminSessionTest(RoutesTestCase):
         self.assertEqual(len(found), 1)
         return found[0].id
 
+    def test_only_the_owner_ends_an_admins_session(self) -> None:
+        """S3: only the owner signs another admin's device out."""
+        third = users.create_user(self.store, "Third", users.ROLE_ADMIN)
+        third_cookie = self.session(third.id)
+        path = f"{self.route(third.id)}/{self.only_session(third.id)}/revoke"
+        self.assertEqual(self.post(path, self.admin_cookie), 403)
+        self.assertEqual(self.call("GET", "/api/me", cookie=third_cookie)[0], 200)
+        self.assertEqual(self.post(path, self.owner_cookie), 200)
+        self.assertEqual(self.call("GET", "/api/me", cookie=third_cookie)[0], 401)
+
     def test_the_routes_refuse(self) -> None:
         path = self.route(self.user.id)
         self.assertEqual(self.call("GET", path, cookie=self.user_cookie)[0], 403)
-        self.assertEqual(self.call("GET", path, key=self.admin_key)[0], 403)
+        self.assertEqual(self.call("GET", path, key=self.user_key)[0], 403)
         self.assertEqual(self.call("GET", self.route(9999), cookie=self.owner_cookie)[0], 404)
         self.assertEqual(self.post(f"{path}/nothing/revoke", self.owner_cookie), 404)
         theirs = self.only_session(self.user.id)
