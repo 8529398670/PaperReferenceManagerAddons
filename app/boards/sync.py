@@ -46,7 +46,7 @@ FIELDS = ( "tags" , "fields" )   # what travels ( for the docs / the schema )
 
 def mode( doc ):
     """The list's sharing mode : "two-way" , "one-way" or "off"."""
-    from .sortboard import sync_mode
+    from .board import sync_mode
     return sync_mode( ( ( doc or {} ).get( "options" ) or {} ).get( "sync" ) )
 
 

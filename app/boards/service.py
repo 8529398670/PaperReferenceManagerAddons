@@ -4,11 +4,13 @@ tells every open page "list X is at rev N now" so it fetches the list again.
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
-from typing import Any
+from typing import Any, Callable
 
-from app.boards import cite, ops, refs, store as boards
+from app.boards import board, cite, ops, refs, sync, store as boards
 from app.core import db, sse
+from app.models import to_iso, utc_now
 from app.library.catalogue import Catalogue
 from app.search import query as q
 
@@ -28,12 +30,17 @@ class BoardService:
     def stop(self) -> None:
         self.hub.close()
 
-    def changed(self, slug: str, rev: int, by: str, locked: bool | None = None) -> None:
+    def changed(self, slug: str, rev: int, by: str, locked: bool | None = None, deleted: bool = False, renamed_from: str | None = None) -> None:
         """Tell open pages. Safe from any thread. locked rides along when the
-        view-only switch moved (rev does not move for that)."""
+        view-only switch moved (rev does not move for that); deleted and
+        renamed_from when the list itself went or moved."""
         data: dict[str, Any] = {"slug": slug, "rev": rev, "by": by}
         if locked is not None:
             data["locked"] = locked
+        if deleted:
+            data["deleted"] = True
+        if renamed_from:
+            data["renamed_from"] = renamed_from
         message = sse.event("list", json.dumps(data))
         if self._loop is None:
             return
@@ -89,8 +96,122 @@ class BoardService:
     def parse_refs(self, text: str) -> list[dict[str, Any]]:
         return refs.resolve(self.catalogue, text)
 
+    def purge_job(self) -> tuple[str, str]:
+        """The lists-purge job: deleted lists past their 30 days go for good."""
+        gone = boards.purge_deleted(self.store)
+        return (f"removed {gone} deleted list(s)" if gone else ""), ""
+
+    # -- the other lists, as ops see them ----------------------------------------
+
+    def list_doc(self, slug: str) -> dict[str, Any]:
+        """Another list's document ("" is the main one), following a rename."""
+        try:
+            return boards.find_board(self.store, slug or boards.MAIN)["doc"]
+        except boards.BoardError as refusal:
+            raise ops.OpError(str(refusal)) from None
+
+    def tiers_doc(self, slug: str = "") -> dict[str, Any]:
+        """The tier list pull_tiers reads: the one named, else the first list
+        with sections."""
+        if slug:
+            return self.list_doc(slug)
+        for row in boards.list_boards(self.store):
+            if row["sections"]:
+                record = boards.get_board(self.store, row["slug"])
+                if record is not None:
+                    return record["doc"]
+        raise ops.OpError("no list has tiers (sections) switched on")
+
+    def shared_docs(self) -> list[tuple[str, dict[str, Any]]]:
+        out = []
+        for _, record in self.store.all(db.BUCKET_BOARDS):
+            if not record.get("deleted") and sync.sends(record.get("doc")):
+                out.append((record.get("name", record["slug"]), record["doc"]))
+        return out
+
+    def remaining(self, doc: dict[str, Any]) -> list[dict[str, Any]]:
+        """Every library paper not on `doc` (list or shelf), newest added
+        first, as an add would take it. Modality stamps (mods) arrive with the
+        content stages (phase 4)."""
+        here = ops._here(doc)
+        out = []
+        for paper in self.catalogue.all():
+            record = paper.record
+            row = {"key": record["key"], "title": record.get("title", ""), "doi": record.get("doi", ""), "year": record.get("year"),
+                   "journal": record.get("journal", ""), "in_library": True, "mods": [], "added": record.get("date_added") or ""}
+            if not ops._is_here(here, row):
+                out.append(row)
+        out.sort(key=lambda row: row["added"], reverse=True)
+        return out
+
     def ctx(self) -> ops.Ctx:
-        return ops.Ctx(resolve=self.resolve, meta=self.meta, parse_refs=self.parse_refs, cite_styles=cite.usable())
+        return ops.Ctx(
+            resolve=self.resolve, meta=self.meta, parse_refs=self.parse_refs, cite_styles=cite.usable(),
+            list_doc=self.list_doc, tiers_doc=self.tiers_doc, shared_docs=self.shared_docs, remaining=self.remaining,
+        )
+
+    # -- one paper, the same on every list (app/boards/sync.py) -----------------
+
+    def absorb(self, slug: str, change: Callable[[dict[str, Any]], int], by: str) -> int | str:
+        """Make `change` to a list's document as one new version, without
+        passing it on (an absorbed edit does not cascade). -> how many papers
+        changed, or "locked" / "gone"."""
+        with self.store.transaction() as tx:
+            record = tx.get(db.BUCKET_BOARDS, slug)
+            if record is None or record.get("deleted"):
+                return "gone"
+            if record.get("locked"):
+                return "locked"
+            before = record["doc"]
+            doc = copy.deepcopy(before)
+            did = change(doc)
+            doc = board.normalize(doc)
+            if not did or doc == before:
+                return 0
+            rev = int(record.get("rev", 0))
+            boards.keep_version(tx, record)
+            record["doc"] = doc
+            record["rev"] = rev + 1
+            record["updated_at"] = to_iso(utc_now())
+            record["updated_by"] = by
+            tx.put(db.BUCKET_BOARDS, slug, record)
+        self.changed(slug, rev + 1, by)
+        return did
+
+    def mirror(self, slug: str, before: dict[str, Any], after: dict[str, Any], by: str) -> list[dict[str, Any]]:
+        """After a write to `slug` (before -> after): papers it newly holds get
+        what the two-way lists already say about them (when it receives), and
+        its tag and cell edits are made on every other list holding those
+        papers (when it sends). -> one entry per list reached."""
+        out: list[dict[str, Any]] = []
+        others = [record for _, record in self.store.all(db.BUCKET_BOARDS) if not record.get("deleted") and record["slug"] != slug]
+        new = sync.arrivals(before, after) if sync.receives(after) else []
+        if new:
+            rows = {r["key"]: r for r in (after.get("items") or []) + (after.get("staging") or [])}
+            probe = {k: {"doi": str(rows[k].get("doi") or "").strip().lower()} for k in new if k in rows}
+            sources = [record for record in others if sync.sends(record["doc"]) and sync.touches(record["doc"], probe)]
+            if sources:
+                names = [record.get("name", record["slug"]) for record in sources]
+                did = self.absorb(slug, lambda doc: sync.fill(doc, new, [record["doc"] for record in sources]), by)
+                if isinstance(did, int) and did:
+                    out.append({"slug": slug, "name": "", "filled": did, "from": names})
+        changes = sync.changes(before, after)
+        if not changes or not sync.sends(after):
+            return out
+        for record in others:
+            doc = record["doc"]
+            if not sync.receives(doc) or not sync.touches(doc, changes):
+                continue
+            entry = {"slug": record["slug"], "name": record.get("name", record["slug"])}
+            if record.get("locked"):
+                out.append({**entry, "skipped": "locked"})
+                continue
+            did = self.absorb(record["slug"], lambda doc: sync.apply(doc, changes, after), by)
+            if isinstance(did, str):
+                out.append({**entry, "skipped": did})
+            elif did:
+                out.append({**entry, "papers": did})
+        return out
 
     # -- citations ---------------------------------------------------------------
 

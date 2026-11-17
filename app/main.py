@@ -76,6 +76,7 @@ def build_app(
     library = LibraryService(cfg)
     registry.register("library-sync", housekeeping.HOUR_SECONDS, library.sync_job)
     boards = BoardService(store, library.catalogue)
+    registry.register("lists-purge", housekeeping.HOUR_SECONDS, boards.purge_job)
 
     @asynccontextmanager
     async def lifespan(app: Starlette) -> AsyncIterator[None]:

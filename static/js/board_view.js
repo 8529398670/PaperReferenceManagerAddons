@@ -40,7 +40,42 @@ const BoardView = {
     const seen = new Set();
     const wanted = [];
     let rebuilt = 0;
-    ctx.visible.forEach( ( key ) => {
+    // A tier board: a heading before each tier's rows, every tier shown even
+    // when the filter leaves it empty, so there is always somewhere to drop.
+    const sections = ( !ctx.shelf && ctx.sections && ctx.sections.length ) ? ctx.sections : null;
+    let visible = ctx.visible;
+    const heads = new Map();
+    if ( sections ) {
+      const groups = new Map( sections.map( ( section ) => [ section.id , [] ] ) );
+      ctx.visible.forEach( ( key ) => {
+        const item = ctx.items.get( key );
+        if ( item && groups.has( item.section ) ) groups.get( item.section ).push( key );
+      } );
+      visible = [];
+      sections.forEach( ( section ) => {
+        if ( !heads.has( visible.length ) ) heads.set( visible.length , [] );
+        heads.get( visible.length ).push( section );
+        visible = visible.concat( groups.get( section.id ) );
+      } );
+    }
+    const sectionSig = sections ? JSON.stringify( sections.map( ( section ) => [ section.id , section.label ] ) ) : "";
+    const head = ( section ) => {
+      const total = ctx.sectionCounts ? ctx.sectionCounts[ section.id ] || 0 : 0;
+      const sig = JSON.stringify( [ section , total , ctx.target === section.id , ctx.locked ] );
+      const cacheKey = "§" + section.id;
+      let entry = cache.rows.get( cacheKey );
+      if ( !entry || entry.sig !== sig ) {
+        entry = { li: this.sectionHead( section , total , ctx ) , sig: sig };
+        cache.rows.set( cacheKey , entry );
+      }
+      seen.add( cacheKey );
+      wanted.push( entry.li );
+    };
+    visible.forEach( ( key , index ) => {
+      if ( sections && heads.has( index ) ) {
+        heads.get( index ).forEach( head );
+        heads.delete( index );
+      }
       const item = ctx.items.get( key );
       if ( !item ) return;
       seen.add( key );
@@ -48,7 +83,7 @@ const BoardView = {
       const cite = ( ctx.cites && ctx.cites[ key ] ) || null;
       const tagColors = ( item.tags || [] ).map( ( name ) => TagColors.of( name , vocab ) ).join( "," );
       const sig = JSON.stringify( [ item , paper , cite , tagColors , colSig , ctx.locked , ctx.anchor === key ,
-        ctx.shelf ? ( ctx.matched && ctx.matched[ key ] ) || "" : "" ] );
+        ctx.shelf ? ( ctx.matched && ctx.matched[ key ] ) || "" : "" , sectionSig ] );
       let entry = cache.rows.get( key );
       if ( !entry || entry.sig !== sig ) {
         const li = ctx.shelf ? this.shelfRow( item , ctx , paper ) : this.row( item , ctx , paper , cite );
@@ -67,6 +102,8 @@ const BoardView = {
       }
       wanted.push( entry.li );
     } );
+    // Tiers after the last row (empty ones at the end).
+    if ( sections ) heads.forEach( ( group ) => group.forEach( head ) );
     for ( const key of Array.from( cache.rows.keys() ) ) {
       if ( !seen.has( key ) && !ctx.items.has( key ) ) cache.rows.delete( key );
     }
@@ -240,7 +277,20 @@ const BoardView = {
       on: { click: () => handlers.anchor( item.key ) },
     } );
 
-    const side = Dom.el( "div" , { class: "board-cell-side" , children: [ number , grip , anchor ] } );
+    const sideParts = [ number , grip , anchor ];
+    if ( ctx.sections && ctx.sections.length ) {
+      // Move to another tier, without dragging.
+      const tier = Dom.el( "select" , {
+        class: "form-select form-select-sm board-row-tier",
+        attrs: { "data-focus": "tier" , "aria-label": this.label( "lists.tier_label" , item.title ) , title: I18n.get( "lists.tier_move" ) },
+      } );
+      ctx.sections.forEach( ( section ) => tier.appendChild( Dom.el( "option" , { text: section.label , attrs: { value: section.id } } ) ) );
+      tier.value = item.section || "";
+      tier.disabled = locked;
+      tier.addEventListener( "change" , () => handlers.setSection( item.key , tier.value ) );
+      sideParts.push( tier );
+    }
+    const side = Dom.el( "div" , { class: "board-cell-side" , children: sideParts } );
     const main = Dom.el( "div" , { class: "board-cell-paper" , children: this.paperBlock( item , ctx , paper , cite ) } );
     const cells = ctx.columns.map( ( column ) => this.cell( item , column , ctx ) );
     const remove = Dom.el( "button" , {
@@ -498,6 +548,48 @@ const BoardView = {
     return li;
   },
 
+  // A tier's heading: its colour, name and description, how many papers it
+  // holds, and ◉ to make it where added papers land. A row dropped on it goes
+  // to the top of that tier.
+  sectionHead( section , total , ctx ) {
+    const handlers = ctx.handlers;
+    const armed = ctx.target === section.id;
+    const swatch = Dom.el( "span" , { class: "board-section-swatch" , attrs: { "aria-hidden": "true" } } );
+    swatch.style.backgroundColor = section.color || "#8b94a3";
+    const target = Dom.el( "button" , {
+      class: "btn btn-sm board-section-target" + ( armed ? " is-on" : "" ),
+      attrs: { type: "button" , "aria-pressed": String( armed ) , title: I18n.get( "lists.tier_target" ) , "aria-label": I18n.get( "lists.tier_target_label" ).replace( "{tier}" , () => section.label ) },
+      children: [ Dom.el( "i" , { class: "bi " + ( armed ? "bi-record-circle-fill" : "bi-record-circle" ) , attrs: { "aria-hidden": "true" } } ) ],
+      on: { click: () => handlers.target( section.id ) },
+    } );
+    target.disabled = ctx.locked;
+    const li = Dom.el( "li" , {
+      class: "board-section" , attrs: { "data-section": section.id },
+      children: [
+        swatch,
+        Dom.el( "div" , { class: "board-section-text" , children: [
+          Dom.el( "span" , { class: "board-section-label" , text: section.label } ),
+          Dom.el( "span" , { class: "board-section-count" , text: I18n.get( "lists.tier_count" ).replace( "{count}" , total ) } ),
+          section.desc ? Dom.el( "span" , { class: "board-section-desc" , text: section.desc } ) : document.createTextNode( "" ),
+        ] } ),
+        target,
+      ],
+    } );
+    li.style.setProperty( "--section-color" , section.color || "#8b94a3" );
+    li.addEventListener( "dragover" , ( event ) => {
+      if ( !this.dragging ) return;
+      event.preventDefault();
+      li.classList.add( "drop-into" );
+    } );
+    li.addEventListener( "dragleave" , () => li.classList.remove( "drop-into" ) );
+    li.addEventListener( "drop" , ( event ) => {
+      event.preventDefault();
+      li.classList.remove( "drop-into" );
+      if ( this.dragging ) handlers.dropOnSection( this.dragging , section.id );
+    } );
+    return li;
+  },
+
   // ---- dragging ---------------------------------------------------------------------
 
   // Drag by the grip only, so the text in a row can still be selected.
@@ -513,7 +605,7 @@ const BoardView = {
       li.draggable = false;
       li.classList.remove( "is-dragging" );
       this.dragging = null;
-      Dom.all( ".drop-before, .drop-after" ).forEach( ( row ) => row.classList.remove( "drop-before" , "drop-after" ) );
+      Dom.all( ".drop-before, .drop-after, .drop-into" ).forEach( ( row ) => row.classList.remove( "drop-before" , "drop-after" , "drop-into" ) );
     } );
     li.addEventListener( "dragover" , ( event ) => {
       if ( !this.dragging || this.dragging === key ) return;

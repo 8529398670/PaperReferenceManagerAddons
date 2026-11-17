@@ -257,13 +257,14 @@ def tag_order(used: set[str]) -> list[str]:
     return [name for name in TAG_ORDER if name in used] + sorted(name for name in used if name not in TAG_ORDER)
 
 
-ERROR_STATUSES = (400, 401, 403, 404, 409, 429, 503)
+ERROR_STATUSES = (400, 401, 403, 404, 409, 410, 429, 503)
 ERROR_MEANINGS = {
     400: "The request was refused as it stands.",
     401: "Not signed in.",
     403: "Not allowed, or a bad csrf_token.",
     404: "No such thing, or this feature is switched off.",
     409: "The record has moved on: an undo too late, or a stale edit.",
+    410: "It was deleted: a list in the trash, which can still be put back.",
     429: "Too many requests.",
     503: "In maintenance mode. Retry-After says when to try again.",
 }

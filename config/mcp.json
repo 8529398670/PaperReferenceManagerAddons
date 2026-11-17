@@ -16,6 +16,10 @@
       "route": "GET /api/library/stream"
     },
     {
+      "reason": "Which lists exist is a person's decision.",
+      "route": "GET /api/lists/deleted"
+    },
+    {
       "reason": "A live event stream for the page; get_list's rev says the same when asked.",
       "route": "GET /api/lists/stream"
     },
@@ -36,6 +40,10 @@
       "route": "POST /api/lists"
     },
     {
+      "reason": "Which lists exist is a person's decision.",
+      "route": "POST /api/lists/{slug}/delete"
+    },
+    {
       "reason": "A file to download; list_rows gives the same rows as data.",
       "route": "POST /api/lists/{slug}/export.csv"
     },
@@ -44,8 +52,16 @@
       "route": "POST /api/lists/{slug}/lock"
     },
     {
+      "reason": "Which lists exist, and what they are called, is a person's decision.",
+      "route": "POST /api/lists/{slug}/rename"
+    },
+    {
       "reason": "Restoring is done from the page, by a person.",
       "route": "POST /api/lists/{slug}/restore"
+    },
+    {
+      "reason": "Which lists exist is a person's decision.",
+      "route": "POST /api/lists/{slug}/undelete"
     },
     {
       "reason": "Ends a browser session; a key has none to end.",
@@ -54,6 +70,10 @@
     {
       "reason": "The browser's own activity reports (track.js), not an action.",
       "route": "POST /api/logs/events"
+    },
+    {
+      "reason": "It reads a sheet for the page's import dialog; list_ops imports rows.",
+      "route": "POST /api/sheet/csv"
     },
     {
       "reason": "The MCP endpoint itself.",
@@ -1212,7 +1232,7 @@
         "readOnlyHint": true,
         "title": "Read a list"
       },
-      "description": "One list in full: its document (rows in order, each with key, title, year, tags and cells; columns; the tag vocabulary with colours), its rev, and what the library knows of each row.",
+      "description": "One list in full (a slug it was renamed away from answers the list as it is now): its document (rows in order, each with key, title, year, tags and cells; columns; the tag vocabulary with colours), its rev, and what the library knows of each row.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -1472,6 +1492,32 @@
       "name": "list_ops",
       "route": "POST /api/lists/{slug}/ops",
       "title": "Change a list"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Library papers not on a list"
+      },
+      "description": "Every library paper not on the list (or its shelf), newest added first: what import_remaining picks from, in the order its range counts.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "slug": {
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug"
+        ],
+        "type": "object"
+      },
+      "name": "list_remaining",
+      "route": "GET /api/lists/{slug}/remaining",
+      "title": "Library papers not on a list"
     },
     {
       "adminOnly": false,

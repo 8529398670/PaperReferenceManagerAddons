@@ -30,6 +30,7 @@ class JobsRoutesTest(RoutesTestCase):
         names.append("backup")
         names.append("prune-logs")
         names.append("library-sync")
+        names.append("lists-purge")
         self.assertEqual([row["name"] for row in body["jobs"]], sorted(names))
         self.assertEqual(body["jobs"][0]["interval_seconds"], 3600)
 

@@ -46,6 +46,7 @@ Every tool POST /mcp offers. Written by scripts/api_docs.sh from the registered 
 | [`list_lists`](#list_lists) | [`GET /api/lists`](api.md#get-apilists) | any key | List the lists |
 | [`list_my_sessions`](#list_my_sessions) | [`GET /api/account/sessions`](api.md#get-apiaccountsessions) | any key | Your signed-in devices |
 | [`list_ops`](#list_ops) | [`POST /api/lists/{slug}/ops`](api.md#post-apilistsslugops) | any key | Change a list |
+| [`list_remaining`](#list_remaining) | [`GET /api/lists/{slug}/remaining`](api.md#get-apilistsslugremaining) | any key | Library papers not on a list |
 | [`list_rows`](#list_rows) | [`GET /api/lists/{slug}/rows`](api.md#get-apilistsslugrows) | any key | A list as flat rows |
 | [`list_schema`](#list_schema) | [`GET /api/lists/schema`](api.md#get-apilistsschema) | any key | List ops reference |
 | [`list_team`](#list_team) | [`GET /api/team`](api.md#get-apiteam) | any key | List team |
@@ -526,7 +527,7 @@ A link that signs your own account in on a browser or another device. An API key
 
 ## get_list
 
-One list in full: its document (rows in order, each with key, title, year, tags and cells; columns; the tag vocabulary with colours), its rev, and what the library knows of each row.
+One list in full (a slug it was renamed away from answers the list as it is now): its document (rows in order, each with key, title, year, tags and cells; columns; the tag vocabulary with colours), its rev, and what the library knows of each row.
 
 |  |  |
 |---|---|
@@ -673,6 +674,22 @@ Run a batch of ops against a list, atomically: every op succeeds and the list is
 | `dry_run` | boolean | no |  | Preview: run the ops and answer, but save nothing. |
 | `if_rev` | integer or null | no |  | Refuse the batch when the list has moved past this rev since you read it. |
 | `ops` | array of object | yes |  | The ops, in order: {op, ...} each. GET /api/lists/schema names them all. |
+| `slug` | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+
+## list_remaining
+
+Every library paper not on the list (or its shelf), newest added first: what import_remaining picks from, in the order its range counts.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/lists/{slug}/remaining`](api.md#get-apilistsslugremaining) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
 | `slug` | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
 
 ## list_rows
@@ -984,14 +1001,19 @@ Routes an API key may call that have no tool, and why.
 | [`GET /api/api.json`](api.md#get-apiapijson) | The API reference itself; GET /api/mcp.json is the MCP one. |
 | [`GET /api/library/links`](api.md#get-apilibrarylinks) | Settings for drawing the page's links, not something an agent acts on. |
 | [`GET /api/library/stream`](api.md#get-apilibrarystream) | A live event stream for the page; library_version is the polling equivalent. |
+| [`GET /api/lists/deleted`](api.md#get-apilistsdeleted) | Which lists exist is a person's decision. |
 | [`GET /api/lists/stream`](api.md#get-apilistsstream) | A live event stream for the page; get_list's rev says the same when asked. |
 | [`GET /api/lists/{slug}/export.csv`](api.md#get-apilistsslugexportcsv) | A file to download; list_rows gives the same rows as data. |
 | [`GET /api/mcp.json`](api.md#get-apimcpjson) | The MCP reference itself; tools/list gives the same list. |
 | [`GET /api/paper/pdf`](api.md#get-apipaperpdf) | The file itself, for a browser to show. |
 | [`POST /api/lists`](api.md#post-apilists) | An agent edits lists; which lists exist is a person's decision. |
+| [`POST /api/lists/{slug}/delete`](api.md#post-apilistsslugdelete) | Which lists exist is a person's decision. |
 | [`POST /api/lists/{slug}/export.csv`](api.md#post-apilistsslugexportcsv) | A file to download; list_rows gives the same rows as data. |
 | [`POST /api/lists/{slug}/lock`](api.md#post-apilistssluglock) | Which lists may change is a person's decision. |
+| [`POST /api/lists/{slug}/rename`](api.md#post-apilistsslugrename) | Which lists exist, and what they are called, is a person's decision. |
 | [`POST /api/lists/{slug}/restore`](api.md#post-apilistsslugrestore) | Restoring is done from the page, by a person. |
+| [`POST /api/lists/{slug}/undelete`](api.md#post-apilistsslugundelete) | Which lists exist is a person's decision. |
 | [`POST /api/logout`](api.md#post-apilogout) | Ends a browser session; a key has none to end. |
 | [`POST /api/logs/events`](api.md#post-apilogsevents) | The browser's own activity reports (track.js), not an action. |
+| [`POST /api/sheet/csv`](api.md#post-apisheetcsv) | It reads a sheet for the page's import dialog; list_ops imports rows. |
 | [`POST /mcp`](api.md#post-mcp) | The MCP endpoint itself. |

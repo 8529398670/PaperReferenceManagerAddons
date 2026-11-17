@@ -60,6 +60,8 @@ const Lists = {
     this.initAdd();
     ListTools.init( this );
     ListPanels.init( this );
+    ListManage.init( this );
+    ListSheet.init( this );
     await this.loadLists();
     this.listen();
   },
@@ -89,12 +91,24 @@ const Lists = {
       Dom.text( Dom.get( "list-count" ) , "" );
       return;
     }
-    const wanted = [ choose , this.slug , this.local( this.storageKey ) , "main" ].find( ( slug ) => slug && this.lists.some( ( list ) => list.slug === slug ) );
+    // A link (#lists/<slug>) wins on the first load; a slug renamed away from
+    // still opens, as the list it became.
+    const linked = this.slug ? null : ListManage.hashSlug();
+    if ( linked && !choose && !this.lists.some( ( list ) => list.slug === linked ) ) {
+      try {
+        await this.open( linked );
+        return;
+      } catch ( error ) {
+        ListManage.cannotOpen( error );
+      }
+    }
+    const wanted = [ choose , linked , this.slug , this.local( this.storageKey ) , "main" ].find( ( slug ) => slug && this.lists.some( ( list ) => list.slug === slug ) );
     await this.open( wanted || this.lists[ 0 ].slug );
   },
 
-  async open( slug ) {
-    const answer = await Api.request( "/api/lists/" + encodeURIComponent( slug ) );
+  async open( asked ) {
+    const answer = await Api.request( "/api/lists/" + encodeURIComponent( asked ) );
+    const slug = answer.list.slug;
     if ( slug !== this.slug ) {
       // Another list: what was picked, ticked and painted belonged to the last.
       ListTools.forget();
@@ -107,6 +121,7 @@ const Lists = {
     this.slug = slug;
     this.local( this.storageKey , slug );
     Dom.get( "list-picker" ).value = slug;
+    ListManage.showInHash( slug );
     this.take( answer.list );
   },
 
@@ -115,9 +130,16 @@ const Lists = {
     this.view = view;
     this.items = new Map();
     this.positions = new Map();
+    // On a tier board a row's number is its rank in its tier.
+    this.sectionCounts = {};
     ( view.doc.items || [] ).forEach( ( item , index ) => {
       this.items.set( item.key , item );
-      this.positions.set( item.key , index + 1 );
+      if ( item.section ) {
+        this.sectionCounts[ item.section ] = ( this.sectionCounts[ item.section ] || 0 ) + 1;
+        this.positions.set( item.key , this.sectionCounts[ item.section ] );
+      } else {
+        this.positions.set( item.key , index + 1 );
+      }
     } );
     this.shelfItems = new Map( ( view.doc.staging || [] ).map( ( item ) => [ item.key , item ] ) );
     const entry = this.lists.find( ( list ) => list.slug === view.slug );
@@ -135,14 +157,10 @@ const Lists = {
     event.preventDefault();
     const name = Dom.get( "list-new-name" ).value.trim();
     if ( !name ) return;
-    try {
-      const answer = await Api.post( "/api/lists" , { name: name } );
+    const made = await ListManage.create( { name: name } , "undo.list_create" );
+    if ( made ) {
       Dom.get( "list-new-name" ).value = "";
       this.showNewForm( false );
-      await this.loadLists( answer.list.slug );
-      Dom.toast( I18n.get( "ui.saved" ) , "ok" );
-    } catch ( error ) {
-      Dom.toast( error.message , "error" );
     }
   },
 
@@ -211,6 +229,7 @@ const Lists = {
     BoardView.render( Dom.get( "list-rows" ) , {
       doc: doc , papers: view.papers || {} , handlers: handlers , locked: view.locked , columns: columns ,
       items: this.items , visible: visible , positions: this.positions , cites: this.cites , anchor: anchor ,
+      sections: doc.sections || [] , sectionCounts: this.sectionCounts , target: ( doc.options && doc.options.section_target ) || "" ,
     } );
     ListTools.paintSelection();
     this.drawShelf( columns , handlers );
@@ -264,6 +283,9 @@ const Lists = {
       setCell: ( key , column , value , previous ) => this.setCell( key , column , value , previous ),
       anchor: ( key ) => ListTools.toggleAnchor( key ),
       copy: ( text ) => this.copy( text ),
+      setSection: ( key , section ) => this.toSection( [ key ] , section ),
+      dropOnSection: ( key , section ) => this.toSection( this.dragged( key ) , section , 1 ),
+      target: ( section ) => this.target( section ),
       rename: ( key , title , previous ) => this.change( "undo.list_title" , [ { op: "update" , row: key , title: title } ] , [ { op: "update" , row: key , title: previous } ] ),
       check: ( key , on ) => {
         if ( on ) this.checked.add( key );
@@ -327,6 +349,7 @@ const Lists = {
       const answer = await Api.post( "/api/lists/" + encodeURIComponent( slug ) + "/ops" , { ops: ops } );
       if ( slug === this.slug && answer.list ) this.take( answer.list );
       this.state( "lists.saved" );
+      ListManage.report( answer.mirrored );
       return answer;
     } catch ( error ) {
       this.state( "" );
@@ -407,11 +430,53 @@ const Lists = {
   move( key , position ) {
     const at = this.positions.get( key );
     if ( !at ) return;
+    const item = this.items.get( key );
+    if ( item && item.section ) {
+      // A rank in its own tier.
+      this.toSection( [ key ] , item.section , position );
+      return;
+    }
     this.change( "undo.list_move" , [ { op: "move" , row: key , to: position } ] , [ { op: "move" , row: key , to: at } ] , { flash: key } );
+  },
+
+  // ---- tiers ---------------------------------------------------------------------
+
+  // What a drag carries: the row, or the whole selection when it is part of one.
+  dragged( key ) {
+    const selected = ListTools.selectedKeys();
+    return selected.length > 1 && selected.includes( key ) ? selected : [ key ];
+  },
+
+  // Rows into a tier, at a rank among its other rows (its end by default).
+  // One row is undone by putting it back where it was; several by the version.
+  toSection( keys , section , rank ) {
+    const op = { op: "section_set" , rows: keys , section: section };
+    if ( rank ) op.rank = rank;
+    if ( keys.length > 1 ) return this.changeWhole( "undo.list_tier" , [ op ] , { toast: false } );
+    const item = this.items.get( keys[ 0 ] );
+    if ( !item ) return Promise.resolve( false );
+    const back = { op: "section_set" , rows: keys , section: item.section , rank: this.positions.get( keys[ 0 ] ) };
+    return this.change( "undo.list_tier" , [ op ] , [ back ] , { flash: keys[ 0 ] } );
+  },
+
+  target( section ) {
+    const old = ( this.view.doc.options && this.view.doc.options.section_target ) || "unranked";
+    if ( old === section ) return;
+    this.change( "undo.list_target" , [ { op: "section_target" , section: section } ] , [ { op: "section_target" , section: old } ] );
   },
 
   // Dropped next to another row. A selected row brings the whole selection.
   moveNear( key , anchor , side ) {
+    const target = this.items.get( anchor );
+    if ( target && target.section ) {
+      // On a tier board: into the anchor's tier, next to it.
+      const moving = this.dragged( key );
+      const others = ( this.view.doc.items || [] ).filter( ( item ) => item.section === target.section && !moving.includes( item.key ) ).map( ( item ) => item.key );
+      const at = others.indexOf( anchor );
+      if ( at < 0 ) return;
+      this.toSection( moving , target.section , at + 1 + ( side === "after" ? 1 : 0 ) );
+      return;
+    }
     const selected = ListTools.selectedKeys();
     if ( selected.length > 1 && selected.includes( key ) && !selected.includes( anchor ) ) {
       const to = {};
@@ -433,10 +498,13 @@ const Lists = {
     // cells, where it stood.
     const paper = { key: item.key , title: item.title || "" , doi: item.doi || "" , year: item.year || null , journal: item.journal || "" };
     if ( item.authors ) paper.authors = item.authors;
+    const global = ( this.view.doc.items || [] ).findIndex( ( row ) => row.key === key ) + 1;
     const back = [ {
-      op: "add" , paper: paper , at: this.positions.get( key ) , tags: item.tags || [] ,
+      op: "add" , paper: paper , at: global , tags: item.tags || [] ,
       cells: item.fields || {} , auto_tag: false , prefill: false ,
     } ];
+    // Back into its own tier, at its own rank (an add lands in the target tier).
+    if ( item.section ) back.push( { op: "section_set" , rows: [ key ] , section: item.section , rank: this.positions.get( key ) } );
     ListTools.unselect( key );
     this.change( "undo.list_remove" , [ { op: "remove" , rows: [ key ] } ] , back , { toast: true } );
   },
@@ -733,8 +801,17 @@ const Lists = {
       } catch ( error ) {
         return;
       }
+      if ( data.deleted || data.renamed_from ) {
+        // The open list went to the trash, or moved: follow it (or leave it).
+        const mine = this.slug === data.slug || this.slug === data.renamed_from;
+        if ( mine && data.deleted && data.by !== this.me.display_name ) {
+          Dom.toast( I18n.get( "lists.list_deleted_by" ).replace( "{by}" , () => data.by ) , "error" );
+        }
+        this.loadLists( mine && !data.deleted ? data.slug : undefined ).catch( () => {} );
+        return;
+      }
       if ( !this.lists.some( ( list ) => list.slug === data.slug ) ) {
-        // A list made somewhere else: offer it in the picker.
+        // A list made (or put back) somewhere else: offer it in the picker.
         this.loadLists().catch( () => {} );
         return;
       }

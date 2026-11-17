@@ -1,8 +1,10 @@
 """Bringing the old prma's lists in, once: `manage import-legacy --from
 <old output dir>`.
 
-It reads <dir>/cache/sort.json (the main list, imported as "main") and every
-<dir>/cache/sort-lists/<slug>/ (sort.json, meta.json, lock.json), and writes
+It reads <dir>/cache/sort.json (the main list, imported as "main"), every
+<dir>/cache/sort-lists/<slug>/ (sort.json, meta.json, lock.json), and the
+tier list <dir>/cache/tiers.json (+ tiers-lock.json, imported as "Tiers": a
+list with sections, one per tier, its modalities joining the tags), and writes
 each as a list here, with its rows, order, tags and colours, columns and
 staging shelf exactly as they were: the documents have the same shape, so
 they go through the same normalize() the old app used. Nothing in the old
@@ -18,10 +20,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from app.boards import board, store as boards
+from app.boards import board, store as boards, tiers
 from app.core import db
 
 MAIN_NAME = "Main"
+TIERS_SLUG = "tiers"
+TIERS_NAME = "Tiers"
 
 
 @dataclass
@@ -65,10 +69,31 @@ def sources(output_dir: Path) -> list[tuple[str, str, Path, Path]]:
     return found
 
 
+def tiers_as_list(raw: Any) -> dict[str, Any]:
+    """The old tier list's document as a list with sections: each tier a
+    section (Unranked last), its rows in tier order, each saying its tier."""
+    old = tiers.normalize(raw)
+    items = [dict(item, section=tier["id"]) for tier in old["tiers"] for item in tier["items"]]
+    vocab = old["vocab"]
+    return {
+        "columns": old["columns"],
+        "items": items,
+        "staging": old["staging"],
+        "vocab": {"tags": vocab.get("tags", []) + vocab.get("mods", [])},
+        "sections": [{key: tier[key] for key in ("id", "label", "desc", "color", "locked")} for tier in old["tiers"]],
+        "options": {"section_target": board.UNRANKED},
+    }
+
+
 def import_lists(store: db.Store, output_dir: Path, replace: bool = False) -> list[Imported]:
     done = []
-    for slug, name, doc_path, lock_path in sources(output_dir):
-        doc = board.normalize(_read_json(doc_path))
+    found = sources(output_dir)
+    tiers_path = output_dir / "cache" / "tiers.json"
+    if tiers_path.is_file():
+        found.append((TIERS_SLUG, TIERS_NAME, tiers_path, output_dir / "cache" / "tiers-lock.json"))
+    for slug, name, doc_path, lock_path in found:
+        raw = _read_json(doc_path)
+        doc = board.normalize(tiers_as_list(raw) if doc_path == tiers_path else raw)
         locked = bool((_read_json(lock_path) or {}).get("locked"))
         rows, shelf = len(doc["items"]), len(doc["staging"])
         existing = store.get(db.BUCKET_BOARDS, slug)

@@ -60,10 +60,12 @@ const Nav = {
 
   // A hash naming a screen this user does not have (an admin link opened by a
   // non-admin, a typo) shows the account screen rather than nothing.
+  // "#lists/<slug>" is the Lists screen, opened on that list (list_manage.js).
   current() {
-    const name = window.location.hash.replace( /^#/ , "" );
+    const hash = window.location.hash.replace( /^#/ , "" );
+    const name = hash.split( "/" )[ 0 ];
     if ( this.available( name ) ) return name;
-    const card = this.card( name );
+    const card = this.card( hash );
     return card ? card.closest( ".view" ).getAttribute( "data-view" ) : this.fallback;
   },
 

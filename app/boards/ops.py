@@ -87,7 +87,7 @@ class Ctx:
         self.resolve    = resolve    or ( lambda spec: _no( "paper lookup" ) )
         self.meta       = meta       or ( lambda keys , mods=False , links=False , titles=None: {} )
         self.parse_refs = parse_refs or ( lambda text: _no( "reference parsing" ) )
-        self.tiers_doc  = tiers_doc  or ( lambda: { "tiers": [] , "columns": [] } )
+        self.tiers_doc  = tiers_doc  or ( lambda slug="": { "sections": [] , "columns": [] } )
         self.list_doc   = list_doc   or ( lambda slug: _no( "the other sort lists" ) )
         self.shared_docs = shared_docs or ( lambda: _no( "the other sort lists" ) )
         self.remaining  = remaining  or ( lambda doc: _no( "the library" ) )
@@ -974,7 +974,7 @@ def op_fill_shared( doc , ctx , p ):
 ADD_WHERE = ( "bottom" , "top" , "placed" )
 
 
-_OPTION_KEYS = ( "auto_move" , "add_where" , "cite_style" , "sync" )
+_OPTION_KEYS = ( "auto_move" , "add_where" , "cite_style" , "sync" , "sheet_url" )
 
 
 def op_options( doc , ctx , p ):
@@ -1012,6 +1012,11 @@ def op_options( doc , ctx , p ):
         if not isinstance( v , bool ) and v not in sortboard.SYNC_MODES:
             raise OpError( "`sync` is " + " , ".join( f'"{m}"' for m in sortboard.SYNC_MODES ) )
         opts[ "sync" ] = sortboard.sync_mode( v )
+    if "sheet_url" in p:
+        url = str( p[ "sheet_url" ] or "" ).strip()
+        if url and not url.startswith( "https://docs.google.com/spreadsheets/" ):
+            raise OpError( "`sheet_url` is a https://docs.google.com/spreadsheets/ link , or \"\"" )
+        opts[ "sheet_url" ] = url[ :500 ]
     return { "auto_move": bool( opts.get( "auto_move" ) ) , "add_where": opts.get( "add_where" ) ,
         "cite_style": opts.get( "cite_style" ) or "" , "sync": sortboard.sync_mode( opts.get( "sync" ) ) }
 
@@ -1196,11 +1201,15 @@ def op_refill( doc , ctx , p ):
 
 
 def op_pull_tiers( doc , ctx , p ):
-    """Bring every paper on the tier list onto this board ( ⇩ From tiers ) : its
-    modalities and tags merged into one tag list , its tier in a Tier column , its
-    notes columns merged by name. Papers already here are left alone."""
-    tdoc = ctx.tiers_doc() or {}
-    rows = [ ( it , t ) for t in ( tdoc.get( "tiers" ) or [] ) for it in ( t.get( "items" ) or [] ) ]
+    """Bring every paper on a tier board onto this one ( ⇩ From tiers ) : its
+    tags , its tier in a Tier column , its cells under columns merged by id.
+    Papers already here are left alone. `from` names the tier board ( a list
+    with sections ) ; without it , the first one there is."""
+    tdoc = ctx.tiers_doc( p.get( "from" ) or "" ) or {}
+    if tdoc is doc or not tdoc.get( "sections" ):
+        raise OpError( "that list has no tiers ( sections ) to pull from" )
+    label = { t[ "id" ]: t[ "label" ] for t in tdoc[ "sections" ] }
+    rows = [ ( it , { "label": label.get( it.get( "section" ) ) or "" } ) for it in ( tdoc.get( "items" ) or [] ) ]
     if not rows:
         raise OpError( "the tier list is empty" )
     cols = doc.setdefault( "columns" , [] )
@@ -1226,6 +1235,176 @@ def op_pull_tiers( doc , ctx , p ):
         have.add( it[ "key" ] )
         added.append( it[ "key" ] )
     return { "pulled": added }
+
+
+# ---------------------------------------------------------------------------
+# Sections : tiers on a list ( see board.py , "Sections" )
+# ---------------------------------------------------------------------------
+
+def _sections( doc , need=True ):
+    out = doc.get( "sections" ) or []
+    if need and not out:
+        raise OpError( "this list has no sections -- switch them on with {\"op\": \"sections\", \"on\": true}" )
+    return out
+
+
+def find_section( doc , sel ):
+    """A section by id or label , case-insensitive."""
+    want = lc( str( sel or "" ).strip() )
+    for t in _sections( doc ):
+        if lc( t[ "id" ] ) == want or lc( t[ "label" ] ) == want:
+            return t
+    raise OpError( f"no section {sel!r} -- there is " + " , ".join( t[ "label" ] for t in _sections( doc ) ) )
+
+
+def _section_of( doc , sid ):
+    return [ it for it in _items( doc ) if it.get( "section" ) == sid ]
+
+
+def op_sections( doc , ctx , p ):
+    """Switch sections on ( a tier board : S , A , B , C , D and Unranked , every
+    row starting in Unranked ) or off ( one plain list , in the order the tiers
+    put it )."""
+    if p[ "on" ]:
+        if not _sections( doc , need=False ):
+            doc[ "sections" ] = sortboard.default_sections()
+            for it in _items( doc ):
+                it[ "section" ] = sortboard.UNRANKED
+            _options( doc )[ "section_target" ] = sortboard.UNRANKED
+    else:
+        doc[ "sections" ] = []
+        for it in _items( doc ):
+            it.pop( "section" , None )
+    return { "sections": [ t[ "id" ] for t in _sections( doc , need=False ) ] }
+
+
+def op_section_add( doc , ctx , p ):
+    """A new section , just above Unranked unless `at` ( 1-based ) says where."""
+    secs  = _sections( doc )
+    label = str( p[ "label" ] ).strip()[ :60 ]
+    if not label:
+        raise OpError( "a section needs a label" )
+    if any( lc( t[ "label" ] ) == lc( label ) for t in secs ):
+        raise OpError( f"there is already a section {label!r}" )
+    if len( secs ) >= sortboard.MAX_SECTIONS:
+        raise OpError( f"at most {sortboard.MAX_SECTIONS} sections" )
+    sid , n = tiers_db.slug( label , "tier" ) , 1
+    base = sid
+    while any( t[ "id" ] == sid for t in secs ):
+        n  += 1
+        sid = f"{base}-{n}"
+    at = len( secs ) - 1
+    if p.get( "at" ) is not None:
+        at = max( 0 , min( len( secs ) - 1 , int( p[ "at" ] ) - 1 ) )
+    secs.insert( at , { "id": sid , "label": label , "desc": str( p.get( "desc" ) or "" )[ :400 ] ,
+        "color": _color( p.get( "color" ) ) or "#8b94a3" , "locked": False } )
+    return { "section": sid , "at": at + 1 }
+
+
+def _unlocked( doc , p ):
+    t = find_section( doc , p[ "section" ] )
+    if t[ "id" ] == sortboard.UNRANKED:
+        raise OpError( f"{t[ 'label' ]} is always there , last , and can't be changed that way" )
+    return t
+
+
+def op_section_rename( doc , ctx , p ):
+    t = find_section( doc , p[ "section" ] )
+    label = str( p[ "label" ] ).strip()[ :60 ]
+    if not label:
+        raise OpError( "a section needs a label" )
+    if any( x is not t and lc( x[ "label" ] ) == lc( label ) for x in _sections( doc ) ):
+        raise OpError( f"there is already a section {label!r}" )
+    t[ "label" ] = label
+    return { "section": t[ "id" ] , "label": label }
+
+
+def op_section_desc( doc , ctx , p ):
+    t = find_section( doc , p[ "section" ] )
+    t[ "desc" ] = str( p.get( "desc" ) or "" )[ :400 ]
+    return { "section": t[ "id" ] }
+
+
+def op_section_color( doc , ctx , p ):
+    t = find_section( doc , p[ "section" ] )
+    t[ "color" ] = _color( p[ "color" ] ) or "#8b94a3"
+    return { "section": t[ "id" ] , "color": t[ "color" ] }
+
+
+def op_section_move( doc , ctx , p ):
+    """Up , down , or to 1-based place `to` -- never below Unranked."""
+    t    = _unlocked( doc , p )
+    secs = _sections( doc )
+    at   = secs.index( t )
+    to   = p[ "to" ]
+    if to == "up":
+        to = at - 1
+    elif to == "down":
+        to = at + 1
+    elif isinstance( to , int ) and not isinstance( to , bool ):
+        to = to - 1
+    else:
+        raise OpError( "`to` is \"up\" , \"down\" or a 1-based place" )
+    to = max( 0 , min( len( secs ) - 2 , to ) )
+    secs.insert( to , secs.pop( at ) )
+    return { "section": t[ "id" ] , "at": to + 1 }
+
+
+def op_section_delete( doc , ctx , p ):
+    """A section goes ; its rows go to Unranked ( at its top , in their order )."""
+    t    = _unlocked( doc , p )
+    rows = _section_of( doc , t[ "id" ] )
+    for it in rows:
+        it[ "section" ] = sortboard.UNRANKED
+    # To the top of Unranked : lift them out , in before its first row.
+    ids  = { id( it ) for it in rows }
+    rest = [ it for it in _items( doc ) if id( it ) not in ids ]
+    at   = next( ( i for i , it in enumerate( rest ) if it.get( "section" ) == sortboard.UNRANKED ) , len( rest ) )
+    doc[ "items" ] = rest[ :at ] + rows + rest[ at: ]
+    doc[ "sections" ] = [ x for x in _sections( doc ) if x is not t ]
+    if _options( doc ).get( "section_target" ) == t[ "id" ]:
+        _options( doc )[ "section_target" ] = sortboard.UNRANKED
+    return { "section": t[ "id" ] , "moved": len( rows ) }
+
+
+def op_section_target( doc , ctx , p ):
+    """Where papers added to this list land ( ◉ )."""
+    t = find_section( doc , p[ "section" ] )
+    _options( doc )[ "section_target" ] = t[ "id" ]
+    return { "section": t[ "id" ] }
+
+
+def op_section_set( doc , ctx , p ):
+    """Put rows in a section ( "move to tier" , or a drag across tiers ) , at
+    1-based `rank` among that section's other rows ( default : its end ) , in
+    the order given."""
+    t     = find_section( doc , p[ "section" ] )
+    rows  = []
+    for sel in _rows_arg( p ):
+        _ , it = _on_list( doc , sel )
+        if not any( x is it for x in rows ):
+            rows.append( it )
+    ids   = { id( it ) for it in rows }
+    rest  = [ it for it in _items( doc ) if id( it ) not in ids ]
+    order = [ x[ "id" ] for x in _sections( doc ) ]
+    there = [ i for i , it in enumerate( rest ) if it.get( "section" ) == t[ "id" ] ]
+    rank  = p.get( "rank" )
+    if rank is not None and ( not isinstance( rank , int ) or isinstance( rank , bool ) or rank < 1 ):
+        raise OpError( "`rank` is a whole number from 1" )
+    if there and rank is not None and rank <= len( there ):
+        at = there[ rank - 1 ]
+    elif there:
+        at = there[ -1 ] + 1
+    else:
+        # An empty section : where it would start.
+        later = set( order[ order.index( t[ "id" ] ) + 1: ] )
+        at = next( ( i for i , it in enumerate( rest ) if it.get( "section" ) in later ) , len( rest ) )
+    for it in rows:
+        it[ "section" ] = t[ "id" ]
+        it[ "placed" ]  = True
+    doc[ "items" ] = rest[ :at ] + rows + rest[ at: ]
+    return { "section": t[ "id" ] , "rows": [ it[ "key" ] for it in rows ] ,
+        "rank": len( [ i for i in there if i < at ] ) + 1 }
 
 
 # ---------------------------------------------------------------------------
@@ -1478,6 +1657,7 @@ def op_import_remaining( doc , ctx , p ):
 ROW  = "a row selector : key , DOI or \"#N\""
 ROWS = "one row selector or a list of them"
 POS  = "N , \"top\" , \"bottom\" , \"placed\" , {\"after\": row} or {\"before\": row}"
+SECTION = "a section ( tier ) : its id or label"
 
 # What the two import ops pick rows with ( pick_rows ) and where they land them.
 IMPORT_PICK = {
@@ -1552,7 +1732,8 @@ OPS = {
         "cite_style": ( "str" , False , "CSL style for the rows' citations , by file name "
             "without .csl ( \"\" = the configured default )" ) ,
         "sync": ( "str" , False , "sharing tag / cell edits with the other lists : two-way ( default ) | "
-            "one-way ( takes theirs , keeps its own ) | off" ) } ) ,
+            "one-way ( takes theirs , keeps its own ) | off" ) ,
+        "sheet_url": ( "str" , False , "the Google Sheet last imported from ( a docs.google.com link , or \"\" )" ) } ) ,
     "stage":      ( op_stage , { "text": ( "str" , True , "a pasted reference list" ) } ) ,
     "stage_add":  ( op_stage_add , { "rows": ( "rows" , False , ROWS ) ,
         "all": ( "bool" , False , "the whole shelf" ) , "at": ( "pos" , False , POS ) } ) ,
@@ -1560,7 +1741,20 @@ OPS = {
         "all": ( "bool" , False , "the whole shelf" ) } ) ,
     "auto_tag":   ( op_auto_tag , { "rows": ( "rows" , False , ROWS + " ( default : every untagged list row )" ) } ) ,
     "refill":     ( op_refill , { "rows": ( "rows" , False , ROWS + " ( default : rows still processing )" ) } ) ,
-    "pull_tiers": ( op_pull_tiers , {} ) ,
+    "pull_tiers": ( op_pull_tiers , { "from": ( "str" , False , "the tier board's slug ( default : the first list with sections )" ) } ) ,
+    "sections":   ( op_sections , { "on": ( "bool" , True , "true : a tier board ( S , A , B , C , D , Unranked ) ; false : back to one list" ) } ) ,
+    "section_add": ( op_section_add , { "label": ( "str" , True , "its name" ) ,
+        "desc": ( "str" , False , "what belongs in it" ) , "color": ( "str" , False , "#rrggbb" ) ,
+        "at": ( "int" , False , "1-based place ( default : just above Unranked )" ) } ) ,
+    "section_rename": ( op_section_rename , { "section": ( "str" , True , SECTION ) , "label": ( "str" , True , "the new name" ) } ) ,
+    "section_desc": ( op_section_desc , { "section": ( "str" , True , SECTION ) , "desc": ( "str" , True , "what belongs in it" ) } ) ,
+    "section_color": ( op_section_color , { "section": ( "str" , True , SECTION ) , "color": ( "str" , True , "#rrggbb" ) } ) ,
+    "section_move": ( op_section_move , { "section": ( "str" , True , SECTION ) ,
+        "to": ( "pos" , True , "\"up\" , \"down\" or a 1-based place ( Unranked stays last )" ) } ) ,
+    "section_delete": ( op_section_delete , { "section": ( "str" , True , SECTION + " ; its rows go to Unranked" ) } ) ,
+    "section_target": ( op_section_target , { "section": ( "str" , True , SECTION + " -- where added papers land" ) } ) ,
+    "section_set": ( op_section_set , { "rows": ( "rows" , True , ROWS ) , "section": ( "str" , True , SECTION ) ,
+        "rank": ( "int" , False , "1-based place among that section's rows ( default : its end )" ) } ) ,
     "import_list": ( op_import_list , dict( {
         "from":   ( "str" , True , "the list's slug -- \"\" or \"main\" for the main board ( GET /api/sort/lists )" ) ,
         "fields": ( "bool" , False , "bring each row's notes / cells , adding columns this board lacks ( default true )" ) ,
@@ -1649,6 +1843,7 @@ def rows_view( doc , meta=None , q="" , tags=None , match="any" , shelf=False ,
     like the page's filter box ; `tags` like the tag bar's 🔎 Filter."""
     meta   = meta or {}
     ckeys  = _cell_keys( doc )
+    tiers  = { t[ "id" ]: t[ "label" ] for t in doc.get( "sections" ) or [] }
     src    = _staged( doc ) if shelf else _items( doc )
     want   = [ lc( t ) for t in ( tags or [] ) if t ]
     rows   = []
@@ -1674,6 +1869,8 @@ def rows_view( doc , meta=None , q="" , tags=None , match="any" , shelf=False ,
             "placed":  bool( it.get( "placed" ) ) ,
             "pending": bool( it.get( "pending" ) ) ,
         }
+        if it.get( "section" ):
+            row[ "tier" ] = tiers.get( it[ "section" ] ) or it[ "section" ]
         if meta:
             row[ "in_library" ] = bool( m.get( "in_library" ) )
         if it.get( "authors" ):
@@ -1719,7 +1916,8 @@ def to_csv( doc , meta=None , cites=None , keep=None ):
     buf   = io.StringIO()
     w     = csv.writer( buf , lineterminator="\n" )
     cols  = doc.get( "columns" ) or []
-    w.writerow( [ "#" , "DOI_or_Key" , "Cite" , "Title" , "Year" , "Tags" ]
+    tiers = { t[ "id" ]: t[ "label" ] for t in doc.get( "sections" ) or [] }
+    w.writerow( [ "#" , "DOI_or_Key" , "Cite" , "Title" , "Year" ] + ( [ "Tier" ] if tiers else [] ) + [ "Tags" ]
         + [ c[ "label" ] for c in cols ] + [ "MD_File" ] )
     for i , it in enumerate( _items( doc ) ):
         # keep : only these keys ( the page's filter ) , each still numbered
@@ -1731,7 +1929,9 @@ def to_csv( doc , meta=None , cites=None , keep=None ):
         w.writerow( [ _csv_cell( x ) for x in
             [ i + 1 , it[ "key" ] , ( cites.get( it[ "key" ] ) or {} ).get( "intext" ) or "" ,
               it.get( "title" ) or m.get( "title" ) or "" ,
-              it.get( "year" ) or m.get( "year" ) or "" , it.get( "tags" ) or [] ]
+              it.get( "year" ) or m.get( "year" ) or "" ]
+            + ( [ tiers.get( it.get( "section" ) ) or "" ] if tiers else [] )
+            + [ it.get( "tags" ) or [] ]
             + [ ( it.get( "fields" ) or {} ).get( c[ "id" ] ) or "" for c in cols ]
             + [ re.sub( r"[\/\\]" , "_" , lk ) + ".md" if m.get( "has_md" ) else "" ] ] )
     return "\ufeff" + buf.getvalue().rstrip( "\n" )

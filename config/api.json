@@ -51,6 +51,16 @@
         },
         "description": "The record has moved on: an undo too late, or a stale edit."
       },
+      "E410": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "It was deleted: a list in the trash, which can still be put back."
+      },
       "E429": {
         "content": {
           "application/json": {
@@ -6572,7 +6582,7 @@
         ]
       },
       "post": {
-        "description": "A new, empty list.",
+        "description": "A new list: empty, a full copy of the list `from` names, or a copy of only the rows `keys` names.",
         "operationId": "post_api_lists",
         "requestBody": {
           "content": {
@@ -6583,6 +6593,24 @@
                   "csrf_token": {
                     "description": "From GET /api/me. Browser sessions only.",
                     "type": "string"
+                  },
+                  "from": {
+                    "description": "Copy this list (its slug) instead of starting empty.",
+                    "type": "string"
+                  },
+                  "keys": {
+                    "description": "With from: copy only these rows (keys), and only the tags they use.",
+                    "oneOf": [
+                      {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "name": {
                     "description": "The new list's name.",
@@ -6626,6 +6654,12 @@
           "403": {
             "$ref": "#/components/responses/E403"
           },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "410": {
+            "$ref": "#/components/responses/E410"
+          },
           "429": {
             "$ref": "#/components/responses/E429"
           },
@@ -6646,6 +6680,62 @@
           "Lists"
         ],
         "x-mcp-http": "An agent edits lists; which lists exist is a person's decision."
+      }
+    },
+    "/api/lists/deleted": {
+      "get": {
+        "description": "The lists in the trash, most recently deleted first. Each can be put back for 30 days.",
+        "operationId": "get_api_lists_deleted",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "days": {
+                      "description": "How long a deleted list can be put back.",
+                      "type": "integer"
+                    },
+                    "lists": {
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "days",
+                    "lists"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Deleted lists",
+        "tags": [
+          "Lists"
+        ],
+        "x-mcp-http": "Which lists exist is a person's decision."
       }
     },
     "/api/lists/schema": {
@@ -6753,7 +6843,7 @@
     },
     "/api/lists/{slug}": {
       "get": {
-        "description": "One list in full: its document (rows in order, each with key, title, year, tags and cells; columns; the tag vocabulary with colours), its rev, and what the library knows of each row.",
+        "description": "One list in full (a slug it was renamed away from answers the list as it is now): its document (rows in order, each with key, title, year, tags and cells; columns; the tag vocabulary with colours), its rev, and what the library knows of each row.",
         "operationId": "get_api_lists_slug",
         "parameters": [
           {
@@ -6794,6 +6884,9 @@
           "404": {
             "$ref": "#/components/responses/E404"
           },
+          "410": {
+            "$ref": "#/components/responses/E410"
+          },
           "429": {
             "$ref": "#/components/responses/E429"
           },
@@ -6813,6 +6906,94 @@
         "tags": [
           "Lists"
         ]
+      }
+    },
+    "/api/lists/{slug}/delete": {
+      "post": {
+        "description": "Into the trash: off the picker and its link, its versions kept. It can be put back for 30 days. The main list cannot be deleted.",
+        "operationId": "post_api_lists_slug_delete",
+        "parameters": [
+          {
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "list": {
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "list"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "410": {
+            "$ref": "#/components/responses/E410"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Delete a list",
+        "tags": [
+          "Lists"
+        ],
+        "x-mcp-http": "Which lists exist is a person's decision."
       }
     },
     "/api/lists/{slug}/export.csv": {
@@ -7311,6 +7492,13 @@
                         }
                       ]
                     },
+                    "mirrored": {
+                      "description": "The other lists the tag and cell edits were made on too: {slug, name, papers} (or skipped: \"locked\"); and {filled, from} when papers arriving here were given what other lists say about them.",
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "ok": {
                       "type": "boolean"
                     },
@@ -7367,6 +7555,176 @@
         "tags": [
           "Lists"
         ]
+      }
+    },
+    "/api/lists/{slug}/remaining": {
+      "get": {
+        "description": "Every library paper not on the list (or its shelf), newest added first: what import_remaining picks from, in the order its range counts.",
+        "operationId": "get_api_lists_slug_remaining",
+        "parameters": [
+          {
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "papers": {
+                      "description": "{key, title, doi, year, journal, mods}, newest added first.",
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "papers",
+                    "total"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "410": {
+            "$ref": "#/components/responses/E410"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Library papers not on a list",
+        "tags": [
+          "Lists"
+        ]
+      }
+    },
+    "/api/lists/{slug}/rename": {
+      "post": {
+        "description": "A new name, and the slug it makes (the old slug still answers, for links sent before). The main list keeps its slug.",
+        "operationId": "post_api_lists_slug_rename",
+        "parameters": [
+          {
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "The new name. The slug follows it; the old one keeps working as a link.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "list": {
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "list"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "410": {
+            "$ref": "#/components/responses/E410"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Rename a list",
+        "tags": [
+          "Lists"
+        ],
+        "x-mcp-http": "Which lists exist, and what they are called, is a person's decision."
       }
     },
     "/api/lists/{slug}/restore": {
@@ -7643,6 +8001,91 @@
         "tags": [
           "Lists"
         ]
+      }
+    },
+    "/api/lists/{slug}/undelete": {
+      "post": {
+        "description": "Out of the trash, at the slug it had.",
+        "operationId": "post_api_lists_slug_undelete",
+        "parameters": [
+          {
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "list": {
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "list"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Put a deleted list back",
+        "tags": [
+          "Lists"
+        ],
+        "x-mcp-http": "Which lists exist is a person's decision."
       }
     },
     "/api/login": {
@@ -9337,6 +9780,106 @@
         "tags": [
           "Lists"
         ]
+      }
+    },
+    "/api/sheet/csv": {
+      "post": {
+        "description": "A public Google Sheet's rows, and the links behind its cells, for an import. The request always goes to docs.google.com's own export, built from the sheet ID alone, so nothing else can be fetched. At most 20 MB.",
+        "operationId": "post_api_sheet_csv",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "url": {
+                    "description": "A Google Sheets link, shared as Anyone with the link. Only its sheet ID (and gid) are used.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "url"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "links": {
+                      "description": "Per row: null, or {column index: [[text, url or null], ...]} for each cell with links behind its text.",
+                      "oneOf": [
+                        {
+                          "type": "array"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "links_error": {
+                      "description": "Why the links could not be read, when they could not (the rows still came).",
+                      "type": "string"
+                    },
+                    "rows": {
+                      "description": "The sheet's tab as rows of cells, the header first.",
+                      "items": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "rows"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Read a Google Sheet",
+        "tags": [
+          "Lists"
+        ],
+        "x-mcp-http": "It reads a sheet for the page's import dialog; list_ops imports rows."
       }
     },
     "/api/team": {

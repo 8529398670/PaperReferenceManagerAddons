@@ -49,16 +49,17 @@ The idea that changes everything: **no reindex, no pipeline to run**.
 - [x] **P2** CSL citations (in-text + full, copy buttons, style picker; `POST /api/cite`).
 - [x] **P2** Version history with a preview of what restoring changes, and restore (undoable); view-only lock in the list menu, live in every tab.
 - [x] **P2** Faster redraw of very long lists (only changed rows; ~0.65 s → ~0.1 s on 1,527 rows), and focus kept across redraws.
-- [ ] **P3** Duplicate, rename (with redirect), delete (to trash, undoable).
-- [ ] **P3** Copy/move rows to another list; import from lists or remaining papers.
-- [ ] **P3** Tags and cells mirrored across lists (two-way / one-way / off).
-- [ ] **P3** Public Google Sheet import with cell links and the per-column merge dialog.
+- [x] **P3** Duplicate, rename (the old slug keeps answering), delete (to the trash for 30 days, undoable; Deleted lists to put one back; ops on it answer 410); undoable list creation; `#lists/<slug>` links.
+- [x] **P3** Copy/move rows to another list (or a new one; top, bottom or #N; undo covers both lists); import from lists or Remaining papers with filters, a pick table and positions (`GET /api/lists/<slug>/remaining`).
+- [x] **P3** Tags and cells mirrored across lists (two-way / one-way / off, in the list menu); papers arriving on a list filled from the sharing lists; locked lists skipped; restores travel too.
+- [x] **P3** Public Google Sheet import (`POST /api/sheet/csv`, docs.google.com only) with cell links and the per-column merge dialog (fill / overwrite / leave out, tags add / replace, keep or take the sheet's order; add only; one undo step). A downloaded CSV goes through the same dialog.
 - [ ] **P7** Google Sheets live two-way mirror.
 
 ## D. Tiers
-- [ ] **P3** A tier board as a list with sections: label, description, colour, target, reorder, delete.
-- [ ] **P3** Rank within a tier, move across tiers.
-- [ ] **P3** Modality bar; legacy `tiers.json` import; `pull_tiers`.
+- [x] **P3** A tier board as a list with sections (Tiers… in the list menu): label, description, colour, target (◉), reorder, delete (rows to Unranked), switch on and off.
+- [x] **P3** Rank within a tier (type it), move across tiers (drag onto a row or a tier heading, or the tier picker on each row); CSV export/import carries a Tier column.
+- [x] **P3** Legacy `tiers.json` (+ lock) imported as a tier board "Tiers"; `pull_tiers` from any tier board.
+- [ ] **P4** Modality bar (modalities are tags; their own chip group needs the modality vocabulary from P4).
 
 ## E. Per-paper content (lazy, no pipeline to run)
 - [ ] **P4** Per-paper queue: new paper, changed PDF, or opened-and-not-ready, each enqueue it.

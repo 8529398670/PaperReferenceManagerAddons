@@ -36,6 +36,7 @@ An error reply is a JSON object whose `error` says what went wrong.
 | 403 | Not allowed, or a bad csrf_token. | [`Error`](#error) |
 | 404 | No such thing, or this feature is switched off. | [`Error`](#error) |
 | 409 | The record has moved on: an undo too late, or a stale edit. | [`Error`](#error) |
+| 410 | It was deleted: a list in the trash, which can still be put back. | [`Error`](#error) |
 | 429 | Too many requests. | [`Error`](#error) |
 | 503 | In maintenance mode. Retry-After says when to try again. | [`Maintenance`](#maintenance) |
 
@@ -2255,18 +2256,24 @@ A token that changes whenever the library does, so a userscript can poll cheaply
 | GET | [`/api/cite/styles`](#get-apicitestyles) | The citation styles | browser session or API key, anyone signed in |
 | GET | [`/api/lists`](#get-apilists) | List the lists | browser session or API key, anyone signed in |
 | POST | [`/api/lists`](#post-apilists) | Make a new list | browser session or API key, anyone signed in |
+| GET | [`/api/lists/deleted`](#get-apilistsdeleted) | Deleted lists | browser session or API key, anyone signed in |
 | GET | [`/api/lists/schema`](#get-apilistsschema) | List ops reference | browser session or API key, anyone signed in |
 | GET | [`/api/lists/stream`](#get-apilistsstream) | When a list changes | browser session or API key, anyone signed in |
 | GET | [`/api/lists/{slug}`](#get-apilistsslug) | Read a list | browser session or API key, anyone signed in |
+| POST | [`/api/lists/{slug}/delete`](#post-apilistsslugdelete) | Delete a list | browser session or API key, anyone signed in |
 | GET | [`/api/lists/{slug}/export.csv`](#get-apilistsslugexportcsv) | A list as CSV | browser session or API key, anyone signed in |
 | POST | [`/api/lists/{slug}/export.csv`](#post-apilistsslugexportcsv) | Some of a list as CSV | browser session or API key, anyone signed in |
 | GET | [`/api/lists/{slug}/history`](#get-apilistsslughistory) | A list's past versions | browser session or API key, anyone signed in |
 | GET | [`/api/lists/{slug}/history/{rev}`](#get-apilistsslughistoryrev) | One past version of a list | browser session or API key, anyone signed in |
 | POST | [`/api/lists/{slug}/lock`](#post-apilistssluglock) | Make a list view-only, or editable | browser session or API key, anyone signed in |
 | POST | [`/api/lists/{slug}/ops`](#post-apilistsslugops) | Change a list | browser session or API key, anyone signed in |
+| GET | [`/api/lists/{slug}/remaining`](#get-apilistsslugremaining) | Library papers not on a list | browser session or API key, anyone signed in |
+| POST | [`/api/lists/{slug}/rename`](#post-apilistsslugrename) | Rename a list | browser session or API key, anyone signed in |
 | POST | [`/api/lists/{slug}/restore`](#post-apilistsslugrestore) | Put a past version back | browser session or API key, anyone signed in |
 | GET | [`/api/lists/{slug}/rows`](#get-apilistsslugrows) | A list as flat rows | browser session or API key, anyone signed in |
+| POST | [`/api/lists/{slug}/undelete`](#post-apilistsslugundelete) | Put a deleted list back | browser session or API key, anyone signed in |
 | POST | [`/api/refs/parse`](#post-apirefsparse) | Read a reference list | browser session or API key, anyone signed in |
+| POST | [`/api/sheet/csv`](#post-apisheetcsv) | Read a Google Sheet | browser session or API key, anyone signed in |
 
 ### POST /api/cite
 
@@ -2346,19 +2353,21 @@ Every curated list, the main one first: slug, name, rev (its version number), ho
 
 Make a new list
 
-A new, empty list.
+A new list: empty, a full copy of the list `from` names, or a copy of only the rows `keys` names.
 
 |  |  |
 |---|---|
 | Who may call | browser session or API key, anyone signed in |
 | MCP tool | None, HTTP only: An agent edits lists; which lists exist is a person's decision. |
-| Errors | 400, 401, 403, 429, 503 |
+| Errors | 400, 401, 403, 404, 410, 429, 503 |
 
 **Request body**
 
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
 | `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `from` | string | no |  | Copy this list (its slug) instead of starting empty. |
+| `keys` | array of string or null | no |  | With from: copy only these rows (keys), and only the tags they use. |
 | `name` | string | yes |  | The new list's name. |
 
 **Reply 200**: Success
@@ -2366,6 +2375,25 @@ A new, empty list.
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
 | `list` | object | yes |  |  |
+
+### GET /api/lists/deleted
+
+Deleted lists
+
+The lists in the trash, most recently deleted first. Each can be put back for 30 days.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | None, HTTP only: Which lists exist is a person's decision. |
+| Errors | 401, 429, 503 |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `days` | integer | yes |  | How long a deleted list can be put back. |
+| `lists` | array of object | yes |  |  |
 
 ### GET /api/lists/schema
 
@@ -2412,19 +2440,49 @@ Text, as `text/event-stream`.
 
 Read a list
 
-One list in full: its document (rows in order, each with key, title, year, tags and cells; columns; the tag vocabulary with colours), its rev, and what the library knows of each row.
+One list in full (a slug it was renamed away from answers the list as it is now): its document (rows in order, each with key, title, year, tags and cells; columns; the tag vocabulary with colours), its rev, and what the library knows of each row.
 
 |  |  |
 |---|---|
 | Who may call | browser session or API key, anyone signed in |
 | MCP tool | [`get_list`](mcp.md#get_list) |
-| Errors | 400, 401, 404, 429, 503 |
+| Errors | 400, 401, 404, 410, 429, 503 |
 
 **Parameters**
 
 | Name | In | Type | Required | Limits | Description |
 |---|---|---|---|---|---|
 | `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `list` | object | yes |  |  |
+
+### POST /api/lists/{slug}/delete
+
+Delete a list
+
+Into the trash: off the picker and its link, its versions kept. It can be put back for 30 days. The main list cannot be deleted.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | None, HTTP only: Which lists exist is a person's decision. |
+| Errors | 400, 401, 403, 404, 410, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
 
 **Reply 200**: Success
 
@@ -2602,9 +2660,66 @@ Run a batch of ops against a list, atomically: every op succeeds and the list is
 |---|---|---|---|---|
 | `changed` | boolean | yes |  |  |
 | `list` | object or null | no |  | The list afterwards. Left out of the MCP tool's answer: get_list has it. |
+| `mirrored` | array of object | no |  | The other lists the tag and cell edits were made on too: {slug, name, papers} (or skipped: "locked"); and {filled, from} when papers arriving here were given what other lists say about them. |
 | `ok` | boolean | yes |  |  |
 | `results` | array of any | yes |  |  |
 | `rev` | integer | yes |  |  |
+
+### GET /api/lists/{slug}/remaining
+
+Library papers not on a list
+
+Every library paper not on the list (or its shelf), newest added first: what import_remaining picks from, in the order its range counts.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`list_remaining`](mcp.md#list_remaining) |
+| Errors | 400, 401, 404, 410, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `papers` | array of object | yes |  | {key, title, doi, year, journal, mods}, newest added first. |
+| `total` | integer | yes |  |  |
+
+### POST /api/lists/{slug}/rename
+
+Rename a list
+
+A new name, and the slug it makes (the old slug still answers, for links sent before). The main list keeps its slug.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | None, HTTP only: Which lists exist, and what they are called, is a person's decision. |
+| Errors | 400, 401, 403, 404, 410, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `name` | string | yes |  | The new name. The slug follows it; the old one keeps working as a link. |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `list` | object | yes |  |  |
 
 ### POST /api/lists/{slug}/restore
 
@@ -2678,6 +2793,36 @@ The list as flat rows, each with its position and its cells under their column l
 | `tags` | array of object | yes |  |  |
 | `total` | integer | yes |  |  |
 
+### POST /api/lists/{slug}/undelete
+
+Put a deleted list back
+
+Out of the trash, at the slug it had.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | None, HTTP only: Which lists exist is a person's decision. |
+| Errors | 400, 401, 403, 404, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `list` | object | yes |  |  |
+
 ### POST /api/refs/parse
 
 Read a reference list
@@ -2705,6 +2850,33 @@ A pasted or dropped reference list, read and matched to the library: a preview o
 | `max` | integer | yes |  |  |
 | `refs` | array of any | yes |  |  |
 | `text` | string | yes |  | What was read, so a dropped file can go on to the stage op. |
+
+### POST /api/sheet/csv
+
+Read a Google Sheet
+
+A public Google Sheet's rows, and the links behind its cells, for an import. The request always goes to docs.google.com's own export, built from the sheet ID alone, so nothing else can be fetched. At most 20 MB.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | None, HTTP only: It reads a sheet for the page's import dialog; list_ops imports rows. |
+| Errors | 400, 401, 403, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `url` | string | yes |  | A Google Sheets link, shared as Anyone with the link. Only its sheet ID (and gid) are used. |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `links` | array of any or null | no |  | Per row: null, or {column index: [[text, url or null], ...]} for each cell with links behind its text. |
+| `links_error` | string | no |  | Why the links could not be read, when they could not (the rows still came). |
+| `rows` | array of array of string | yes |  | The sheet's tab as rows of cells, the header first. |
 
 ## Schemas
 

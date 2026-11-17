@@ -23,6 +23,9 @@ const ListCSV = {
   H_TAGS: /^(tags?|modalit\w*|section[_ ]?tags?)$/i,
   H_MD: /^md[_ ]?file$/i,
   H_CITE: /^(cite|citation|in[-_ ]?text([-_ ]?citation)?)$/i,
+  // A tier board's export says each row's tier; read back onto one, it puts
+  // the row there. Anywhere else it is derived, and read past.
+  H_TIER: /^(tier|section)$/i,
 
   parse( text ) {
     const rows = [];
@@ -84,7 +87,7 @@ const ListCSV = {
   plan( rows , doc , mode ) {
     if ( rows.length < 2 ) throw new Error( I18n.get( "lists.csv_empty" ) );
     const head = rows[ 0 ].map( ( h ) => String( h || "" ).trim() );
-    const at = { key: -1 , doi: -1 , title: -1 , year: -1 , journal: -1 , authors: -1 };
+    const at = { key: -1 , doi: -1 , title: -1 , year: -1 , journal: -1 , authors: -1 , tier: -1 };
     const tagCols = [];
     const extra = [];
     head.forEach( ( h , i ) => {
@@ -95,6 +98,7 @@ const ListCSV = {
       else if ( this.H_JOURNAL.test( h ) ) at.journal = i;
       else if ( this.H_AUTHORS.test( h ) ) at.authors = i;
       else if ( this.H_TAGS.test( h ) ) tagCols.push( i );
+      else if ( this.H_TIER.test( h ) ) at.tier = i;
       else if ( this.H_MD.test( h ) || this.H_NUM.test( h ) || this.H_CITE.test( h ) ) { /* derived: not stored */ }
       else if ( h ) extra.push( { i: i , label: h } );
     } );
@@ -138,6 +142,9 @@ const ListCSV = {
     };
     const vocab = new Set( ( ( doc.vocab && doc.vocab.tags ) || [] ).map( ( tag ) => lower( tag.name ) ) );
     const newTags = new Map();
+    const sections = doc.sections || [];
+    const tierOf = ( text ) => sections.find( ( section ) => lower( section.label ) === lower( text ) || section.id === lower( text ) ) || null;
+    const tiers = new Map();
 
     rows.slice( 1 ).forEach( ( row ) => {
       const cell = ( i ) => ( i >= 0 && i < row.length ? String( row[ i ] ).trim() : "" );
@@ -151,6 +158,9 @@ const ListCSV = {
       if ( seen.has( lower( key ) ) ) return;
       seen.add( lower( key ) );
       order.push( key );
+      const tier = sections.length ? tierOf( cell( at.tier ) ) : null;
+      const tierMoves = tier && ( !existing || existing.section !== tier.id || mode === "replace" );
+      if ( tierMoves ) push( tiers , tier.id , key );
       let tags = [];
       tagCols.forEach( ( i ) => { tags = tags.concat( this.splitTags( cell( i ) ) ); } );
       tags.forEach( ( tag ) => {
@@ -202,7 +212,7 @@ const ListCSV = {
         ops.push( { op: "set_cell" , row: key , col: col , value: value } );
         touched = true;
       } );
-      if ( touched ) counts.updated += 1;
+      if ( touched || tierMoves ) counts.updated += 1;
       else counts.unchanged += 1;
     } );
 
@@ -215,6 +225,7 @@ const ListCSV = {
       if ( gone.length ) ops.unshift( { op: "remove" , rows: gone } );
       if ( order.length ) ops.push( { op: "reorder" , rows: order , at: 1 } );
     }
+    tiers.forEach( ( keys , section ) => ops.push( { op: "section_set" , rows: keys , section: section } ) );
     // A tag new to the list takes a colour of its own, as one made by hand does.
     const created = [];
     const palette = ( ( doc.vocab && doc.vocab.tags ) || [] ).slice();

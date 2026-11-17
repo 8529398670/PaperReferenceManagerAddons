@@ -126,6 +126,77 @@ def default_doc():
     }
 
 
+# ---------------------------------------------------------------------------
+# Sections : a tier board is a list with sections switched on
+# ---------------------------------------------------------------------------
+#
+# doc[ "sections" ] is [] on a plain list. On a tier board it is the tiers , in
+# order -- { id , label , desc , color , locked } -- with Unranked always there ,
+# locked and last. Each row says which one it is in ( row[ "section" ] ) , and
+# the rows are kept grouped in section order , so a row's number is still its
+# place in the one list and everything that works on a list ( moving , the
+# shelf , CSV , undo , versions ) works on a tier board unchanged. Its rank IN
+# its tier is its place among that tier's rows.
+#
+# A row that arrives with no section ( added , imported , taken off the shelf )
+# lands in the target section ( options.section_target , ◉ on the page ,
+# Unranked unless one is armed ) ; one naming a section that is gone goes to
+# Unranked.
+
+UNRANKED       = tiers_db.STAGING_ID
+UNRANKED_LABEL = tiers_db.STAGING_LABEL
+UNRANKED_COLOR = "#8b94a3"
+MAX_SECTIONS   = 30
+
+
+def default_sections():
+    """S , A , B , C , D and Unranked -- the old tier list's ramp."""
+    out = [ { "id": i , "label": l , "desc": "" , "color": c , "locked": False }
+        for i , l , c in tiers_db.DEFAULT_TIERS ]
+    return out + [ unranked() ]
+
+
+def unranked():
+    return { "id": UNRANKED , "label": UNRANKED_LABEL , "desc": "Added but not ranked yet" ,
+        "color": UNRANKED_COLOR , "locked": True }
+
+
+def _clean_sections( raw ):
+    """The sections , in order , Unranked last -- or [] ( no sections )."""
+    if not isinstance( raw , list ) or not raw:
+        return []
+    out , seen , last = [] , set() , None
+    for t in raw:
+        if not isinstance( t , dict ):
+            continue
+        label = tiers_db._clean_str( t.get( "label" ) , 60 ).strip()
+        sid   = tiers_db.slug( t.get( "id" ) or label , "tier" )
+        while sid in seen:
+            sid = f"{sid}-2"
+        seen.add( sid )
+        row = { "id": sid , "label": label or sid.upper() ,
+            "desc": tiers_db._clean_str( t.get( "desc" ) , 400 ) ,
+            "color": tiers_db._clean_str( t.get( "color" ) , 32 ) or UNRANKED_COLOR ,
+            "locked": bool( t.get( "locked" ) ) or sid == UNRANKED }
+        if sid == UNRANKED:
+            last = row
+        else:
+            out.append( row )
+    return out[ :MAX_SECTIONS - 1 ] + [ last or unranked() ]
+
+
+def _place_in_sections( items , raws , sections , target ):
+    """Give every row its section and group them in section order ( stable :
+    within a section the rows keep their order ). In place."""
+    ids = { t[ "id" ]: n for n , t in enumerate( sections ) }
+    for row , raw in zip( items , raws ):
+        sid = raw.get( "section" ) if isinstance( raw , dict ) else None
+        if not sid:
+            sid = target
+        row[ "section" ] = sid if sid in ids else UNRANKED
+    items.sort( key=lambda row: ids[ row[ "section" ] ] )
+
+
 def _one_namespace( row ):
     """ONE tag namespace here , so a document that came through the tier page
     ( which keeps modalities in their own list ) keeps everything it was tagged
@@ -148,11 +219,18 @@ def normalize( doc ):
     col_ids = [ c[ "id" ] for c in columns ]
     # One key namespace across the list AND the shelf , so a staged row can never
     # shadow a placed one. The list is cleaned first : it wins.
-    items , seen_keys = [] , set()
+    items , raws , seen_keys = [] , [] , set()
     for raw in ( doc.get( "items" ) or [] ):
         row = tiers_db._clean_item( raw , col_ids , seen_keys )
         if row:
             items.append( _one_namespace( row ) )
+            raws.append( raw )
+    sections = _clean_sections( doc.get( "sections" ) )
+    target   = opts.get( "section_target" )
+    if not any( t[ "id" ] == target for t in sections ):
+        target = UNRANKED
+    if sections:
+        _place_in_sections( items , raws , sections , target )
     staging = [ _one_namespace( r ) for r in
         tiers_db._clean_staging( doc.get( "staging" ) , col_ids , seen_keys ) ]
     tags = tiers_db._clean_vocab( ( doc.get( "vocab" ) or {} ).get( "tags" ) , 400 )
@@ -201,7 +279,11 @@ def normalize( doc ):
             # that follows the original without writing back to it -- and off
             # does neither. Two-way unless somebody chose otherwise.
             "sync": sync_mode( opts.get( "sync" ) ) ,
+            # Where a paper added to a tier board lands ( ◉ ) : a section id.
+            # Unranked when nothing else is armed ; "" on a plain list.
+            "section_target": target if sections else "" ,
         } ,
+        "sections":   sections ,
         "columns":    columns ,
         "items":      items ,
         "staging":    staging ,
