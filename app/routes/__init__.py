@@ -45,6 +45,7 @@ from app.routes import (
     settings,
     shortcuts,
     team,
+    themes,
     two_factor,
 )
 from app.routes.api_keys import RequireAPIKeys
@@ -134,6 +135,8 @@ def build_routes(static_server: StaticServer, cfg: Config) -> list[BaseRoute]:
         signed_in("/api/me", account.me),
         signed_in("/api/account/rename", account.rename, ["POST"]),
         signed_in("/api/account/shortcuts", shortcuts.set_my_shortcuts, ["POST"]),
+        signed_in("/api/account/themes", themes.set_my_themes, ["POST"]),
+        signed_in("/api/account/theme", themes.set_my_theme, ["POST"]),
         # A session only, for the same reason as every route that hands out
         # a login link: the link becomes a session. See admin_sessions above.
         sessions_only("/api/account/login-link", account.create_my_login_link, ["POST"]),
@@ -171,6 +174,9 @@ def build_routes(static_server: StaticServer, cfg: Config) -> list[BaseRoute]:
         # sessions could end the one that would revoke it.
         admin_sessions("/api/admin/users/{user_id}/sessions", sessions.list_user_sessions),
         admin_sessions("/api/admin/users/{user_id}/sessions/{session_id}/revoke", sessions.revoke_user_session, ["POST"]),
+        # The themes everyone starts from. Not a credential, so a key may.
+        admins("/api/admin/theme-defaults", themes.get_theme_defaults),
+        admins("/api/admin/theme-defaults", themes.set_theme_defaults, ["POST"]),
         admin_keys("/api/admin/keys", api_keys.list_all_keys),
         admin_keys("/api/admin/keys", api_keys.create_key_for_user, ["POST"]),
         admin_keys("/api/admin/keys/{key_id}/rename", api_keys.rename_any_key, ["POST"]),

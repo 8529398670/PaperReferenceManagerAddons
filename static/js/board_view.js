@@ -537,6 +537,7 @@ const BoardView = {
   flash( container , key ) {
     const row = this.find( container , key );
     if ( !row ) return false;
+    Dom.movedOnPurpose();
     row.scrollIntoView( { block: "center" , behavior: "smooth" } );
     row.classList.remove( "is-flashing" );
     void row.offsetWidth;

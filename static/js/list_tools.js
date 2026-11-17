@@ -113,10 +113,15 @@ const ListTools = {
       const key = this.anchor();
       if ( key && !BoardView.flash( rows , key ) ) Dom.toast( I18n.get( "lists.hidden_by_filter" ) , "error" );
     } );
-    Dom.get( "list-to-top" ).addEventListener( "click" , () => Dom.get( "lists-panel" ).scrollIntoView( { behavior: "smooth" } ) );
+    Dom.get( "list-to-top" ).addEventListener( "click" , () => {
+      Dom.movedOnPurpose();
+      Dom.get( "lists-panel" ).scrollIntoView( { behavior: "smooth" } );
+    } );
     Dom.get( "list-to-bottom" ).addEventListener( "click" , () => {
       const last = rows.lastElementChild;
-      if ( last ) last.scrollIntoView( { block: "end" , behavior: "smooth" } );
+      if ( !last ) return;
+      Dom.movedOnPurpose();
+      last.scrollIntoView( { block: "end" , behavior: "smooth" } );
     } );
   },
 

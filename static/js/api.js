@@ -104,6 +104,13 @@ const Api = {
   },
   // The whole set of changed keys; {} puts them all back. See shortcuts.js.
   setShortcuts( shortcuts )    { return this.post( "/api/account/shortcuts" , { shortcuts: shortcuts } ); },
+  // Your whole list of themes (null: back to the defaults) and the one you
+  // use; or only the one you use. See theme.js.
+  setThemes( themes , id )     { return this.post( "/api/account/themes" , { themes: themes , theme_id: id } ); },
+  setTheme( id )               { return this.post( "/api/account/theme" , { theme_id: id } ); },
+  // The themes everyone without their own list sees; null is the built-in ones. // feature:appearance
+  themeDefaults()              { return this.request( "/api/admin/theme-defaults" ); }, // feature:appearance
+  setThemeDefaults( themes )   { return this.post( "/api/admin/theme-defaults" , { themes: themes } ); }, // feature:appearance
   startTwoFactor()             { return this.post( "/api/account/two-factor/start" ); },
   confirmTwoFactor( code )     { return this.post( "/api/account/two-factor/confirm" , { code: code } ); },
   disableTwoFactor( code )     { return this.post( "/api/account/two-factor/disable" , { code: code } ); },

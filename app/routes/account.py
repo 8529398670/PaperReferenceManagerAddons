@@ -13,6 +13,7 @@ from app.core.encryption import BadKeyError, CipherTextError
 from app.core.logs import KIND_AUTH
 from app.core.security import Actor, actor_from, check_csrf, clear_session_cookie, decrypt_cookie
 from app.models import login_tokens, sessions, users
+from app.models import themes
 from app.models import two_factor
 from app.routes.admin import link_options, link_response
 from app.routes.helpers import bad_request, conflict, forbidden, get_config, get_store, read_json, run, server_error
@@ -39,6 +40,7 @@ def me_row(store: Store, cfg: Config, actor: Actor, version: str) -> dict[str, A
     # is_owner tells the UI which account-management buttons to offer; the
     # server checks ownership again on every request that depends on it.
     owner_id = users.get_owner_id(store)
+    my_themes, themes_custom = themes.mine(store, actor.user.themes)
     payload: dict[str, Any] = {
         "authenticated": True,
         "id": actor.user.id,
@@ -51,6 +53,9 @@ def me_row(store: Store, cfg: Config, actor: Actor, version: str) -> dict[str, A
         "version": version,
         "announcement": cfg.announcement,
         "shortcuts": actor.user.shortcuts,
+        "themes": my_themes,
+        "themes_custom": themes_custom,
+        "theme_id": actor.user.theme_id,
         "two_factor": two_factor.is_on(actor.user),
         "two_factor_enabled": cfg.two_factor_enabled,
         "auth": actor.method,

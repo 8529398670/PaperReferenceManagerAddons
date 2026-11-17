@@ -350,6 +350,7 @@ const ListPanels = {
       lists.draw();
       ListModal.close();
       Dom.toast( I18n.get( "lists.refs_staged" ).replace( "{staged}" , result.staged ).replace( "{list}" , result.on_list ).replace( "{shelf}" , result.on_shelf ) , "ok" );
+      Dom.movedOnPurpose();
       Dom.get( "list-shelf" ).scrollIntoView( { behavior: "smooth" , block: "start" } );
     };
     area.addEventListener( "input" , () => {
