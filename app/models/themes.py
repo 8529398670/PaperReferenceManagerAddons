@@ -228,6 +228,24 @@ def set_user_theme_id(store: Store, user_id: int, theme_id: object) -> bool:
     return store.update_value(BUCKET_USERS, user_id, mutate) is not None
 
 
+TAG_COLOR_MODES = ("wsu", "theme")
+
+
+def set_user_tag_colors(store: Store, user_id: int, mode: str) -> bool:
+    """Where someone's tag colours come from: "wsu" (the default, kept as
+    nothing) or "theme". False if there is no such account."""
+    if mode not in TAG_COLOR_MODES:
+        raise ThemesError("tag colours must be one of: " + ", ".join(TAG_COLOR_MODES))
+
+    def mutate(record: Record) -> None:
+        if mode == "wsu":
+            record.pop("tag_colors", None)
+        else:
+            record["tag_colors"] = mode
+
+    return store.update_value(BUCKET_USERS, user_id, mutate) is not None
+
+
 def mine(store: Store, user_themes: list[dict[str, Any]] | None, user_builtins: int = 0) -> tuple[list[dict[str, Any]] | None, bool, int]:
     """What /api/me says about someone's themes: their own list, else the
     defaults, else None for the built-in ones; whether it is their own; and

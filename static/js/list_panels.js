@@ -117,7 +117,6 @@ const ListPanels = {
       shared( "off" , "lists.shared_off" ),
       rule(),
       item( "bi-bar-chart-steps" , "lists.menu_tiers" , () => manage.tiers() , { check: Boolean( ( view.doc.sections || [] ).length ) } ),
-      item( "bi-layout-three-columns" , "lists.menu_columns" , () => this.columns() , { disabled: locked } ),
       item( "bi-palette" , "lists.menu_colours" , () => this.colours() , { disabled: locked } ),
       item( "bi-quote" , "lists.menu_cite" , () => this.citeStyle() , { disabled: locked } ),
       rule(),
@@ -160,11 +159,23 @@ const ListPanels = {
 
   // ---- columns --------------------------------------------------------------------
 
-  columns() {
+  // The board's Columns dropdown: the same picker as every table's (see
+  // DataTable.drawMenu) -- tick to show, arrows to move -- and since a list's
+  // columns are its own, each can also be renamed (pencil) or deleted, and new
+  // ones added at the bottom. Unticked columns are hidden, for everyone who
+  // opens the list. Drawn again whenever the list changes (ListTools.drawBar).
+  columnsMenu( menu ) {
     const lists = this.lists;
-    let dragging = null;
+    const doc = lists.view.doc;
+    const locked = Boolean( lists.view.locked );
+    const folded = new Set( ( doc.options && doc.options.fold_cols ) || [] );
+    const cols = doc.columns || [];
+    // Not while someone is typing in it: that would throw their text away.
+    const sig = JSON.stringify( [ cols , [ ...folded ] , locked ] );
+    if ( menu.contains( document.activeElement ) && document.activeElement.matches( "input[type=text]" ) ) return;
+    if ( sig === this.columnsSig && menu.childElementCount ) return;
+    this.columnsSig = sig;
     const run = async ( label , ops , back , whole ) => {
-      ListModal.problem( "" );
       try {
         if ( whole ) {
           const answer = await lists.changeWhole( label , ops , { toast: false } );
@@ -177,66 +188,94 @@ const ListPanels = {
           } );
         }
       } catch ( error ) {
-        ListModal.problem( error.message );
+        Dom.toast( error.message , "error" );
       }
-      ListModal.redraw();
     };
-    ListModal.open( I18n.get( "lists.columns_title" ) , () => {
-      const doc = lists.view.doc;
-      const folded = new Set( ( doc.options && doc.options.fold_cols ) || [] );
-      const cols = doc.columns || [];
-      const rows = cols.map( ( column , index ) => {
-        const shown = Dom.el( "input" , { class: "form-check-input" , attrs: { type: "checkbox" , "aria-label": I18n.get( "lists.column_shown" ).replace( "{column}" , () => column.label ) } } );
-        shown.checked = !folded.has( column.id );
-        shown.addEventListener( "change" , () => run( "undo.list_columns" ,
-          [ { op: "column_fold" , col: column.id , folded: !shown.checked } ] ,
-          [ { op: "column_fold" , col: column.id , folded: shown.checked } ] ) );
-        const name = Dom.el( "input" , { class: "form-control form-control-sm" , attrs: { type: "text" , maxlength: "60" , "aria-label": I18n.get( "lists.column_name" ) } } );
+    const iconButton = ( icon , label , click , extra ) => Dom.el( "button" , {
+      class: "btn btn-sm btn-link data-table-move" + ( extra || "" ),
+      attrs: { type: "button" , title: label , "aria-label": label },
+      children: [ Dom.el( "i" , { class: "bi bi-" + icon , attrs: { "aria-hidden": "true" } } ) ],
+      on: { click: click },
+    } );
+    const items = [ Dom.el( "li" , { children: [ Dom.el( "h6" , { class: "dropdown-header" , text: I18n.get( "table.columns_heading" ) } ) ] } ) ];
+    // The two the board always has, ticked and fixed, like Library's title.
+    [ "lists.number_column" , "lists.paper_column" ].forEach( ( key ) => {
+      const box = Dom.el( "input" , { class: "form-check-input mt-0" , attrs: { type: "checkbox" , "aria-label": I18n.get( key ) } } );
+      box.checked = true;
+      box.disabled = true;
+      items.push( Dom.el( "li" , { children: [ Dom.el( "div" , {
+        class: "dropdown-item-text d-flex align-items-center gap-2 data-table-menu-item",
+        children: [ box , Dom.el( "span" , { class: "flex-grow-1 text-nowrap" , text: I18n.get( key ) } ) ],
+      } ) ] } ) );
+    } );
+    cols.forEach( ( column , index ) => {
+      const id = "list-col-" + column.id;
+      const box = Dom.el( "input" , { class: "form-check-input mt-0" , attrs: { type: "checkbox" , id: id } } );
+      box.checked = !folded.has( column.id );
+      box.disabled = locked;
+      box.addEventListener( "change" , () => run( "undo.list_columns" ,
+        [ { op: "column_fold" , col: column.id , folded: !box.checked } ] ,
+        [ { op: "column_fold" , col: column.id , folded: box.checked } ] ) );
+      const label = Dom.el( "label" , { class: "form-check-label flex-grow-1 text-nowrap" , text: column.label , attrs: { for: id } } );
+      const line = Dom.el( "div" , { class: "dropdown-item-text d-flex align-items-center gap-2 data-table-menu-item" } );
+      const rename = () => {
+        const name = Dom.el( "input" , { class: "form-control form-control-sm flex-grow-1" , attrs: { type: "text" , maxlength: "60" , "aria-label": I18n.get( "lists.column_name" ) } } );
         name.value = column.label;
-        name.addEventListener( "change" , () => {
-          const label = name.value.trim();
-          if ( !label || label === column.label ) {
-            name.value = column.label;
-            return;
+        let finished = false;
+        const finish = ( save ) => {
+          if ( finished ) return;
+          finished = true;
+          const wanted = name.value.trim();
+          this.columnsSig = "";
+          if ( save && wanted && wanted !== column.label ) {
+            run( "undo.list_columns" , [ { op: "column_rename" , col: column.id , label: wanted } ] , [ { op: "column_rename" , col: column.id , label: column.label } ] );
+          } else {
+            this.columnsMenu( menu );
           }
-          run( "undo.list_columns" , [ { op: "column_rename" , col: column.id , label: label } ] , [ { op: "column_rename" , col: column.id , label: column.label } ] );
+        };
+        name.addEventListener( "keydown" , ( event ) => {
+          if ( event.key === "Enter" ) {
+            event.preventDefault();
+            finish( true );
+          } else if ( event.key === "Escape" ) {
+            event.preventDefault();
+            event.stopPropagation();
+            finish( false );
+          }
         } );
-        const remove = Dom.el( "button" , {
-          class: "btn btn-sm btn-outline-danger" , attrs: { type: "button" , "aria-label": I18n.get( "lists.column_delete" ).replace( "{column}" , () => column.label ) },
-          children: [ Dom.el( "i" , { class: "bi bi-trash" , attrs: { "aria-hidden": "true" } } ) ],
-          on: { click: async () => {
-            const sure = await Dom.confirm( I18n.get( "lists.column_delete_confirm" ).replace( "{column}" , () => column.label ) );
-            if ( sure ) await run( "undo.list_column_delete" , [ { op: "column_delete" , col: column.id } ] , null , true );
-          } },
-        } );
-        remove.disabled = cols.length <= 1;
-        const up = Dom.el( "button" , {
-          class: "btn btn-sm btn-outline-secondary" , attrs: { type: "button" , "aria-label": I18n.get( "lists.column_up" ).replace( "{column}" , () => column.label ) },
-          children: [ Dom.el( "i" , { class: "bi bi-arrow-up" , attrs: { "aria-hidden": "true" } } ) ],
-          on: { click: () => run( "undo.list_columns" , [ { op: "column_move" , col: column.id , to: index } ] , [ { op: "column_move" , col: column.id , to: index + 1 } ] ) },
-        } );
-        up.disabled = index === 0;
-        const grip = Dom.el( "span" , { class: "board-row-grip" , attrs: { "aria-hidden": "true" , title: I18n.get( "lists.drag_label" ) } , children: [ Dom.el( "i" , { class: "bi bi-grip-vertical" } ) ] } );
-        const row = Dom.el( "li" , { class: "list-group-item d-flex align-items-center gap-2" , children: [ grip , shown , name , up , remove ] } );
-        row.draggable = true;
-        row.addEventListener( "dragstart" , () => { dragging = index; } );
-        row.addEventListener( "dragover" , ( event ) => event.preventDefault() );
-        row.addEventListener( "drop" , ( event ) => {
-          event.preventDefault();
-          if ( dragging === null || dragging === index ) return;
-          const moving = cols[ dragging ];
-          run( "undo.list_columns" , [ { op: "column_move" , col: moving.id , to: index + 1 } ] , [ { op: "column_move" , col: moving.id , to: dragging + 1 } ] );
-          dragging = null;
-        } );
-        return row;
-      } );
-      const fresh = Dom.el( "input" , { class: "form-control" , attrs: { type: "text" , maxlength: "60" , placeholder: I18n.get( "lists.column_new" ) , "aria-label": I18n.get( "lists.column_new" ) } } );
+        name.addEventListener( "blur" , () => finish( true ) );
+        label.replaceWith( name );
+        name.focus();
+        name.select();
+      };
+      const up = iconButton( "arrow-up" , I18n.get( "table.move_left" ) + ": " + column.label ,
+        () => run( "undo.list_columns" , [ { op: "column_move" , col: column.id , to: index } ] , [ { op: "column_move" , col: column.id , to: index + 1 } ] ) );
+      const down = iconButton( "arrow-down" , I18n.get( "table.move_right" ) + ": " + column.label ,
+        () => run( "undo.list_columns" , [ { op: "column_move" , col: column.id , to: index + 2 } ] , [ { op: "column_move" , col: column.id , to: index + 1 } ] ) );
+      up.disabled = locked || index === 0;
+      down.disabled = locked || index === cols.length - 1;
+      const pencil = iconButton( "pencil" , I18n.get( "lists.column_rename" ).replace( "{column}" , () => column.label ) , rename );
+      const trash = iconButton( "trash" , I18n.get( "lists.column_delete" ).replace( "{column}" , () => column.label ) , async () => {
+        const sure = await Dom.confirm( I18n.get( "lists.column_delete_confirm" ).replace( "{column}" , () => column.label ) );
+        if ( sure ) await run( "undo.list_column_delete" , [ { op: "column_delete" , col: column.id } ] , null , true );
+      } , " data-table-delete" );
+      pencil.disabled = locked;
+      trash.disabled = locked || cols.length <= 1;
+      line.replaceChildren( box , label , pencil , up , down , trash );
+      items.push( Dom.el( "li" , { children: [ line ] } ) );
+    } );
+    if ( !locked ) {
+      items.push( Dom.el( "li" , { children: [ Dom.el( "hr" , { class: "dropdown-divider" } ) ] } ) );
+      const fresh = Dom.el( "input" , { class: "form-control form-control-sm" , attrs: { type: "text" , maxlength: "60" , placeholder: I18n.get( "lists.column_new" ) , "aria-label": I18n.get( "lists.column_new" ) } } );
       const add = Dom.el( "button" , {
-        class: "btn btn-outline-primary" , attrs: { type: "button" } , text: I18n.get( "lists.column_add" ),
+        class: "btn btn-sm btn-outline-primary" , attrs: { type: "button" },
+        children: [ Dom.el( "i" , { class: "bi bi-plus-lg" , attrs: { "aria-hidden": "true" } } ) , Dom.el( "span" , { class: "ms-1" , text: I18n.get( "lists.column_add" ) } ) ],
         on: { click: () => {
-          const label = fresh.value.trim();
-          if ( !label ) return undefined;
-          return run( "undo.list_columns" , [ { op: "column_add" , label: label } ] , [ { op: "column_delete" , col: label } ] );
+          const wanted = fresh.value.trim();
+          if ( !wanted ) return undefined;
+          fresh.value = "";
+          this.columnsSig = "";
+          return run( "undo.list_columns" , [ { op: "column_add" , label: wanted } ] , [ { op: "column_delete" , col: wanted } ] );
         } },
       } );
       fresh.addEventListener( "keydown" , ( event ) => {
@@ -245,14 +284,20 @@ const ListPanels = {
           add.click();
         }
       } );
-      return {
-        body: [
-          Dom.el( "p" , { class: "form-text" , text: I18n.get( "lists.columns_help" ) } ),
-          Dom.el( "ul" , { class: "list-group mb-3" , children: rows } ),
-          Dom.el( "div" , { class: "input-group" , children: [ fresh , add ] } ),
-        ],
-      };
-    } );
+      items.push( Dom.el( "li" , { children: [ Dom.el( "div" , { class: "dropdown-item-text" , children: [ Dom.el( "div" , { class: "input-group input-group-sm" , children: [ fresh , add ] } ) ] } ) ] } ) );
+    }
+    items.push( Dom.el( "li" , { children: [ Dom.el( "hr" , { class: "dropdown-divider" } ) ] } ) );
+    items.push( Dom.el( "li" , { children: [ Dom.el( "button" , {
+      class: "dropdown-item",
+      attrs: { type: "button" },
+      children: [ Dom.el( "i" , { class: "bi bi-arrow-counterclockwise me-2" , attrs: { "aria-hidden": "true" } } ) , Dom.el( "span" , { text: I18n.get( "lists.reset_widths" ) } ) ],
+      on: { click: () => {
+        lists.local( "list-col-widths" , "{}" );
+        lists.lastColSig = "";
+        lists.draw();
+      } },
+    } ) ] } ) );
+    menu.replaceChildren( ...items );
   },
 
   // ---- tag colours ---------------------------------------------------------------------
@@ -273,11 +318,13 @@ const ListPanels = {
         const entry = vocab.find( ( tag ) => tag.name.toLowerCase() === name.toLowerCase() );
         const stored = ( entry && entry.color ) || "";
         const chip = TagColors.paint( Dom.el( "span" , { class: "tag-chip" , text: name } ) , name , vocab );
-        const swatches = TagColors.palette.map( ( color ) => {
+        // Shows the palette in use; stores the slot's WSU colour (TagColors).
+        const storedSlot = stored ? TagColors.slot( stored ) : -1;
+        const swatches = TagColors.palette.map( ( color , at ) => {
           const swatch = Dom.el( "button" , {
-            class: "tag-swatch" + ( stored.toLowerCase() === color ? " is-on" : "" ),
+            class: "tag-swatch" + ( storedSlot === at ? " is-on" : "" ),
             attrs: { type: "button" , title: color , "aria-label": I18n.get( "lists.colour_pick" ).replace( "{tag}" , () => name ).replace( "{colour}" , color ) },
-            on: { click: () => set( name , color , stored ) },
+            on: { click: () => set( name , TagColors.wsu[ at ] , stored ) },
           } );
           swatch.style.backgroundColor = color;
           return swatch;

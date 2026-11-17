@@ -54,6 +54,14 @@ const Lists = {
   async init( me ) {
     this.me = me;
     Dom.show( Dom.get( "lists-panel" ) , true );
+    // Tag colours can follow the theme (TagColors): repaint when they moved.
+    let palette = TagColors.palette.join();
+    Theme.onChange.push( () => {
+      const now = TagColors.palette.join();
+      if ( now === palette ) return;
+      palette = now;
+      this.draw();
+    } );
     Dom.get( "list-picker" ).addEventListener( "change" , ( event ) => this.open( event.target.value ) );
     Dom.get( "list-new" ).addEventListener( "click" , () => this.showNewForm( true ) );
     Dom.get( "list-new-cancel" ).addEventListener( "click" , () => this.showNewForm( false ) );
@@ -167,12 +175,11 @@ const Lists = {
 
   // ---- drawing -------------------------------------------------------------
 
-  // The columns drawn: every one that is not folded, and the folded ones too
-  // while "extra columns" is on.
+  // The columns drawn: every one not unticked in the Columns menu.
   columns() {
     const doc = this.view.doc;
     const folded = new Set( ( doc.options && doc.options.fold_cols ) || [] );
-    return ( doc.columns || [] ).filter( ( column ) => ListTools.showExtra || !folded.has( column.id ) );
+    return ( doc.columns || [] ).filter( ( column ) => !folded.has( column.id ) );
   },
 
   widths() {
@@ -187,20 +194,31 @@ const Lists = {
   // per browser; a column nobody resized gets the default.
   layout( columns ) {
     const widths = this.widths();
-    const template = [ "var(--board-side)" , "minmax(18rem, 1fr)" ]
-      .concat( columns.map( ( column ) => ( widths[ column.id ] ? widths[ column.id ] + "px" : "var(--board-col)" ) ) )
-      .concat( [ "2.25rem" ] ).join( " " );
+    // The Paper column fills what is left until a width is dragged; then it
+    // keeps its own, so dragging an edge moves only that edge (see resize).
+    // Once pinned, the last column takes whatever the board has left over
+    // (at least its own width), so there is never blank space at the right.
+    const tracks = [ widths.paper ? widths.paper + "px" : "minmax(18rem, 1fr)" ]
+      .concat( columns.map( ( column ) => ( widths[ column.id ] ? widths[ column.id ] + "px" : "var(--board-col)" ) ) );
+    if ( widths.paper ) tracks[ tracks.length - 1 ] = "minmax(" + tracks[ tracks.length - 1 ] + ", 1fr)";
+    const template = [ "var(--board-side)" ].concat( tracks , [ "2.25rem" ] ).join( " " );
     // On the list body, so the shelf's rows line up with the list's.
     const scroll = Dom.get( "list-body" );
     scroll.style.setProperty( "--board-grid" , template );
     // The least width all of it needs; past it the board scrolls sideways.
     const fixed = columns.map( ( column ) => ( widths[ column.id ] ? widths[ column.id ] + "px" : "var(--board-col)" ) );
     const gaps = ( columns.length + 3 ) * 0.75;
-    scroll.style.setProperty( "--board-min" , "calc(var(--board-side) + 18rem + 2.25rem + " + gaps + "rem" + fixed.map( ( width ) => " + " + width ).join( "" ) + ")" );
+    scroll.style.setProperty( "--board-min" , "calc(var(--board-side) + " + ( widths.paper ? widths.paper + "px" : "18rem" ) + " + 2.25rem + " + gaps + "rem" + fixed.map( ( width ) => " + " + width ).join( "" ) + ")" );
   },
 
   resize( id , width , done ) {
     const widths = this.widths();
+    // The first drag pins the Paper column at the width it has now, so it no
+    // longer gives or takes what the dragged column gains or loses.
+    if ( width && id !== "paper" && !widths.paper ) {
+      const cell = Dom.get( "list-head" ).querySelector( ".board-cell-paper" );
+      if ( cell ) widths.paper = Math.round( cell.getBoundingClientRect().width );
+    }
     if ( width === 0 ) delete widths[ id ];
     else if ( width ) widths[ id ] = width;
     this.local( "list-col-widths" , JSON.stringify( widths ) );

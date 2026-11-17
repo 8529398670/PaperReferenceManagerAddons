@@ -135,6 +135,34 @@ def set_my_theme(request: Request, body: SetMyTheme) -> SetMyThemeReply:
     return SetMyThemeReply(ok=True, theme_id=body.theme_id)
 
 
+class SetMyTagColors(RequestType):
+    mode: Annotated[Literal["wsu", "theme"], Meta(description="wsu: Wright State's palette (the default). theme: a gradient from the accent to the second colour of the theme you use.")]
+
+
+class SetMyTagColorsReply(Reply):
+    ok: bool
+    mode: str
+
+
+@route(
+    "POST /api/account/tag-colors", summary="Choose where your tag colours come from",
+    tag="Account", feature="appearance",
+    description="Tags on lists are coloured from Wright State's palette (wsu), or from a gradient of the "
+    "theme you use (theme). Only how you see them: what a list stores is unchanged.",
+    mcp="set_tag_colors",
+)
+def set_my_tag_colors(request: Request, body: SetMyTagColors) -> SetMyTagColorsReply:
+    """Changes where the caller's tag colours come from, over HTTP or the MCP
+    set_tag_colors tool."""
+    try:
+        found = themes.set_user_tag_colors(get_store(request), actor_from(request).user.id, body.mode)
+    except themes.ThemesError as invalid:
+        raise Refused(400, str(invalid)) from None
+    if not found:
+        raise Refused.internal("themes: the signed-in account has no record")
+    return SetMyTagColorsReply(ok=True, mode=body.mode)
+
+
 class ThemeDefaultsReply(Reply):
     themes: Annotated[list[Theme] | None, Meta(description="null while the built-in themes apply.")]
     builtins: Annotated[int, Meta(description="Which built-in themes that list has seen (see builtins on POST /api/account/themes).")]

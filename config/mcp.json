@@ -2249,6 +2249,36 @@
         "destructiveHint": false,
         "openWorldHint": false,
         "readOnlyHint": false,
+        "title": "Choose where your tag colours come from"
+      },
+      "description": "Tags on lists are coloured from Wright State's palette (wsu), or from a gradient of the theme you use (theme). Only how you see them: what a list stores is unchanged.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "description": "wsu: Wright State's palette (the default). theme: a gradient from the accent to the second colour of the theme you use.",
+            "enum": [
+              "wsu",
+              "theme"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "type": "object"
+      },
+      "name": "set_tag_colors",
+      "route": "POST /api/account/tag-colors",
+      "title": "Choose where your tag colours come from"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
         "title": "Pick your theme"
       },
       "description": "Switch to another theme from your list (or the defaults), by its id.",

@@ -23,14 +23,11 @@ const ListTools = {
   filterTags: [],
   match: "any",
   text: "",
-  showExtra: false,
   draggingChip: null,
   INTERACTIVE: "input, textarea, select, button, a, .board-cell, .board-row-grip, label",
 
   init( lists ) {
     this.lists = lists;
-    this.showExtra = lists.local( "list-extra" ) === "1";
-    Dom.get( "list-extra" ).checked = this.showExtra;
     // A long vocabulary folds to a few lines until asked for.
     this.allTags = lists.local( "list-all-tags" ) === "1";
     Dom.get( "list-chips-more" ).addEventListener( "click" , () => {
@@ -38,10 +35,13 @@ const ListTools = {
       lists.local( "list-all-tags" , this.allTags ? "1" : "0" );
       this.drawBar();
     } );
-    Dom.get( "list-extra" ).addEventListener( "change" , ( event ) => {
-      this.showExtra = event.target.checked;
-      lists.local( "list-extra" , this.showExtra ? "1" : "0" );
-      lists.draw();
+    // The tag bar is folded away until the Tags button opens it; open or not
+    // is kept per browser, like the rest of the board's view.
+    this.tagsShown = lists.local( "list-tags-shown" ) === "1";
+    Dom.get( "list-tags-toggle" ).addEventListener( "click" , () => {
+      this.tagsShown = !this.tagsShown;
+      lists.local( "list-tags-shown" , this.tagsShown ? "1" : "0" );
+      this.drawBar();
     } );
     Dom.get( "list-filter" ).addEventListener( "input" , ( event ) => {
       this.text = event.target.value;
@@ -60,7 +60,6 @@ const ListTools = {
         this.filterTags = [];
         lists.draw();
       } );
-    Dom.onPress( Dom.get( "list-columns-edit" ) , () => ListPanels.columns() );
     Dom.get( "list-filter-match" ).addEventListener( "change" , ( event ) => {
       this.match = event.target.value;
       lists.draw();
@@ -122,9 +121,14 @@ const ListTools = {
       const key = this.anchor();
       if ( key && !BoardView.flash( rows , key ) ) Dom.toast( I18n.get( "lists.hidden_by_filter" ) , "error" );
     } );
+    // From md up the rows scroll inside the board (#list-scroll); on a phone
+    // the page does. To the top moves both; scrollIntoView finds its own way.
+    const board = Dom.get( "list-scroll" );
     Dom.get( "list-to-top" ).addEventListener( "click" , () => {
       Dom.movedOnPurpose();
-      Dom.get( "lists-panel" ).scrollIntoView( { behavior: "smooth" } );
+      // A jump, not a glide: gliding up past hundreds of rows is slow.
+      board.scrollTo( { top: 0 } );
+      window.scrollTo( { top: 0 } );
     } );
     Dom.get( "list-to-bottom" ).addEventListener( "click" , () => {
       const last = rows.lastElementChild;
@@ -179,11 +183,18 @@ const ListTools = {
     Dom.show( Dom.get( "list-filter-match" ) , this.filterOn );
     Dom.get( "list-filter-match" ).value = this.match;
     Dom.get( "list-to-anchor" ).disabled = !this.anchor();
-    const folded = ( options.fold_cols || [] ).filter( ( id ) => ( view.doc.columns || [] ).some( ( column ) => column.id === id ) ).length;
-    Dom.text( Dom.get( "list-extra-label" ) , I18n.get( "lists.extra_columns" ).replace( "{count}" , folded ) );
-    Dom.show( Dom.get( "list-extra-holder" ) , folded > 0 );
+    ListPanels.columnsMenu( Dom.get( "list-columns" ) );
     Dom.text( Dom.get( "list-filter-tags" ) , this.filterOn ? this.filterTags.join( ", " ) : "" );
     if ( this.paintFilter ) this.paintFilter();
+
+    // Shown before the chips are measured for "Show all tags" below. A tag
+    // armed to paint opens it too, so what is painting is always in sight.
+    const barShown = this.tagsShown || Boolean( this.armed );
+    Dom.show( Dom.get( "list-tagbar" ) , barShown );
+    const toggle = Dom.get( "list-tags-toggle" );
+    toggle.setAttribute( "aria-expanded" , String( barShown ) );
+    toggle.classList.toggle( "active" , barShown );
+    Dom.text( Dom.get( "list-tags-count" ) , String( this.tagNames().length ) );
 
     const vocab = ( view.doc.vocab && view.doc.vocab.tags ) || [];
     const counts = this.counts();

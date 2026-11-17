@@ -148,3 +148,20 @@ class ThemeRoutesTest(RoutesTestCase):
         self.assertEqual(listed[0]["dark"], {"accent": "#cba052", "second": "#f8e08e", "background": "#101820",
                                              "overrides": {"link": "#ffffff"}})
         self.assertNotIn("light", listed[0])
+
+    def test_tag_colours_are_wsu_until_changed(self) -> None:
+        """Where tag colours come from: wsu by default, theme when chosen, and
+        nothing else."""
+        def mode() -> str:
+            status, me = self.call("GET", "/api/me", cookie=self.user_cookie)
+            self.assertEqual(status, 200)
+            return me["tag_colors"]
+
+        self.assertEqual(mode(), "wsu")
+        status, reply = self.post(self.user_cookie, "/api/account/tag-colors", {"mode": "theme"})
+        self.assertEqual((status, reply["mode"]), (200, "theme"), reply)
+        self.assertEqual(mode(), "theme")
+        self.assertEqual(self.post(self.user_cookie, "/api/account/tag-colors", {"mode": "rainbow"})[0], 400)
+        self.assertEqual(mode(), "theme")
+        self.post(self.user_cookie, "/api/account/tag-colors", {"mode": "wsu"})
+        self.assertEqual(mode(), "wsu")

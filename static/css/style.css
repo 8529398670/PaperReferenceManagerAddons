@@ -328,10 +328,11 @@ progress { accent-color: var(--app-second); }
    the shell's. On a phone the sidebar is an offcanvas panel and the content
    is the whole width. */
 .app-main {
+  --main-pad: 1rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  padding: 1rem;
+  padding: var(--main-pad);
   width: 100%;
   min-width: 0;
 }
@@ -370,7 +371,7 @@ progress { accent-color: var(--app-second); }
     padding: 1rem 0.75rem;
     border-right: 1px solid var(--app-border);
   }
-  .app-main { padding: 1.5rem; }
+  .app-main { --main-pad: 1.5rem; }
   /* The menu button folds the sidebar away; the content re-centres in the
      full width. nav.js sets the class on <html>. */
   .sidebar-collapsed .app-sidebar { display: none; }
@@ -415,6 +416,41 @@ html { scrollbar-gutter: stable; overflow-anchor: auto; }
 /* Prose keeps its measure, however wide the screen: a line past ~70
    characters is hard to follow back to its start. */
 .view-description, .view .card-text, .view .form-text, .view .alert p { max-width: 70ch; }
+/* A screen header that folds away once its table is scrolled into
+   (view_head.js). Rows going 1fr -> 0fr animates to the header's own height,
+   whatever it is; the negative margin takes the .view gap with it. */
+.view-head { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.2s ease, opacity 0.2s ease, margin-bottom 0.2s ease; }
+.view-head-inner { min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 0.5rem; }
+.view-head-inner .view-description { margin: 0; }
+.view.head-collapsed .view-head { grid-template-rows: 0fr; opacity: 0; margin-bottom: -1rem; }
+.view-fill.head-collapsed .view-head { margin-bottom: -0.5rem; }
+
+/* Screens that are a table (Library, Missing, Status, Lists). They keep a
+   thin margin all round -- much less than other screens -- and from md up
+   the screen is exactly the window tall, the table's card taking what the
+   rest leaves and its rows scrolling inside it, so the toolbar over them
+   never scrolls away. On a phone the page scrolls, as everywhere else.
+   --main-pad is .app-main's padding. */
+.app-main:has(> #signed-in > .view-fill.view-active) { --main-pad: 0.5rem; padding-bottom: var(--main-pad); }
+.view-fill { gap: 0.5rem; }
+.view-fill .view-description { margin-top: 0; }
+.board-fill { padding: 0; }
+.board-fill > p { padding: 0.5rem 1rem 0; }
+@media (min-width: 768px) {
+  .view-fill { height: calc(100dvh - var(--app-navbar-height) - 2 * var(--main-pad)); }
+  /* The window does not scroll on these screens (their rows do), so the
+     page's reserved scrollbar gutter would only be an empty strip on the
+     right, and the margins would not match. */
+  html:has(.view-fill.view-active) { scrollbar-gutter: auto; }
+  .view-fill > .card-fill, .list-fill, .list-fill > .card-fill { flex: 1 1 0; min-height: 18rem; display: flex; flex-direction: column; }
+  /* Bootstrap lets every .card-body grow; here only the rows do. */
+  .card-fill > .card-body { flex: 0 0 auto; }
+  .card-fill > .table-fill:not([hidden]), .card-fill > .board-fill { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+  .table-fill > .data-table-scroll, .view .table-fill > .data-table-scroll { flex: 1 1 0; max-height: none; min-height: 0; }
+  .board-fill > .board-scroll { flex: 1 1 0; min-height: 0; overflow: auto; }
+  /* The column labels stay over the rows as they scroll by. */
+  .board-fill .board-head { position: sticky; top: 0; z-index: 3; background: var(--app-surface); }
+}
 /* An old link to a card (#two-factor) scrolls to it; clear the sticky navbar. */
 .view .card { scroll-margin-top: calc(var(--app-navbar-height) + 1rem); }
 
@@ -899,7 +935,7 @@ th[aria-sort="descending"] .th-sort::after { content: " \2193"; }
 
 /* A view-only list keeps its reading tools and loses its editing ones. */
 .is-locked #list-editing, .is-locked #list-order, .is-locked label[for="list-auto-move"],
-.is-locked #list-options-holder, .is-locked #list-columns-edit,
+.is-locked #list-options-holder,
 .is-locked #list-add-where, .is-locked label[for="list-add-where"],
 .is-locked #list-shelf-add, .is-locked #list-shelf-drop, .is-locked #list-shelf-tag,
 .is-locked .list-shelf .form-check { display: none !important; }

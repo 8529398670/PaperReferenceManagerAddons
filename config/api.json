@@ -523,6 +523,10 @@
             "description": "app.show_about: whether the menu has About.",
             "type": "boolean"
           },
+          "tag_colors": {
+            "description": "Where your tag colours come from: wsu or theme (see POST /api/account/tag-colors).",
+            "type": "string"
+          },
           "theme_id": {
             "description": "The theme you use. Empty: the first.",
             "type": "string"
@@ -581,6 +585,7 @@
           "role",
           "shortcuts",
           "show_about",
+          "tag_colors",
           "theme_id",
           "themes",
           "themes_builtins",
@@ -1985,6 +1990,92 @@
         ]
       },
       "x-feature": "shortcuts"
+    },
+    "/api/account/tag-colors": {
+      "post": {
+        "description": "Tags on lists are coloured from Wright State's palette (wsu), or from a gradient of the theme you use (theme). Only how you see them: what a list stores is unchanged.",
+        "operationId": "post_api_account_tag_colors",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "mode": {
+                    "description": "wsu: Wright State's palette (the default). theme: a gradient from the accent to the second colour of the theme you use.",
+                    "enum": [
+                      "wsu",
+                      "theme"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "mode": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "mode",
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Choose where your tag colours come from",
+        "tags": [
+          "Account"
+        ]
+      },
+      "x-feature": "appearance"
     },
     "/api/account/theme": {
       "post": {

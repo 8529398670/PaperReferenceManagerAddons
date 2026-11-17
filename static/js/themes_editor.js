@@ -39,6 +39,39 @@ const ThemeEditor = {
     accentFg: "accent_fg" , accentText: "accent_text" , secondText: "second_text" , secondFg: "second_fg" , info: "info" , infoBorder: "info_border" ,
   },
 
+  // Where tag colours come from: Wright State's palette or the theme in use.
+  // Saved on the account; undoable. Every screen with chips redraws through
+  // Theme.onChange, so this only has to fire it.
+  initTagColors() {
+    const boxes = Dom.all( 'input[name="tag-colors"]' );
+    const paint = () => {
+      boxes.forEach( ( box ) => { box.checked = box.value === TagColors.mode; } );
+      const preview = Dom.get( "tag-colors-preview" );
+      preview.replaceChildren( ...TagColors.palette.map( ( color ) => {
+        const swatch = Dom.el( "span" , { class: "tag-swatch" , attrs: { title: color } } );
+        swatch.style.backgroundColor = color;
+        return swatch;
+      } ) );
+    };
+    const choose = async ( mode ) => {
+      TagColors.setMode( mode );
+      Theme.changed();
+      await Api.setTagColors( mode );
+    };
+    boxes.forEach( ( box ) => box.addEventListener( "change" , () => {
+      const previous = TagColors.mode;
+      if ( !box.checked || box.value === previous ) return;
+      Undo.run( {
+        label: I18n.get( "undo.tag_colors" ),
+        screen: null,
+        do: () => choose( box.value ),
+        undo: () => choose( previous ),
+      } ).catch( ( error ) => Dom.toast( error.message , "error" ) );
+    } ) );
+    Theme.onChange.push( paint );
+    paint();
+  },
+
   // A label for a color of theme.js: its own key, or for a button variant's
   // fill, label or outline, one sentence with the variant's name in it.
   colorLabel( field ) {
@@ -57,7 +90,9 @@ const ThemeEditor = {
 
   init( me ) {
     this.me = me;
+    TagColors.setMode( me.tag_colors );
     Theme.load( me );
+    this.initTagColors();
     const mine = this.create( Dom.get( "theme-editor-mine" ) , {
       kind: "mine",
       themes: () => Theme.list,

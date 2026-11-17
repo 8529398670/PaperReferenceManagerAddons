@@ -346,6 +346,8 @@ lists:
   tag_find_placeholder: "Find a tag"
   new_tag: "+ new tag"
   # {count} tags in all.
+  tags_button: "Tags"
+  tags_button_title: "Show or hide this list's tags: filter by them, tag the selection, or paint"
   all_tags: "Show all {count} tags"
   fewer_tags: "Show fewer tags"
   chip_help_filter: "Click to add or drop this tag in the filter"
@@ -378,10 +380,8 @@ lists:
   to_bottom: "To the bottom"
   hidden_by_filter: "That row is hidden by the filter."
   # {count} folded columns.
-  extra_columns: "Show extra columns ({count})"
 
   # The list menu.
-  menu_columns: "Columns…"
   menu_colours: "Tag colours…"
   menu_cite: "Citation style…"
   menu_refs: "Import references…"
@@ -551,12 +551,11 @@ lists:
   col_year: "Year"
   col_tags: "Tags"
 
-  columns_title: "Columns"
-  columns_help: "Untick a column to fold it away behind “Show extra columns”. Drag to reorder."
   columns_failed: "That column change did not go through."
-  column_shown: "Show {column}"
   column_name: "Column name"
-  column_up: "Move {column} up"
+  column_rename: "Rename {column}"
+  number_column: "#"
+  reset_widths: "Reset column widths"
   column_delete: "Delete {column}"
   column_delete_confirm: "Delete the column “{column}” and everything written in it? Undo puts it back."
   column_new: "New column name"
@@ -752,6 +751,7 @@ undo:
   button: "Undo"
   redo_button: "Redo"
   theme: "theme change"
+  tag_colors: "tag colour change"
   theme_new: "new theme"
   theme_copy: "theme duplicated"
   theme_delete: "theme deleted"
@@ -808,6 +808,10 @@ undo:
 # default. Names for the built-in themes in static/js/theme.js, used until a
 # list is saved; a saved list keeps its own names.
 theme:
+  tag_colors_heading: "Tag colours"
+  tag_colors_description: "The colours of the tags on your lists: Wright State's palette, or a gradient of the theme you use. Only how you see them; the lists are unchanged."
+  tag_colors_wsu: "WSU palette"
+  tag_colors_theme: "From current theme"
   heading: "Appearance"
   tab_mine: "My themes"
   tab_defaults: "Defaults for everyone"

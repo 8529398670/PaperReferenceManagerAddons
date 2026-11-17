@@ -67,6 +67,7 @@ Every tool POST /mcp offers. Written by scripts/api_docs.sh from the registered 
 | [`search_library`](#search_library) | [`GET /api/papers`](api.md#get-apipapers) | any key | Search the library |
 | [`search_missing`](#search_missing) | [`GET /api/missing`](api.md#get-apimissing) | any key | Search the papers you do not have |
 | [`set_shortcuts`](#set_shortcuts) | [`POST /api/account/shortcuts`](api.md#post-apiaccountshortcuts) | any key | Change your keyboard shortcuts |
+| [`set_tag_colors`](#set_tag_colors) | [`POST /api/account/tag-colors`](api.md#post-apiaccounttag-colors) | any key | Choose where your tag colours come from |
 | [`set_theme`](#set_theme) | [`POST /api/account/theme`](api.md#post-apiaccounttheme) | any key | Pick your theme |
 | [`set_themes`](#set_themes) | [`POST /api/account/themes`](api.md#post-apiaccountthemes) | any key | Replace your own themes |
 | [`skip_missing`](#skip_missing) | [`POST /api/missing/skip`](api.md#post-apimissingskip) | any key | Skip or unskip missing papers |
@@ -1049,6 +1050,22 @@ Replace your changed keyboard shortcuts: action name to binding, such as "search
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
 | `shortcuts` | map of string | yes |  | Action name to binding, such as "search": "Mod+K". Mod is Cmd on a Mac and Ctrl elsewhere. Only changed shortcuts are listed; an empty binding switches that key off. Replaces the whole set; {} puts every key back to its default. |
+
+## set_tag_colors
+
+Tags on lists are coloured from Wright State's palette (wsu), or from a gradient of the theme you use (theme). Only how you see them: what a list stores is unchanged.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/account/tag-colors`](api.md#post-apiaccounttag-colors) |
+| Read only | no |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `mode` | string | yes | one of `wsu`, `theme` | wsu: Wright State's palette (the default). theme: a gradient from the accent to the second colour of the theme you use. |
 
 ## set_theme
 

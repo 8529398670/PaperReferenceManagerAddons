@@ -128,6 +128,8 @@ class DataTable {
     this.scroll = Dom.el( "div" , { class: "table-responsive" , attrs: { tabindex: "0" } , children: [ this.table ] } );
     this.scroll.classList.add( "data-table-scroll" );
     holder.appendChild( this.scroll );
+    // A wider or narrower area changes how much the last column takes.
+    new ResizeObserver( () => { if ( this.least ) this.fit( this.least ); } ).observe( this.scroll );
     if ( this.options.onEnd ) {
       this.scroll.addEventListener( "scroll" , () => {
         const left = this.scroll.scrollHeight - this.scroll.scrollTop - this.scroll.clientHeight;
@@ -149,13 +151,41 @@ class DataTable {
       const width = this.widthOf( column );
       least += width;
       const col = Dom.el( "col" );
-      if ( !column.flex ) col.style.width = width + "px";
+      if ( !column.flex || this.pinned() ) col.style.width = width + "px";
       this.colgroup.appendChild( col );
       this.headRow.appendChild( this.headCell( column ) );
     } );
-    // Never narrower than its columns: past that the area scrolls sideways.
-    this.table.style.minWidth = least + "px";
+    this.fit( least );
     this.paintSort();
+  }
+
+  // Until a width is dragged, the flex column takes whatever room is left, so
+  // the table fills its area. Once one is, every column keeps the width it
+  // has: dragging an edge then moves that edge and only that edge, like a
+  // spreadsheet, rather than the flex column giving or taking the difference.
+  pinned() {
+    const flex = this.columns.find( ( column ) => column.flex );
+    return !flex || Boolean( this.prefs.widths[ flex.id ] );
+  }
+
+  // The table's width. Unpinned, the area's, the flex column filling it.
+  // Pinned, its columns' -- and when they are narrower than the area, the
+  // last column takes the rest (drawn only, not kept), so there is never
+  // blank space at the right. Never narrower than its columns: past that the
+  // area scrolls sideways.
+  fit( least ) {
+    this.least = least;
+    this.table.style.minWidth = least + "px";
+    if ( !this.pinned() ) {
+      this.table.style.width = "";
+      return;
+    }
+    const columns = this.visible();
+    const last = columns[ columns.length - 1 ];
+    const col = this.colgroup.lastElementChild;
+    const slack = Math.max( 0 , this.scroll.clientWidth - least );
+    if ( last && col ) col.style.width = ( this.widthOf( last ) + slack ) + "px";
+    this.table.style.width = ( least + slack ) + "px";
   }
 
   headCell( column ) {
@@ -189,14 +219,22 @@ class DataTable {
     event.stopPropagation();
     const startX = event.clientX;
     const start = th.getBoundingClientRect().width;
-    const index = Array.from( this.headRow.children ).indexOf( th );
-    const col = this.colgroup.children[ index ];
+    const cells = Array.from( this.headRow.children );
+    const col = this.colgroup.children[ cells.indexOf( th ) ];
+    // Pin every column at the width it is drawn at now, the flex one too, so
+    // nothing but this edge moves (see pinned).
+    if ( !this.pinned() ) {
+      this.visible().forEach( ( each , at ) => {
+        this.prefs.widths[ each.id ] = Math.round( cells[ at ].getBoundingClientRect().width );
+        this.colgroup.children[ at ].style.width = this.prefs.widths[ each.id ] + "px";
+      } );
+    }
     document.body.classList.add( "data-table-dragging" );
     const move = ( moved ) => {
       const width = Math.max( 48 , Math.round( start + moved.clientX - startX ) );
       this.prefs.widths[ column.id ] = width;
-      if ( !column.flex ) col.style.width = width + "px";
-      this.table.style.minWidth = this.visible().reduce( ( sum , each ) => sum + this.widthOf( each ) , 0 ) + "px";
+      col.style.width = width + "px";
+      this.fit( this.visible().reduce( ( sum , each ) => sum + this.widthOf( each ) , 0 ) );
     };
     const up = () => {
       document.removeEventListener( "pointermove" , move );

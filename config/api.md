@@ -54,6 +54,7 @@ An error reply is a JSON object whose `error` says what went wrong.
 | POST | [`/api/account/sessions/{session_id}/label`](#post-apiaccountsessionssession_idlabel) | Name one of your devices | browser session or API key, anyone signed in |
 | POST | [`/api/account/sessions/{session_id}/revoke`](#post-apiaccountsessionssession_idrevoke) | Sign out one of your devices | browser session or API key, anyone signed in |
 | POST | [`/api/account/shortcuts`](#post-apiaccountshortcuts) | Change your keyboard shortcuts | browser session or API key, anyone signed in |
+| POST | [`/api/account/tag-colors`](#post-apiaccounttag-colors) | Choose where your tag colours come from | browser session or API key, anyone signed in |
 | POST | [`/api/account/theme`](#post-apiaccounttheme) | Pick your theme | browser session or API key, anyone signed in |
 | POST | [`/api/account/themes`](#post-apiaccountthemes) | Replace your own themes | browser session or API key, anyone signed in |
 | POST | [`/api/account/two-factor/confirm`](#post-apiaccounttwo-factorconfirm) | Turn two-factor on | browser session only, anyone signed in |
@@ -286,6 +287,32 @@ Replace your changed keyboard shortcuts: action name to binding, such as "search
 |---|---|---|---|---|
 | `ok` | boolean | yes |  |  |
 | `shortcuts` | map of string | yes |  |  |
+
+### POST /api/account/tag-colors
+
+Choose where your tag colours come from
+
+Tags on lists are coloured from Wright State's palette (wsu), or from a gradient of the theme you use (theme). Only how you see them: what a list stores is unchanged.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`set_tag_colors`](mcp.md#set_tag_colors) |
+| Errors | 400, 401, 403, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `mode` | string | yes | one of `wsu`, `theme` | wsu: Wright State's palette (the default). theme: a gradient from the accent to the second colour of the theme you use. |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `mode` | string | yes |  |  |
+| `ok` | boolean | yes |  |  |
 
 ### POST /api/account/theme
 
@@ -3247,6 +3274,7 @@ The shapes the routes above refer to by name.
 | `role` | string | yes |  | The effective role: never higher than an API key's own. |
 | `shortcuts` | map of string | yes |  | The keyboard shortcuts you changed, by action. Mod is Cmd on a Mac and Ctrl elsewhere. |
 | `show_about` | boolean | yes |  | app.show_about: whether the menu has About. |
+| `tag_colors` | string | yes |  | Where your tag colours come from: wsu or theme (see POST /api/account/tag-colors). |
 | `theme_id` | string | yes |  | The theme you use. Empty: the first. |
 | `themes` | array of [`Theme`](#theme) or null | yes |  | Your themes (see the Theme schema): your own list, else the app's defaults, else null for the built-in ones. |
 | `themes_builtins` | integer | yes |  | Which built-in themes that list has seen (see builtins on POST /api/account/themes). |

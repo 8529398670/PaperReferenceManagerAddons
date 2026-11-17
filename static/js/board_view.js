@@ -195,8 +195,10 @@ const BoardView = {
   head( element , columns , widths , onResize ) {
     const cells = [
       Dom.el( "div" , { class: "board-head-cell board-cell-side" , text: "#" } ),
-      Dom.el( "div" , { class: "board-head-cell board-cell-paper" , text: I18n.get( "lists.paper_column" ) } ),
     ];
+    const paperHandle = Dom.el( "span" , { class: "board-resize" , attrs: { title: I18n.get( "lists.resize_help" ) } } );
+    this.resizable( paperHandle , "paper" , widths , onResize );
+    cells.push( Dom.el( "div" , { class: "board-head-cell board-cell-paper" , children: [ Dom.el( "span" , { text: I18n.get( "lists.paper_column" ) } ) , paperHandle ] } ) );
     columns.forEach( ( column ) => {
       const handle = Dom.el( "span" , { class: "board-resize" , attrs: { title: I18n.get( "lists.resize_help" ) } } );
       this.resizable( handle , column.id , widths , onResize );

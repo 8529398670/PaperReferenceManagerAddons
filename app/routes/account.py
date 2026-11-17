@@ -51,6 +51,7 @@ class Me(Reply, kw_only=True):
     themes_custom: Annotated[bool, Meta(description="Whether you have your own list rather than following the defaults.")]
     themes_builtins: Annotated[int, Meta(description="Which built-in themes that list has seen (see builtins on POST /api/account/themes).")]
     theme_id: Annotated[str, Meta(description="The theme you use. Empty: the first.")]
+    tag_colors: Annotated[str, Meta(description="Where your tag colours come from: wsu or theme (see POST /api/account/tag-colors).")]
     two_factor: bool
     two_factor_enabled: bool
     auth: str
@@ -110,6 +111,7 @@ def me(request: Request) -> Me:
         themes_custom=themes_custom,
         themes_builtins=themes_builtins,
         theme_id=actor.user.theme_id,
+        tag_colors=actor.user.tag_colors,
         two_factor=two_factor.is_on(actor.user),
         two_factor_enabled=cfg.two_factor_enabled,
         auth=actor.method,

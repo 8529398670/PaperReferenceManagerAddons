@@ -16,6 +16,7 @@ const Library = {
 
   async init() {
     Dom.show( Dom.get( "library-panel" ) , true );
+    ViewHead.watch( Dom.get( "library-panel" ) );
     await PaperLinks.init();
     const search = Dom.get( "library-search" );
     search.addEventListener( "input" , () => this.later() );

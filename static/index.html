@@ -147,14 +147,19 @@
       -->
       <section id="signed-in" hidden>
         <!-- Every paper in Zotero, searched live. static/js/library.js -->
-        <section class="view" data-view="library" id="library-panel" hidden>
-          <div class="d-flex flex-wrap align-items-baseline gap-2">
-            <h2 class="view-title" data-i18n="library.heading"></h2>
-            <span id="library-count" class="text-body-secondary small"></span>
-          </div>
-          <p id="library-status" class="view-description" role="status"></p>
+        <section class="view view-fill" data-view="library" id="library-panel" hidden>
+          <!-- Folds away once the table is scrolled into (view_head.js). -->
+          <header class="view-head">
+            <div class="view-head-inner">
+              <div class="d-flex flex-wrap align-items-baseline gap-2">
+                <h2 class="view-title" data-i18n="library.heading"></h2>
+                <span id="library-count" class="text-body-secondary small"></span>
+              </div>
+              <p id="library-status" class="view-description" role="status"></p>
+            </div>
+          </header>
 
-          <section class="card">
+          <section class="card card-fill">
             <div class="card-body py-2">
               <div class="row g-2 align-items-center" role="search">
                 <div class="col-12 col-md-6 col-xl-5">
@@ -200,15 +205,17 @@
                   </button>
                   <ul id="library-columns" class="dropdown-menu data-table-menu"></ul>
                 </div>
+                <!-- How many are showing; scrolling to the end loads more (the
+                     button is there for the keyboard). -->
+                <div class="col-auto ms-auto d-flex align-items-center gap-2">
+                  <span id="library-results-count" class="small text-body-secondary"></span>
+                  <span id="library-empty" class="small text-body-secondary" hidden data-i18n="ui.no_matches"></span>
+                  <button id="library-more" type="button" class="btn btn-outline-secondary btn-sm visually-hidden-focusable" hidden data-i18n="ui.load_more"></button>
+                </div>
               </div>
               <p id="library-fuzzy" class="alert alert-info py-2 mt-2 mb-0" role="status" hidden data-i18n="library.fuzzy"></p>
             </div>
-            <div id="library-table"></div>
-            <div class="card-footer d-flex flex-wrap align-items-center gap-2">
-              <span id="library-results-count" class="small text-body-secondary"></span>
-              <span id="library-empty" class="text-body-secondary" hidden data-i18n="ui.no_matches"></span>
-              <button id="library-more" type="button" class="btn btn-outline-secondary btn-sm ms-auto" hidden data-i18n="ui.load_more"></button>
-            </div>
+            <div id="library-table" class="table-fill"></div>
           </section>
         </section>
 
@@ -302,15 +309,20 @@
         </section>
 
         <!-- The papers you do not have. static/js/missing.js -->
-        <section class="view" data-view="missing" id="missing-panel" hidden>
-          <h2 class="view-title" data-i18n="missing.heading"></h2>
-          <p class="view-description" data-i18n="missing.description"></p>
+        <section class="view view-fill" data-view="missing" id="missing-panel" hidden>
+          <!-- Folds away once the table is scrolled into (view_head.js). -->
+          <header class="view-head">
+            <div class="view-head-inner">
+              <h2 class="view-title" data-i18n="missing.heading"></h2>
+              <p class="view-description" data-i18n="missing.description"></p>
+            </div>
+          </header>
           <div id="missing-paper" class="alert alert-info py-2 mb-0 d-flex flex-wrap align-items-center gap-2" role="status" hidden>
             <span data-i18n="missing.paper_filter"></span>
             <a id="missing-paper-link" class="fw-semibold" href="#library"></a>
             <button id="missing-clear-paper" type="button" class="btn btn-outline-secondary btn-sm ms-auto" data-i18n="missing.paper_clear"></button>
           </div>
-          <section class="card">
+          <section class="card card-fill">
             <div class="card-header">
               <ul class="nav nav-tabs card-header-tabs">
                 <li class="nav-item"><a class="nav-link active" href="#missing" data-missing-tab="all"><span data-i18n="missing.tab_all"></span> <span class="badge text-bg-light border"></span></a></li>
@@ -346,15 +358,17 @@
                   </button>
                   <ul id="missing-columns" class="dropdown-menu data-table-menu"></ul>
                 </div>
+                <!-- How many are showing; scrolling to the end loads more (the
+                     button is there for the keyboard). -->
+                <div class="col-auto ms-auto d-flex align-items-center gap-2">
+                  <span id="missing-total" class="small text-body-secondary"></span>
+                  <span id="missing-empty" class="small text-body-secondary" hidden data-i18n="missing.empty"></span>
+                  <button id="missing-more" type="button" class="btn btn-outline-secondary btn-sm visually-hidden-focusable" hidden data-i18n="ui.load_more"></button>
+                </div>
               </div>
             </div>
-            <div id="missing-works"></div>
-            <div id="missing-authors" hidden></div>
-            <div class="card-footer d-flex flex-wrap align-items-center gap-2">
-              <span id="missing-total" class="small text-body-secondary"></span>
-              <span id="missing-empty" class="text-body-secondary" hidden data-i18n="missing.empty"></span>
-              <button id="missing-more" type="button" class="btn btn-outline-secondary btn-sm ms-auto" hidden data-i18n="ui.load_more"></button>
-            </div>
+            <div id="missing-works" class="table-fill"></div>
+            <div id="missing-authors" class="table-fill" hidden></div>
           </section>
 
           <div class="modal fade" id="missing-add-dialog" tabindex="-1" aria-labelledby="missing-add-heading" aria-hidden="true">
@@ -379,7 +393,7 @@
         </section>
 
         <!-- The content queue and its failures. static/js/status.js -->
-        <section class="view" data-view="status" id="status-panel" hidden>
+        <section class="view view-fill" data-view="status" id="status-panel" hidden>
           <h2 class="view-title" data-i18n="status.heading"></h2>
           <p class="view-description" data-i18n="status.description"></p>
           <div class="row g-3">
@@ -396,7 +410,7 @@
               <div id="status-cards" class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 row-cols-xl-5 g-3"></div>
             </div>
           </div>
-          <section class="card">
+          <section class="card card-fill">
             <div class="card-header d-flex flex-wrap align-items-center gap-2">
               <h3 class="card-title h6 mb-0 me-auto" id="status-table-heading"></h3>
               <button id="status-retry-all" type="button" class="btn btn-outline-secondary btn-sm" hidden><i class="bi bi-arrow-repeat" aria-hidden="true"></i> <span data-i18n="status.retry_all"></span></button>
@@ -430,21 +444,23 @@
                   </button>
                   <ul id="status-columns" class="dropdown-menu data-table-menu"></ul>
                 </div>
+                <!-- How many are showing; scrolling to the end loads more (the
+                     button is there for the keyboard). -->
+                <div class="col-auto ms-auto d-flex align-items-center gap-2">
+                  <span id="status-total" class="small text-body-secondary"></span>
+                  <span id="status-empty" class="small text-body-secondary" hidden data-i18n="status.empty"></span>
+                  <button id="status-more" type="button" class="btn btn-outline-secondary btn-sm visually-hidden-focusable" hidden data-i18n="ui.load_more"></button>
+                </div>
               </div>
             </div>
-            <div id="status-table"></div>
-            <div class="card-footer d-flex flex-wrap align-items-center gap-2">
-              <span id="status-total" class="small text-body-secondary"></span>
-              <span id="status-empty" class="text-body-secondary" hidden data-i18n="status.empty"></span>
-              <button id="status-more" type="button" class="btn btn-outline-secondary btn-sm ms-auto" hidden data-i18n="ui.load_more"></button>
-            </div>
+            <div id="status-table" class="table-fill"></div>
           </section>
         </section>
 
         <!-- Curated, ordered, tagged lists of papers. static/js/lists.js (state, sending, adding),
              board_view.js (the rows), list_tools.js (tag bar, selection, filter, order, jump),
              list_panels.js (the list menu's dialogs: columns, colours, history, CSV, references, shelf). -->
-        <section class="view" data-view="lists" id="lists-panel" hidden>
+        <section class="view view-fill" data-view="lists" id="lists-panel" hidden>
           <h2 class="view-title" data-i18n="lists.heading"></h2>
 
           <section class="card">
@@ -480,7 +496,7 @@
           </section>
 
           <!-- The open list: adding to it, its shelf, then the board itself. -->
-          <div id="list-body" class="d-flex flex-column gap-3" hidden>
+          <div id="list-body" class="list-fill d-flex flex-column gap-3" hidden>
             <p id="list-view-only" class="alert alert-secondary py-2 mb-0" hidden data-i18n="lists.view_only"></p>
             <section id="list-editing" class="card">
               <div class="card-body">
@@ -532,7 +548,7 @@
               <ol id="list-shelf-rows" class="list-unstyled board-rows board-shelf board-scroll mt-2"></ol>
             </section>
 
-            <section class="card">
+            <section class="card card-fill">
               <div class="card-body py-2">
                 <!-- The same toolbar as the other tables: search, Filter, Columns,
                      then this board's own Order, Options and moves. -->
@@ -568,21 +584,19 @@
                     <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
                       <i class="bi bi-layout-three-columns" aria-hidden="true"></i> <span data-i18n="table.columns"></span>
                     </button>
-                    <div class="dropdown-menu p-3 filter-menu">
-                      <div class="form-check form-switch mb-2" id="list-extra-holder" hidden>
-                        <input id="list-extra" class="form-check-input" type="checkbox" role="switch" />
-                        <label for="list-extra" class="form-check-label" id="list-extra-label"></label>
-                      </div>
-                      <button id="list-columns-edit" type="button" class="btn btn-outline-secondary btn-sm">
-                        <i class="bi bi-pencil-square" aria-hidden="true"></i> <span data-i18n="lists.menu_columns"></span>
-                      </button>
-                    </div>
+                    <ul id="list-columns" class="dropdown-menu data-table-menu"></ul>
                   </div>
                   <div class="col-auto dropdown">
                     <button id="list-order" type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
                       <i class="bi bi-sort-down" aria-hidden="true"></i> <span data-i18n="lists.order_by"></span>
                     </button>
                     <ul id="list-order-items" class="dropdown-menu"></ul>
+                  </div>
+                  <div class="col-auto">
+                    <button id="list-tags-toggle" type="button" class="btn btn-outline-secondary" aria-controls="list-tagbar" aria-expanded="false"
+                            data-i18n-attr="title:lists.tags_button_title">
+                      <i class="bi bi-tags" aria-hidden="true"></i> <span data-i18n="lists.tags_button"></span> <span id="list-tags-count" class="badge text-bg-light ms-1"></span>
+                    </button>
                   </div>
                   <div class="col-auto dropdown" id="list-options-holder">
                     <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
@@ -626,14 +640,15 @@
                   </div>
                 </div>
 
-                <!-- The tags: click to filter, tag the selection or paint (list_tools.js). -->
-                <div id="list-tagbar" class="list-tagbar mt-2">
+                <!-- The tags: click to filter, tag the selection or paint (list_tools.js).
+                     Folded away until the Tags button opens it. -->
+                <div id="list-tagbar" class="list-tagbar mt-2" hidden>
                   <span id="list-paint" class="small" hidden></span>
                   <div id="list-chips" class="list-chips" role="toolbar" data-i18n-attr="aria-label:lists.chips_label"></div>
                   <button id="list-chips-more" type="button" class="btn btn-link btn-sm px-0" aria-controls="list-chips" hidden></button>
                 </div>
               </div>
-              <div class="card-body pt-0">
+              <div class="card-body board-fill">
                 <p id="list-filtered" class="small text-body-secondary mb-2" hidden></p>
                 <div id="list-scroll" class="board-scroll">
                   <div id="list-head" class="board-head" aria-hidden="true"></div>
@@ -925,6 +940,22 @@
              Drawn by themes_editor.js; see theme.js for where they are kept. -->
         <section class="view" data-view="appearance" id="appearance">
           <h2 class="view-title" data-i18n="theme.heading"></h2>
+          <!-- Where tag colours come from (themes_editor.js, TagColors in paper_links.js). -->
+          <section class="card" id="tag-colors-card">
+            <div class="card-body">
+              <h3 class="card-title" data-i18n="theme.tag_colors_heading"></h3>
+              <p class="card-text text-body-secondary" data-i18n="theme.tag_colors_description"></p>
+              <div class="d-flex flex-wrap align-items-center gap-3">
+                <div class="btn-group" role="group" data-i18n-attr="aria-label:theme.tag_colors_heading">
+                  <input type="radio" class="btn-check" name="tag-colors" id="tag-colors-wsu" value="wsu" autocomplete="off" />
+                  <label class="btn btn-outline-secondary" for="tag-colors-wsu" data-i18n="theme.tag_colors_wsu"></label>
+                  <input type="radio" class="btn-check" name="tag-colors" id="tag-colors-theme" value="theme" autocomplete="off" />
+                  <label class="btn btn-outline-secondary" for="tag-colors-theme" data-i18n="theme.tag_colors_theme"></label>
+                </div>
+                <div id="tag-colors-preview" class="tag-swatches" aria-hidden="true"></div>
+              </div>
+            </div>
+          </section>
           <ul class="nav nav-tabs mb-3" id="theme-tabs" role="tablist" hidden>
             <li class="nav-item" role="presentation">
               <button class="nav-link active" id="theme-tab-mine" type="button" role="tab" data-bs-toggle="tab"
@@ -1432,6 +1463,7 @@
   <script src="/js/paper_links.js"></script>
   <script src="/js/content.js"></script>
   <script src="/js/data_table.js"></script>
+  <script src="/js/view_head.js"></script>
   <script src="/js/paper.js"></script>
   <script src="/js/missing.js"></script>
   <script src="/js/status.js"></script>

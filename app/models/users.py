@@ -70,6 +70,9 @@ class User:
     themes: list[dict[str, Any]] | None = None
     themes_builtins: int = 0
     theme_id: str = ""
+    # Where tag colours come from: "wsu" (Wright State's palette) or "theme"
+    # (a gradient of the theme in use). See TagColors in static/js/paper_links.js.
+    tag_colors: str = "wsu"
 
     @property
     def disabled(self) -> bool:
@@ -94,6 +97,7 @@ class User:
             "themes": self.themes,
             "themes_builtins": self.themes_builtins,
             "theme_id": self.theme_id,
+            "tag_colors": self.tag_colors,
         }
 
     @classmethod
@@ -112,6 +116,7 @@ class User:
             themes=record.get("themes"),
             themes_builtins=record.get("themes_builtins", 0),
             theme_id=record.get("theme_id", ""),
+            tag_colors=record.get("tag_colors") or "wsu",
         )
 
 
