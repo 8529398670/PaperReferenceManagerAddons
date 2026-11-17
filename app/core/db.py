@@ -57,6 +57,9 @@ BUCKET_META = "meta"
 # app/boards/store.py.
 BUCKET_BOARDS = "boards"
 BUCKET_BOARD_VERSIONS = "board_versions"
+# Missing-pool works hidden from the Missing screen, by OpenAlex id. See
+# app/content/service.py.
+BUCKET_SKIPS = "skips"
 
 BUCKETS = (
     BUCKET_USERS,
@@ -73,6 +76,7 @@ BUCKETS = (
     BUCKET_META,
     BUCKET_BOARDS,
     BUCKET_BOARD_VERSIONS,
+    BUCKET_SKIPS,
 )
 
 # How long a writer waits for another writer before giving up. Without it a

@@ -68,12 +68,22 @@ class SearchPapers(RequestType):
         description="Default relevance.", extra={"error": "sort must be one of: relevance, added, year, title"},
     )] = "relevance"
     dir: Annotated[Literal["asc", "desc"], QUERY, Meta(description="Default desc.", extra={"error": "dir must be asc or desc"})] = "desc"
+    has: Annotated[str, QUERY, Meta(description=(
+        'Only papers with: "code" (code links found), "data" (dataset links or names), "no_text" (no PDF text), '
+        '"no_openalex" (OpenAlex has no record, or the lookup failed). Several, comma-separated, must all hold.'
+    ))] = ""
     limit: Limit = PAGE_DEFAULT
     offset: Offset = 0
 
 
+HAS = ("code", "data", "no_text", "no_openalex")
+
+
 class SearchReply(Paged):
-    papers: Annotated[list[dict[str, Any]], Meta(description="Each paper as the library has it, with score: its relevance, or null.")]
+    papers: Annotated[list[dict[str, Any]], Meta(description=(
+        "Each paper as the library has it, with score (its relevance, or null) and content (what is ready of it, as "
+        "content_badges gives it; null before its first stage is queued)."
+    ))]
     fuzzy: Annotated[bool, Meta(description="Whether the matches are near ones, not exact.")]
     status: LibraryStatus
 
@@ -93,12 +103,23 @@ class SearchReply(Paged):
 def list_papers(request: Request, body: SearchPapers) -> SearchReply:
     catalogue = get_catalogue(request)
     result = catalogue.search(body.q[:500], mode=body.mode)
-    rows = sort_papers(result.rows, body.sort, body.dir == "desc", result.scores)
+    rows = result.rows
+    content = request.app.state.content
+    for want in [w.strip() for w in body.has.split(",") if w.strip()]:
+        if want not in HAS:
+            raise Refused(400, "has must name: " + ", ".join(HAS))
+        if want == "no_text":
+            rows = [p for p in rows if not p.has_text]
+        else:
+            keys = content.keys_with(want)
+            rows = [p for p in rows if p.key in keys]
+    rows = sort_papers(rows, body.sort, body.dir == "desc", result.scores)
     total = len(rows)
     page = rows[body.offset : body.offset + body.limit]
     end = body.offset + len(page)
+    found = content.badges([paper.key for paper in page])
     return SearchReply(
-        papers=[{**public(paper), "score": result.scores.get(paper.key)} for paper in page],
+        papers=[{**public(paper), "score": result.scores.get(paper.key), "content": found.get(paper.key)} for paper in page],
         next=end if end < total else None,
         total=total,
         fuzzy=result.fuzzy,

@@ -5466,6 +5466,248 @@
         ]
       }
     },
+    "/api/content/papers": {
+      "get": {
+        "description": "A stage's papers in some states, a page at a time: the ones still to do, or the failures with why, when they first and last failed, and how many tries -- the Status and Errors screens.",
+        "operationId": "get_api_content_papers",
+        "parameters": [
+          {
+            "description": "The stage.",
+            "in": "query",
+            "name": "stage",
+            "schema": {
+              "default": "openalex",
+              "enum": [
+                "openalex",
+                "methods",
+                "code",
+                "datasets",
+                "modalities"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "\"unfinished\" (default): pending, running and failed. \"errors\": failed and not found.",
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "default": "unfinished",
+              "enum": [
+                "unfinished",
+                "failed",
+                "not_found",
+                "errors",
+                "pending",
+                "done"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only papers whose title, DOI or error contains this.",
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Default added (newest first).",
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "default": "added",
+              "enum": [
+                "added",
+                "title",
+                "year",
+                "attempts",
+                "last_failed"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Default desc.",
+            "in": "query",
+            "name": "dir",
+            "schema": {
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Rows to return. Default 100.",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 100,
+              "maximum": 1000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Rows to skip: the next value of the previous page.",
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "next": {
+                      "description": "Offset of the next page, or null on the last one.",
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "papers": {
+                      "description": "key, title, doi, year, state, attempts, error, first_failed, last_failed, next_at.",
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "next",
+                    "papers",
+                    "total"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "The papers a stage has not finished",
+        "tags": [
+          "Content"
+        ]
+      }
+    },
+    "/api/content/status": {
+      "get": {
+        "description": "Per stage, how many papers are done, pending, running, failed or not found; the missing pool's size; what is running.",
+        "operationId": "get_api_content_status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "library": {
+                      "description": "papers, with_text, no_pdf, text_pending.",
+                      "type": "object"
+                    },
+                    "openalex_enabled": {
+                      "type": "boolean"
+                    },
+                    "openalex_key": {
+                      "description": "Whether library.openalex_api_key is set.",
+                      "type": "boolean"
+                    },
+                    "pool": {
+                      "additionalProperties": {
+                        "type": "integer"
+                      },
+                      "description": "The missing pool: all, refs, citing, and papers (library papers whose network is in).",
+                      "type": "object"
+                    },
+                    "running": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "description": "The paper each lane (net, local) is working on now.",
+                      "type": "object"
+                    },
+                    "stages": {
+                      "additionalProperties": {
+                        "additionalProperties": {
+                          "type": "integer"
+                        },
+                        "type": "object"
+                      },
+                      "description": "Per stage, how many papers are in each state.",
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "library",
+                    "openalex_enabled",
+                    "openalex_key",
+                    "pool",
+                    "running",
+                    "stages"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "How far the content queue has got",
+        "tags": [
+          "Content"
+        ]
+      }
+    },
     "/api/exists": {
       "post": {
         "description": "The userscripts' question: which of these papers is in the library. A DOI settles it; a title is matched only without one. Called with an API key (Authorization: Bearer), so it needs no csrf_token; a browser session sends one like any other POST.",
@@ -8446,6 +8688,308 @@
         ]
       }
     },
+    "/api/missing": {
+      "get": {
+        "description": "The missing pool: works your library cites, and works citing it, that are not in the library, with how many of your papers connect to each. Searched with the library's grammar, sorted on several columns, a page at a time. It fills in as each paper's OpenAlex stage lands.",
+        "operationId": "get_api_missing",
+        "parameters": [
+          {
+            "description": "The search, the library's boolean grammar. Read up to 500 characters.",
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "\"all\" (default), \"refs\" (works your library cites), \"citing\" (works citing your library).",
+            "in": "query",
+            "name": "pool",
+            "schema": {
+              "default": "all",
+              "enum": [
+                "all",
+                "refs",
+                "citing"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Columns, most important first: \"conn:desc,year:desc\". Columns: relevance (only while searching), conn, cited_by, title, year. Default conn:desc.",
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Default hide.",
+            "in": "query",
+            "name": "skipped",
+            "schema": {
+              "default": "hide",
+              "enum": [
+                "hide",
+                "show"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only this library paper's network: its references and citers that you lack.",
+            "in": "query",
+            "name": "paper",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Rows to return. Default 100.",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 100,
+              "maximum": 1000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Rows to skip: the next value of the previous page.",
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "counts": {
+                      "additionalProperties": {
+                        "type": "integer"
+                      },
+                      "description": "all, refs, citing: the same search on each tab.",
+                      "type": "object"
+                    },
+                    "next": {
+                      "description": "Offset of the next page, or null on the last one.",
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "paper": {
+                      "description": "The library paper a network filter names.",
+                      "oneOf": [
+                        {
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "skipped": {
+                      "description": "How many matching works are skipped.",
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "works": {
+                      "description": "wid, doi, title, journal, year, cited_by (OpenAlex), oa_pdf, authors, lib_cites (library papers citing it), cites_lib (library papers it cites), conn (their sum), score, skipped.",
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "counts",
+                    "next",
+                    "skipped",
+                    "total",
+                    "works"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Search the papers you do not have",
+        "tags": [
+          "Missing papers"
+        ]
+      }
+    },
+    "/api/missing/authors": {
+      "get": {
+        "description": "The top 100 authors of the works your library cites and does not have, by summed connections then paper count.",
+        "operationId": "get_api_missing_authors",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "authors": {
+                      "description": "openalex, name, orcid, papers (in the pool), lib_cites (summed connections).",
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "authors"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Who you cite most and lack",
+        "tags": [
+          "Missing papers"
+        ]
+      }
+    },
+    "/api/missing/skip": {
+      "post": {
+        "description": "Hide works from the Missing screen (a soft hide, undone by skip false), or bring them back.",
+        "operationId": "post_api_missing_skip",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "skip": {
+                    "default": true,
+                    "description": "true hides them (default); false shows them again.",
+                    "type": "boolean"
+                  },
+                  "wids": {
+                    "description": "OpenAlex ids (\"W123\"). At most 1000.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "wids"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "changed": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "changed"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Skip or unskip missing papers",
+        "tags": [
+          "Missing papers"
+        ]
+      }
+    },
     "/api/owner/jobs": {
       "get": {
         "operationId": "get_api_owner_jobs",
@@ -9320,6 +9864,82 @@
         ]
       }
     },
+    "/api/paper/content": {
+      "get": {
+        "description": "Everything derived about one paper so far: its sections (the methods split), code and dataset links, modality tags, its OpenAlex network, and the state of each stage. Asking moves its unfinished stages to the front of the queue, so what someone is looking at is done first.",
+        "operationId": "get_api_paper_content",
+        "parameters": [
+          {
+            "description": "The paper's key, from search_library.",
+            "in": "query",
+            "name": "key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "content": {
+                      "description": "stages: each stage's state (pending, running, done, failed, not_found, none) with its error and summary; sections (the text split on its headings), code, data and names (links and datasets found), modalities, network (OpenAlex id, reference and citer counts, how many of each are in the library) and openalex_abstract.",
+                      "type": "object"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "lists": {
+                      "description": "The lists the paper is on: slug, name, position.",
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "content",
+                    "key",
+                    "lists"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "What is known about a paper",
+        "tags": [
+          "Content"
+        ]
+      }
+    },
     "/api/paper/pdf": {
       "get": {
         "description": "The paper's first PDF that is on disk, to open in the browser.",
@@ -9431,6 +10051,14 @@
             }
           },
           {
+            "description": "Only papers with: \"code\" (code links found), \"data\" (dataset links or names), \"no_text\" (no PDF text), \"no_openalex\" (OpenAlex has no record, or the lookup failed). Several, comma-separated, must all hold.",
+            "in": "query",
+            "name": "has",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "description": "Papers to return. Default 50.",
             "in": "query",
             "name": "limit",
@@ -9469,7 +10097,7 @@
                       ]
                     },
                     "papers": {
-                      "description": "Each paper as the library has it, with score: its relevance, or null.",
+                      "description": "Each paper as the library has it, with score (its relevance, or null) and content (what is ready of it, as content_badges gives it; null before its first stage is queued).",
                       "items": {
                         "type": "object"
                       },
@@ -9547,6 +10175,90 @@
         "summary": "Search the library",
         "tags": [
           "Library"
+        ]
+      }
+    },
+    "/api/papers/badges": {
+      "post": {
+        "description": "A short summary of each paper's content, for the badges on every row that shows a paper.",
+        "operationId": "post_api_papers_badges",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "keys": {
+                    "description": "Paper keys. At most 5000.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "keys"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "badges": {
+                      "additionalProperties": {
+                        "type": "object"
+                      },
+                      "description": "Per key: states (each stage's state), code and data (how many links), methods (a methods section was found), mods, refs and citers, errors.",
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "badges"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "What is ready, for many papers",
+        "tags": [
+          "Content"
         ]
       }
     },
@@ -9656,6 +10368,88 @@
         "summary": "Papers added lately",
         "tags": [
           "Library"
+        ]
+      }
+    },
+    "/api/papers/retry": {
+      "post": {
+        "description": "Put failed (and not-found) stages back in the queue at once: one paper's, one stage's across the library, or one paper's one stage. A not-found OpenAlex lookup is only ever asked again this way.",
+        "operationId": "post_api_papers_retry",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "key": {
+                    "description": "A paper's key. Empty: every paper.",
+                    "type": "string"
+                  },
+                  "stage": {
+                    "description": "One stage. Empty: every stage.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "queued": {
+                      "description": "How many stages were put back in the queue.",
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "queued"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Try a failed stage again",
+        "tags": [
+          "Content"
         ]
       }
     },
@@ -10143,10 +10937,16 @@
       "name": "Monitoring"
     },
     {
+      "name": "Content"
+    },
+    {
       "name": "Library"
     },
     {
       "name": "Lists"
+    },
+    {
+      "name": "Missing papers"
     }
   ]
 }

@@ -61,6 +61,8 @@
           <!-- The app's own screens first. -->
           <a class="nav-link" href="#library" data-nav="library"><i class="bi bi-book" aria-hidden="true"></i><span data-i18n="nav.library"></span></a>
           <a class="nav-link" href="#lists" data-nav="lists"><i class="bi bi-list-ol" aria-hidden="true"></i><span data-i18n="nav.lists"></span></a>
+          <a class="nav-link" href="#missing" data-nav="missing"><i class="bi bi-search-heart" aria-hidden="true"></i><span data-i18n="nav.missing"></span></a>
+          <a class="nav-link" href="#status" data-nav="status"><i class="bi bi-activity" aria-hidden="true"></i><span data-i18n="nav.status"></span></a>
           <hr class="sidebar-rule" />
           <!-- Account: its second line names who is signed in (App.labelAccount). -->
           <a class="nav-link" href="#account" data-nav="account"><i class="bi bi-person-circle" aria-hidden="true"></i><span class="nav-link-text"><span data-i18n="nav.account"></span><span id="sidebar-user" class="nav-link-sub"></span></span></a>
@@ -150,36 +152,304 @@
             <h2 class="view-title" data-i18n="library.heading"></h2>
             <span id="library-count" class="text-body-secondary small"></span>
           </div>
+          <p id="library-status" class="view-description" role="status"></p>
 
+          <!-- What to look for: the search, its mode, and the "only papers with" filters. -->
           <section class="card">
             <div class="card-body">
-              <p id="library-status" class="small text-body-secondary mt-1 mb-2" role="status"></p>
-              <div class="row g-2 align-items-center" role="search">
-                <div class="col-md">
+              <div class="row g-2 g-lg-3 align-items-center" role="search">
+                <div class="col-12 col-lg-6 col-xxl-5">
                   <label for="library-search" class="visually-hidden" data-i18n="library.search_label"></label>
                   <input id="library-search" class="form-control" type="search" autocomplete="off" spellcheck="false"
                          data-i18n-attr="placeholder:library.search_placeholder" />
                 </div>
-                <div class="col-auto form-check form-switch ms-md-2">
-                  <input id="library-title-mode" class="form-check-input" type="checkbox" role="switch" />
-                  <label for="library-title-mode" class="form-check-label" data-i18n="library.mode_title"></label>
-                </div>
                 <div class="col-auto">
-                  <label for="library-sort" class="visually-hidden" data-i18n="library.sort_label"></label>
-                  <select id="library-sort" class="form-select">
-                    <option value="relevance" data-i18n="library.sort_relevance"></option>
-                    <option value="added" data-i18n="library.sort_added"></option>
-                    <option value="year" data-i18n="library.sort_year"></option>
-                    <option value="title" data-i18n="library.sort_title"></option>
-                  </select>
+                  <div class="form-check form-switch mb-0">
+                    <input id="library-title-mode" class="form-check-input" type="checkbox" role="switch" />
+                    <label for="library-title-mode" class="form-check-label" data-i18n="library.mode_title"></label>
+                  </div>
+                </div>
+                <div class="col-12 col-lg">
+                  <div class="d-flex flex-wrap align-items-center gap-2 justify-content-lg-end" role="group" data-i18n-attr="aria-label:library.filters_label">
+                    <span class="small text-body-secondary" data-i18n="library.filters_label"></span>
+                    <input type="checkbox" class="btn-check" id="library-has-code" data-library-has="code" autocomplete="off" />
+                    <label class="btn btn-outline-secondary btn-sm" for="library-has-code"><i class="bi bi-code-slash" aria-hidden="true"></i> <span data-i18n="library.has_code"></span></label>
+                    <input type="checkbox" class="btn-check" id="library-has-data" data-library-has="data" autocomplete="off" />
+                    <label class="btn btn-outline-secondary btn-sm" for="library-has-data"><i class="bi bi-database" aria-hidden="true"></i> <span data-i18n="library.has_data"></span></label>
+                    <input type="checkbox" class="btn-check" id="library-has-no-text" data-library-has="no_text" autocomplete="off" />
+                    <label class="btn btn-outline-secondary btn-sm" for="library-has-no-text"><i class="bi bi-file-earmark-x" aria-hidden="true"></i> <span data-i18n="library.has_no_text"></span></label>
+                    <input type="checkbox" class="btn-check" id="library-has-no-openalex" data-library-has="no_openalex" autocomplete="off" />
+                    <label class="btn btn-outline-secondary btn-sm" for="library-has-no-openalex"><i class="bi bi-question-circle" aria-hidden="true"></i> <span data-i18n="library.has_no_openalex"></span></label>
+                  </div>
                 </div>
               </div>
-              <p class="form-text mb-2" data-i18n="library.search_help"></p>
-              <p id="library-results-count" class="small text-body-secondary mb-1" hidden></p>
+              <p class="form-text mt-2 mb-0" data-i18n="library.search_help"></p>
+            </div>
+          </section>
+
+          <!-- What it found: count and order in the header, the papers below. -->
+          <section class="card">
+            <div class="card-header d-flex flex-wrap align-items-center gap-2">
+              <h3 class="card-title h6 mb-0" data-i18n="library.results_heading"></h3>
+              <span id="library-results-count" class="badge text-bg-light border" hidden></span>
+              <div class="ms-auto d-flex align-items-center gap-2">
+                <label for="library-sort" class="small text-body-secondary" data-i18n="library.sort_label"></label>
+                <select id="library-sort" class="form-select form-select-sm w-auto">
+                  <option value="relevance" data-i18n="library.sort_relevance"></option>
+                  <option value="added" data-i18n="library.sort_added"></option>
+                  <option value="year" data-i18n="library.sort_year"></option>
+                  <option value="title" data-i18n="library.sort_title"></option>
+                </select>
+              </div>
+            </div>
+            <div class="card-body">
               <p id="library-fuzzy" class="alert alert-info py-2" role="status" hidden data-i18n="library.fuzzy"></p>
               <ul id="library-results" class="list-unstyled paper-list"></ul>
-              <p id="library-empty" class="text-body-secondary" hidden data-i18n="ui.no_matches"></p>
-              <button id="library-more" type="button" class="btn btn-outline-secondary" hidden data-i18n="ui.load_more"></button>
+              <p id="library-empty" class="text-body-secondary mb-0" hidden data-i18n="ui.no_matches"></p>
+              <button id="library-more" type="button" class="btn btn-outline-secondary mt-2" hidden data-i18n="ui.load_more"></button>
+            </div>
+          </section>
+        </section>
+
+        <!-- One paper: #paper/<key>. static/js/paper.js -->
+        <section class="view" data-view="paper" id="paper-panel" hidden>
+          <div id="paper-nav" class="d-flex flex-wrap align-items-center gap-2 mb-2" hidden>
+            <button id="paper-prev" type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-left" aria-hidden="true"></i> <span data-i18n="paper.prev"></span></button>
+            <button id="paper-next" type="button" class="btn btn-outline-secondary btn-sm"><span data-i18n="paper.next"></span> <i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+            <a id="paper-back" class="small" href="#lists"></a>
+          </div>
+          <h2 class="view-title paper-heading" id="paper-title" data-i18n="paper.heading"></h2>
+          <p id="paper-missing" class="alert alert-warning" role="status" hidden></p>
+          <div id="paper-body" class="d-flex flex-column gap-3" hidden>
+            <section class="card">
+              <div class="card-body">
+                <p id="paper-meta" class="paper-meta mb-2"></p>
+                <div id="paper-links" class="paper-foot mb-2"></div>
+                <div id="paper-tags" class="d-flex flex-wrap gap-1 mb-2"></div>
+                <p id="paper-lists" class="small mb-0" hidden></p>
+              </div>
+            </section>
+
+            <div class="row g-3">
+              <div class="col-12 col-xl-7">
+                <section class="card h-100">
+                  <div class="card-body">
+                    <h3 class="card-title h5" data-i18n="paper.abstract_heading"></h3>
+                    <p id="paper-abstract" class="mb-1 paper-section-text"></p>
+                    <p id="paper-abstract-source" class="small text-body-secondary mb-0" data-i18n="paper.abstract_from_openalex" hidden></p>
+                  </div>
+                </section>
+              </div>
+              <div class="col-12 col-xl-5">
+                <section class="card h-100">
+                  <div class="card-body">
+                    <h3 class="card-title h5" data-i18n="paper.network_heading"></h3>
+                    <div id="paper-network"></div>
+                  </div>
+                </section>
+              </div>
+            </div>
+
+            <section class="card">
+              <div class="card-body">
+                <h3 class="card-title h5" data-i18n="paper.content_heading"></h3>
+                <p class="small text-body-secondary" data-i18n="paper.content_help"></p>
+                <div class="table-responsive">
+                  <table class="table table-sm align-middle mb-0">
+                    <thead>
+                      <tr>
+                        <th scope="col" data-i18n="paper.col_stage"></th>
+                        <th scope="col" data-i18n="paper.col_state"></th>
+                        <th scope="col" data-i18n="paper.col_detail"></th>
+                        <th scope="col"><span class="visually-hidden" data-i18n="paper.col_actions"></span></th>
+                      </tr>
+                    </thead>
+                    <tbody id="paper-stages"></tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+
+            <div class="row g-3 align-items-start">
+              <div class="col-12 col-xxl-8">
+                <section class="card">
+                  <div class="card-body">
+                    <h3 class="card-title h5" data-i18n="paper.sections_heading"></h3>
+                    <p class="small text-body-secondary" data-i18n="paper.sections_help"></p>
+                    <p id="paper-sections-empty" class="text-body-secondary" data-i18n="paper.no_sections" hidden></p>
+                    <div class="row g-3">
+                      <div class="col-12 col-xl-4 col-xxl-3">
+                        <nav class="aside-sticky" data-i18n-attr="aria-label:paper.toc_label"><ol id="paper-toc" class="paper-toc small"></ol></nav>
+                      </div>
+                      <div class="col-12 col-xl-8 col-xxl-9">
+                        <div id="paper-sections" class="accordion"></div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+              <div class="col-12 col-xxl-4">
+                <section class="card">
+                  <div class="card-body">
+                    <h3 class="card-title h5" data-i18n="paper.found_heading"></h3>
+                    <div id="paper-found"></div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- The papers you do not have. static/js/missing.js -->
+        <section class="view" data-view="missing" id="missing-panel" hidden>
+          <h2 class="view-title" data-i18n="missing.heading"></h2>
+          <p class="view-description" data-i18n="missing.description"></p>
+          <div id="missing-paper" class="alert alert-info py-2 mb-0 d-flex flex-wrap align-items-center gap-2" role="status" hidden>
+            <span data-i18n="missing.paper_filter"></span>
+            <a id="missing-paper-link" class="fw-semibold" href="#library"></a>
+            <button id="missing-clear-paper" type="button" class="btn btn-outline-secondary btn-sm ms-auto" data-i18n="missing.paper_clear"></button>
+          </div>
+          <section class="card">
+            <div class="card-header">
+              <ul class="nav nav-tabs card-header-tabs">
+                <li class="nav-item"><a class="nav-link active" href="#missing" data-missing-tab="all"><span data-i18n="missing.tab_all"></span> <span class="badge text-bg-light border"></span></a></li>
+                <li class="nav-item"><a class="nav-link" href="#missing" data-missing-tab="refs"><span data-i18n="missing.tab_refs"></span> <span class="badge text-bg-light border"></span></a></li>
+                <li class="nav-item"><a class="nav-link" href="#missing" data-missing-tab="citing"><span data-i18n="missing.tab_citing"></span> <span class="badge text-bg-light border"></span></a></li>
+                <li class="nav-item"><a class="nav-link" href="#missing" data-missing-tab="authors"><span data-i18n="missing.tab_authors"></span> <span class="badge text-bg-light border" hidden></span></a></li>
+              </ul>
+            </div>
+            <div class="card-body">
+              <div class="row g-2 g-lg-3 align-items-center" role="search">
+                <div class="col-12 col-md-7 col-xl-5">
+                  <label for="missing-search" class="visually-hidden" data-i18n="missing.search_label"></label>
+                  <input id="missing-search" class="form-control" type="search" autocomplete="off" spellcheck="false" data-i18n-attr="placeholder:missing.search_placeholder" />
+                </div>
+                <div class="col-auto">
+                  <div class="form-check form-switch mb-0">
+                    <input id="missing-show-skipped" class="form-check-input" type="checkbox" role="switch" />
+                    <label for="missing-show-skipped" class="form-check-label" data-i18n="missing.show_skipped"></label>
+                  </div>
+                </div>
+                <div class="col-auto ms-md-auto small text-body-secondary" id="missing-skipped-count"></div>
+              </div>
+              <p class="form-text mt-2 mb-3" data-i18n="library.search_help"></p>
+              <p id="missing-total" class="small text-body-secondary mb-1"></p>
+              <div id="missing-works" class="table-responsive">
+                <table class="table table-hover align-middle mb-0 missing-table">
+                  <thead>
+                    <tr>
+                      <th scope="col" id="missing-col-relevance" class="text-end" data-sort="relevance" hidden><button type="button" class="th-sort" data-missing-sort="relevance"><span data-i18n="missing.col_relevance"></span><span class="sort-mark"></span></button></th>
+                      <th scope="col" class="text-end" data-sort="conn"><button type="button" class="th-sort" data-missing-sort="conn" data-i18n-attr="title:missing.col_conn_title"><span data-i18n="missing.col_conn"></span><span class="sort-mark"></span></button></th>
+                      <th scope="col" class="text-end" data-sort="cited_by"><button type="button" class="th-sort" data-missing-sort="cited_by" data-i18n-attr="title:missing.col_cited_title"><span data-i18n="missing.col_cited"></span><span class="sort-mark"></span></button></th>
+                      <th scope="col" data-sort="title"><button type="button" class="th-sort" data-missing-sort="title"><span data-i18n="missing.col_title"></span><span class="sort-mark"></span></button></th>
+                      <th scope="col" data-sort="year"><button type="button" class="th-sort" data-missing-sort="year"><span data-i18n="missing.col_year"></span><span class="sort-mark"></span></button></th>
+                      <th scope="col" data-i18n="missing.col_links"></th>
+                      <th scope="col"><span class="visually-hidden" data-i18n="missing.col_actions"></span></th>
+                    </tr>
+                  </thead>
+                  <tbody id="missing-rows"></tbody>
+                </table>
+              </div>
+              <div id="missing-authors" class="table-responsive" hidden>
+                <table class="table table-hover align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th scope="col" class="text-end">#</th>
+                      <th scope="col" data-i18n="missing.author_name"></th>
+                      <th scope="col" data-i18n="missing.col_links"></th>
+                      <th scope="col" class="text-end" data-i18n="missing.author_papers"></th>
+                      <th scope="col" class="text-end" data-i18n="missing.col_conn"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="missing-author-rows"></tbody>
+                </table>
+              </div>
+              <p id="missing-empty" class="text-body-secondary mt-2" hidden data-i18n="missing.empty"></p>
+              <button id="missing-more" type="button" class="btn btn-outline-secondary mt-2" hidden data-i18n="ui.load_more"></button>
+            </div>
+          </section>
+
+          <div class="modal fade" id="missing-add-dialog" tabindex="-1" aria-labelledby="missing-add-heading" aria-hidden="true">
+            <div class="modal-dialog">
+              <form class="modal-content" id="missing-add-form">
+                <div class="modal-header">
+                  <h3 class="modal-title h5" id="missing-add-heading" data-i18n="missing.add_heading"></h3>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" data-i18n-attr="aria-label:nav.close"></button>
+                </div>
+                <div class="modal-body">
+                  <p id="missing-add-title" class="fw-semibold"></p>
+                  <label for="missing-add-list" class="form-label" data-i18n="missing.add_list"></label>
+                  <select id="missing-add-list" class="form-select"></select>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" data-i18n="ui.cancel"></button>
+                  <button type="submit" class="btn btn-primary" data-i18n="missing.add_button"></button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <!-- The content queue and its failures. static/js/status.js -->
+        <section class="view" data-view="status" id="status-panel" hidden>
+          <h2 class="view-title" data-i18n="status.heading"></h2>
+          <p class="view-description" data-i18n="status.description"></p>
+          <div class="row g-3">
+            <div class="col-12 col-xxl-3">
+              <section class="card h-100">
+                <div class="card-body">
+                  <p id="status-library" class="mb-1"></p>
+                  <p id="status-pool" class="mb-1"></p>
+                  <p id="status-openalex-note" class="alert alert-warning py-2 mb-0 mt-2" hidden></p>
+                </div>
+              </section>
+            </div>
+            <div class="col-12 col-xxl-9">
+              <div id="status-cards" class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 row-cols-xl-5 g-3"></div>
+            </div>
+          </div>
+          <section class="card">
+            <div class="card-header d-flex flex-wrap align-items-center gap-2">
+              <h3 class="card-title h6 mb-0 me-auto" id="status-table-heading"></h3>
+              <button id="status-retry-all" type="button" class="btn btn-outline-secondary btn-sm" hidden><i class="bi bi-arrow-repeat" aria-hidden="true"></i> <span data-i18n="status.retry_all"></span></button>
+            </div>
+            <div class="card-body">
+              <div class="row g-2 g-lg-3 align-items-center mb-2" role="search">
+                <div class="col-12 col-md-auto">
+                  <label for="status-state" class="visually-hidden" data-i18n="status.state_label"></label>
+                  <select id="status-state" class="form-select">
+                    <option value="errors" selected></option>
+                    <option value="failed"></option>
+                    <option value="not_found"></option>
+                    <option value="unfinished"></option>
+                    <option value="pending"></option>
+                    <option value="done"></option>
+                  </select>
+                </div>
+                <div class="col-12 col-md-6 col-xl-4">
+                  <label for="status-search" class="visually-hidden" data-i18n="status.search_label"></label>
+                  <input id="status-search" class="form-control" type="search" autocomplete="off" data-i18n-attr="placeholder:status.search_placeholder" />
+                </div>
+              </div>
+              <p id="status-total" class="small text-body-secondary mb-1"></p>
+              <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th scope="col" data-sort="title"><button type="button" class="th-sort" data-status-sort="title"><span data-i18n="status.col_paper"></span><span class="sort-mark"></span></button></th>
+                      <th scope="col" data-i18n="status.col_state"></th>
+                      <th scope="col" data-i18n="status.col_error"></th>
+                      <th scope="col" data-i18n="status.col_first"></th>
+                      <th scope="col" data-sort="last_failed"><button type="button" class="th-sort" data-status-sort="last_failed"><span data-i18n="status.col_last"></span><span class="sort-mark"></span></button></th>
+                      <th scope="col" class="text-end" data-sort="attempts"><button type="button" class="th-sort" data-status-sort="attempts"><span data-i18n="status.col_attempts"></span><span class="sort-mark"></span></button></th>
+                      <th scope="col"><span class="visually-hidden" data-i18n="paper.col_actions"></span></th>
+                    </tr>
+                  </thead>
+                  <tbody id="status-rows"></tbody>
+                </table>
+              </div>
+              <p id="status-empty" class="text-body-secondary mt-2" hidden data-i18n="status.empty"></p>
+              <button id="status-more" type="button" class="btn btn-outline-secondary mt-2" hidden data-i18n="ui.load_more"></button>
             </div>
           </section>
         </section>
@@ -218,12 +488,17 @@
                   <button id="list-new-cancel" type="button" class="btn btn-outline-secondary" data-i18n="ui.cancel"></button>
                 </div>
               </form>
-              <p id="lists-none" class="text-body-secondary mt-3" hidden data-i18n="lists.none"></p>
+              <p id="lists-none" class="text-body-secondary mt-3 mb-0" hidden data-i18n="lists.none"></p>
+            </div>
+          </section>
 
-              <div id="list-body" hidden>
-                <p id="list-view-only" class="alert alert-secondary py-2 mt-2 mb-0" hidden data-i18n="lists.view_only"></p>
-                <div id="list-editing" class="row g-2 mt-2">
-                  <div id="list-add-wrap" class="col-lg position-relative">
+          <!-- The open list: adding to it, its shelf, then the board itself. -->
+          <div id="list-body" class="d-flex flex-column gap-3" hidden>
+            <p id="list-view-only" class="alert alert-secondary py-2 mb-0" hidden data-i18n="lists.view_only"></p>
+            <section id="list-editing" class="card">
+              <div class="card-body">
+                <div class="row g-2">
+                  <div id="list-add-wrap" class="col-12 col-lg-8 col-xxl-6 position-relative">
                     <div class="input-group">
                       <label for="list-add" class="visually-hidden" data-i18n="lists.add_label"></label>
                       <input id="list-add" class="form-control" type="search" autocomplete="off" spellcheck="false"
@@ -250,25 +525,29 @@
                     </div>
                   </div>
                 </div>
+              </div>
+            </section>
 
-                <section id="list-shelf" class="list-shelf mt-3" hidden aria-labelledby="list-shelf-title">
-                  <div class="d-flex flex-wrap align-items-center gap-2">
-                    <h3 id="list-shelf-title" class="h6 mb-0"></h3>
-                    <div class="form-check mb-0 ms-2">
-                      <input id="list-shelf-all" class="form-check-input" type="checkbox" />
-                      <label for="list-shelf-all" class="form-check-label small" data-i18n="lists.shelf_all"></label>
-                    </div>
-                    <label for="list-shelf-tag" class="visually-hidden" data-i18n="lists.shelf_tag_label"></label>
-                    <input id="list-shelf-tag" class="form-control form-control-sm tag-input" list="list-tag-options" autocomplete="off"
-                           data-i18n-attr="placeholder:lists.shelf_tag_placeholder" />
-                    <button id="list-shelf-drop" type="button" class="btn btn-outline-danger btn-sm" data-i18n="lists.shelf_drop"></button>
-                    <button id="list-shelf-add" type="button" class="btn btn-primary btn-sm"></button>
-                    <span id="list-shelf-note" class="small text-body-secondary"></span>
-                  </div>
-                  <ol id="list-shelf-rows" class="list-unstyled board-rows board-shelf board-scroll mt-2"></ol>
-                </section>
+            <section id="list-shelf" class="list-shelf" hidden aria-labelledby="list-shelf-title">
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                <h3 id="list-shelf-title" class="h6 mb-0"></h3>
+                <div class="form-check mb-0 ms-2">
+                  <input id="list-shelf-all" class="form-check-input" type="checkbox" />
+                  <label for="list-shelf-all" class="form-check-label small" data-i18n="lists.shelf_all"></label>
+                </div>
+                <label for="list-shelf-tag" class="visually-hidden" data-i18n="lists.shelf_tag_label"></label>
+                <input id="list-shelf-tag" class="form-control form-control-sm tag-input" list="list-tag-options" autocomplete="off"
+                       data-i18n-attr="placeholder:lists.shelf_tag_placeholder" />
+                <button id="list-shelf-drop" type="button" class="btn btn-outline-danger btn-sm" data-i18n="lists.shelf_drop"></button>
+                <button id="list-shelf-add" type="button" class="btn btn-primary btn-sm"></button>
+                <span id="list-shelf-note" class="small text-body-secondary"></span>
+              </div>
+              <ol id="list-shelf-rows" class="list-unstyled board-rows board-shelf board-scroll mt-2"></ol>
+            </section>
 
-                <div id="list-tagbar" class="list-tagbar mt-3">
+            <section class="card">
+              <div class="card-header">
+                <div id="list-tagbar" class="list-tagbar">
                   <div class="d-flex flex-wrap align-items-center gap-2">
                     <input type="checkbox" class="btn-check" id="list-filter-on" autocomplete="off" />
                     <label class="btn btn-outline-secondary btn-sm" for="list-filter-on">
@@ -329,16 +608,18 @@
                   </button>
                 </div>
 
-                <p id="list-filtered" class="small text-body-secondary mt-2 mb-0" hidden></p>
-                <div id="list-scroll" class="board-scroll mt-2">
+              </div>
+              <div class="card-body">
+                <p id="list-filtered" class="small text-body-secondary mb-2" hidden></p>
+                <div id="list-scroll" class="board-scroll">
                   <div id="list-head" class="board-head" aria-hidden="true"></div>
                   <ol id="list-rows" class="list-unstyled board-rows"></ol>
                 </div>
                 <p id="list-empty" class="text-body-secondary mt-3" hidden data-i18n="lists.empty"></p>
                 <datalist id="list-tag-options"></datalist>
               </div>
-            </div>
-          </section>
+            </section>
+          </div>
         </section>
 
         <!-- Everything about you: who you are, how you sign in, and what can
@@ -618,7 +899,7 @@
 
         <!-- Your themes, and for admins the defaults everyone starts from.
              Drawn by themes_editor.js; see theme.js for where they are kept. -->
-        <section class="view view-full" data-view="appearance" id="appearance">
+        <section class="view" data-view="appearance" id="appearance">
           <h2 class="view-title" data-i18n="theme.heading"></h2>
           <ul class="nav nav-tabs mb-3" id="theme-tabs" role="tablist" hidden>
             <li class="nav-item" role="presentation">
@@ -874,7 +1155,7 @@
 
         <!-- The activity log, owner only; see logs.js. data-no-track keeps
              reading the log from writing to it (track.js). -->
-        <section class="view view-full" data-view="logs" id="logs-panel" data-no-track hidden>
+        <section class="view" data-view="logs" id="logs-panel" data-no-track hidden>
           <h2 class="view-title" data-i18n="logs.heading"></h2>
           <p class="view-description" data-i18n="logs.description"></p>
 
@@ -1125,6 +1406,10 @@
   <script src="/js/nav.js"></script>
   <script src="/js/pager.js"></script>
   <script src="/js/paper_links.js"></script>
+  <script src="/js/content.js"></script>
+  <script src="/js/paper.js"></script>
+  <script src="/js/missing.js"></script>
+  <script src="/js/status.js"></script>
   <script src="/js/library.js"></script>
   <script src="/js/board_view.js"></script>
   <script src="/js/lists.js"></script>

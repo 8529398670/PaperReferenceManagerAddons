@@ -14,8 +14,10 @@ This file is generated: do not edit it. Change the docs next to the handlers and
 - [Admin](#admin)
 - [Owner](#owner)
 - [Monitoring](#monitoring)
+- [Content](#content)
 - [Library](#library)
 - [Lists](#lists)
+- [Missing papers](#missing-papers)
 - [Schemas](#schemas)
 
 ## Calling the API
@@ -2019,6 +2021,148 @@ Refused: this server keeps no sessions
 
 **Reply 405**: Success
 
+## Content
+
+| Method | Path | Summary | Who may call |
+|---|---|---|---|
+| GET | [`/api/content/papers`](#get-apicontentpapers) | The papers a stage has not finished | browser session or API key, anyone signed in |
+| GET | [`/api/content/status`](#get-apicontentstatus) | How far the content queue has got | browser session or API key, anyone signed in |
+| GET | [`/api/paper/content`](#get-apipapercontent) | What is known about a paper | browser session or API key, anyone signed in |
+| POST | [`/api/papers/badges`](#post-apipapersbadges) | What is ready, for many papers | browser session or API key, anyone signed in |
+| POST | [`/api/papers/retry`](#post-apipapersretry) | Try a failed stage again | browser session or API key, anyone signed in |
+
+### GET /api/content/papers
+
+The papers a stage has not finished
+
+A stage's papers in some states, a page at a time: the ones still to do, or the failures with why, when they first and last failed, and how many tries -- the Status and Errors screens.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`content_papers`](mcp.md#content_papers) |
+| Errors | 400, 401, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `stage` | query | string | no | one of `openalex`, `methods`, `code`, `datasets`, `modalities`; default `openalex` | The stage. |
+| `state` | query | string | no | one of `unfinished`, `failed`, `not_found`, `errors`, `pending`, `done`; default `unfinished` | "unfinished" (default): pending, running and failed. "errors": failed and not found. |
+| `q` | query | string | no |  | Only papers whose title, DOI or error contains this. |
+| `sort` | query | string | no | one of `added`, `title`, `year`, `attempts`, `last_failed`; default `added` | Default added (newest first). |
+| `dir` | query | string | no | one of `asc`, `desc`; default `desc` | Default desc. |
+| `limit` | query | integer | no | 1 to 1000; default `100` | Rows to return. Default 100. |
+| `offset` | query | integer | no | at least 0 | Rows to skip: the next value of the previous page. |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `next` | integer or null | yes |  | Offset of the next page, or null on the last one. |
+| `papers` | array of object | yes |  | key, title, doi, year, state, attempts, error, first_failed, last_failed, next_at. |
+| `total` | integer | yes |  |  |
+
+### GET /api/content/status
+
+How far the content queue has got
+
+Per stage, how many papers are done, pending, running, failed or not found; the missing pool's size; what is running.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`content_status`](mcp.md#content_status) |
+| Errors | 401, 429, 503 |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `library` | object | yes |  | papers, with_text, no_pdf, text_pending. |
+| `openalex_enabled` | boolean | yes |  |  |
+| `openalex_key` | boolean | yes |  | Whether library.openalex_api_key is set. |
+| `pool` | map of integer | yes |  | The missing pool: all, refs, citing, and papers (library papers whose network is in). |
+| `running` | map of string | yes |  | The paper each lane (net, local) is working on now. |
+| `stages` | map of map of integer | yes |  | Per stage, how many papers are in each state. |
+
+### GET /api/paper/content
+
+What is known about a paper
+
+Everything derived about one paper so far: its sections (the methods split), code and dataset links, modality tags, its OpenAlex network, and the state of each stage. Asking moves its unfinished stages to the front of the queue, so what someone is looking at is done first.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`get_paper_content`](mcp.md#get_paper_content) |
+| Errors | 400, 401, 404, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `key` | query | string | no |  | The paper's key, from search_library. |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `content` | object | yes |  | stages: each stage's state (pending, running, done, failed, not_found, none) with its error and summary; sections (the text split on its headings), code, data and names (links and datasets found), modalities, network (OpenAlex id, reference and citer counts, how many of each are in the library) and openalex_abstract. |
+| `key` | string | yes |  |  |
+| `lists` | array of object | yes |  | The lists the paper is on: slug, name, position. |
+
+### POST /api/papers/badges
+
+What is ready, for many papers
+
+A short summary of each paper's content, for the badges on every row that shows a paper.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`content_badges`](mcp.md#content_badges) |
+| Errors | 400, 401, 403, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `keys` | array of string | yes |  | Paper keys. At most 5000. |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `badges` | map of object | yes |  | Per key: states (each stage's state), code and data (how many links), methods (a methods section was found), mods, refs and citers, errors. |
+
+### POST /api/papers/retry
+
+Try a failed stage again
+
+Put failed (and not-found) stages back in the queue at once: one paper's, one stage's across the library, or one paper's one stage. A not-found OpenAlex lookup is only ever asked again this way.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`retry_content`](mcp.md#retry_content) |
+| Errors | 400, 401, 403, 404, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `key` | string | no |  | A paper's key. Empty: every paper. |
+| `stage` | string | no |  | One stage. Empty: every stage. |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `queued` | integer | yes |  | How many stages were put back in the queue. |
+
 ## Library
 
 | Method | Path | Summary | Who may call |
@@ -2181,6 +2325,7 @@ Search the papers in the Zotero library, a page at a time. mode "text" (default)
 | `mode` | query | string | no | one of `text`, `title`; default `text` | "text" (default): boolean full-text search. "title": a half-remembered title, typos and all, or a DOI. |
 | `sort` | query | string | no | one of `relevance`, `added`, `year`, `title`; default `relevance` | Default relevance. |
 | `dir` | query | string | no | one of `asc`, `desc`; default `desc` | Default desc. |
+| `has` | query | string | no |  | Only papers with: "code" (code links found), "data" (dataset links or names), "no_text" (no PDF text), "no_openalex" (OpenAlex has no record, or the lookup failed). Several, comma-separated, must all hold. |
 | `limit` | query | integer | no | 1 to 1000; default `50` | Papers to return. Default 50. |
 | `offset` | query | integer | no | at least 0 | Papers to skip: the next value of the previous page. |
 
@@ -2190,7 +2335,7 @@ Search the papers in the Zotero library, a page at a time. mode "text" (default)
 |---|---|---|---|---|
 | `fuzzy` | boolean | yes |  | Whether the matches are near ones, not exact. |
 | `next` | integer or null | yes |  | Offset of the next page, or null on the last one. |
-| `papers` | array of object | yes |  | Each paper as the library has it, with score: its relevance, or null. |
+| `papers` | array of object | yes |  | Each paper as the library has it, with score (its relevance, or null) and content (what is ready of it, as content_badges gives it; null before its first stage is queued). |
 | `status` | object | yes |  |  |
 | `status.error` | string | yes |  |  |
 | `status.papers` | integer | yes |  |  |
@@ -2877,6 +3022,93 @@ A public Google Sheet's rows, and the links behind its cells, for an import. The
 | `links` | array of any or null | no |  | Per row: null, or {column index: [[text, url or null], ...]} for each cell with links behind its text. |
 | `links_error` | string | no |  | Why the links could not be read, when they could not (the rows still came). |
 | `rows` | array of array of string | yes |  | The sheet's tab as rows of cells, the header first. |
+
+## Missing papers
+
+| Method | Path | Summary | Who may call |
+|---|---|---|---|
+| GET | [`/api/missing`](#get-apimissing) | Search the papers you do not have | browser session or API key, anyone signed in |
+| GET | [`/api/missing/authors`](#get-apimissingauthors) | Who you cite most and lack | browser session or API key, anyone signed in |
+| POST | [`/api/missing/skip`](#post-apimissingskip) | Skip or unskip missing papers | browser session or API key, anyone signed in |
+
+### GET /api/missing
+
+Search the papers you do not have
+
+The missing pool: works your library cites, and works citing it, that are not in the library, with how many of your papers connect to each. Searched with the library's grammar, sorted on several columns, a page at a time. It fills in as each paper's OpenAlex stage lands.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`search_missing`](mcp.md#search_missing) |
+| Errors | 400, 401, 404, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `q` | query | string | no |  | The search, the library's boolean grammar. Read up to 500 characters. |
+| `pool` | query | string | no | one of `all`, `refs`, `citing`; default `all` | "all" (default), "refs" (works your library cites), "citing" (works citing your library). |
+| `sort` | query | string | no |  | Columns, most important first: "conn:desc,year:desc". Columns: relevance (only while searching), conn, cited_by, title, year. Default conn:desc. |
+| `skipped` | query | string | no | one of `hide`, `show`; default `hide` | Default hide. |
+| `paper` | query | string | no |  | Only this library paper's network: its references and citers that you lack. |
+| `limit` | query | integer | no | 1 to 1000; default `100` | Rows to return. Default 100. |
+| `offset` | query | integer | no | at least 0 | Rows to skip: the next value of the previous page. |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `counts` | map of integer | yes |  | all, refs, citing: the same search on each tab. |
+| `next` | integer or null | yes |  | Offset of the next page, or null on the last one. |
+| `paper` | object or null | no |  | The library paper a network filter names. |
+| `skipped` | integer | yes |  | How many matching works are skipped. |
+| `total` | integer | yes |  |  |
+| `works` | array of object | yes |  | wid, doi, title, journal, year, cited_by (OpenAlex), oa_pdf, authors, lib_cites (library papers citing it), cites_lib (library papers it cites), conn (their sum), score, skipped. |
+
+### GET /api/missing/authors
+
+Who you cite most and lack
+
+The top 100 authors of the works your library cites and does not have, by summed connections then paper count.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`missing_authors`](mcp.md#missing_authors) |
+| Errors | 401, 429, 503 |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `authors` | array of object | yes |  | openalex, name, orcid, papers (in the pool), lib_cites (summed connections). |
+
+### POST /api/missing/skip
+
+Skip or unskip missing papers
+
+Hide works from the Missing screen (a soft hide, undone by skip false), or bring them back.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`skip_missing`](mcp.md#skip_missing) |
+| Errors | 400, 401, 403, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `skip` | boolean | no | default `true` | true hides them (default); false shows them again. |
+| `wids` | array of string | yes |  | OpenAlex ids ("W123"). At most 1000. |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `changed` | integer | yes |  |  |
 
 ## Schemas
 

@@ -309,9 +309,16 @@ const BoardView = {
     const foot = [ PaperLinks.strip( { key: item.key , doi: item.doi , has_pdf: paper.has_pdf } ) ];
     if ( paper.in_library === false ) {
       foot.push( Dom.el( "span" , { class: "badge text-bg-light border" , text: I18n.get( "lists.not_in_library" ) } ) );
+    } else {
+      foot.push( Content.strip( item.key , paper.content ) );
     }
+    // In the library, the title opens the Paper screen, with Prev / Next
+    // stepping through this list.
+    const title = paper.in_library === false
+      ? Dom.el( "div" , { class: "paper-title" , text: item.title || item.key } )
+      : Dom.el( "div" , { children: [ Content.titleLink( { key: item.key , title: item.title } , ctx.paperContext ) ] } );
     const block = [
-      Dom.el( "div" , { class: "paper-title" , text: item.title || item.key } ),
+      title,
       Dom.el( "div" , { class: "paper-meta" , text: meta } ),
       Dom.el( "div" , { class: "paper-foot" , children: foot } ),
     ];

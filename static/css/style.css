@@ -401,17 +401,14 @@ html { scrollbar-gutter: stable; overflow-anchor: auto; }
 .view:not(.view-active) { display: none; }
 
 /* A screen is its heading and its cards, one card per job, so each thing on
-   it has its own edge. See "Desktop layout" in references/frontend.md.
-   Width follows the content: a screen picks a tier. The default is the width
-   screens were designed at, so a screen nobody has laid out for a desktop
-   looks as it always did -- a wider column only stretches its rows and
-   inputs. A screen goes wider only together with a layout that uses the
-   room: .view-wide for a main + aside or cards side by side, .view-full for
-   an editor with panes. .view-narrow is for one small form. */
-.view { display: flex; flex-direction: column; gap: 1rem; width: 100%; max-width: 60rem; margin-inline: auto; }
-.view.view-narrow { max-width: 48rem; }
-.view.view-wide { max-width: 80rem; }
-.view.view-full { max-width: 120rem; }
+   it has its own edge. Every screen takes the full width beside the sidebar
+   (this app's choice, for every screen now and to come); how that room is
+   used is the screen's own Bootstrap grid -- a toolbar card above a results
+   card whose header holds the count and sort and whose footer holds "Load
+   more", tiles in row-cols, main + aside in a .row. .view-narrow is left for
+   one small form. */
+.view { display: flex; flex-direction: column; gap: 1rem; width: 100%; min-width: 0; }
+.view.view-narrow { max-width: 48rem; margin-inline: auto; }
 .view-title { margin: 0; font-size: 1.5rem; color: var(--app-second-text); }
 .view-description { margin: -0.5rem 0 0; color: var(--bs-secondary-color); }
 .view .card-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.75rem; }
@@ -430,10 +427,6 @@ html { scrollbar-gutter: stable; overflow-anchor: auto; }
 @media (min-width: 1400px) {
   .aside-sticky { position: sticky; top: calc(var(--app-navbar-height) + 1rem); }
 }
-/* A search box is for a few words; across a wide card it reads as a second
-   heading and pushes the table it filters further from the eye. The box, not
-   its role="search" holder, which may be a whole toolbar (Settings). */
-.view [role="search"] input[type="search"] { max-width: 28rem; }
 
 /* A card that folds away: <details class="card card-collapse"> with a
    <summary class="card-header">. For a list most visits don't need. */
@@ -953,3 +946,28 @@ body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-ins
   #list-add-wrap .input-group { flex-wrap: wrap; }
   #list-add { flex-basis: 100%; border-radius: var(--bs-border-radius) !important; margin-bottom: 0.25rem; }
 }
+
+/* Content badges: what is ready of each paper (js/content.js). */
+.content-badges { display: inline-flex; flex-wrap: wrap; gap: 0.25rem; }
+.content-badge { display: inline-flex; align-items: center; gap: 0.25rem; font-weight: 500; }
+.content-spin { width: 0.65rem; height: 0.65rem; border-width: 0.12em; }
+a.paper-title-link { color: inherit; text-decoration: none; }
+a.paper-title-link:hover, a.paper-title-link:focus-visible { color: var(--app-link); text-decoration: underline; }
+/* The Paper screen (js/paper.js). */
+.paper-heading { overflow-wrap: anywhere; }
+.paper-section-text { white-space: pre-line; overflow-wrap: anywhere; }
+.paper-section-text p:last-child { margin-bottom: 0; }
+.paper-toc { columns: 1; margin-bottom: 0.75rem; }
+@media (min-width: 768px) { .paper-toc { columns: 2; } }
+/* From xl the contents sit in their own column beside the sections. */
+@media (min-width: 1200px) { .paper-toc { columns: 1; } }
+.paper-found-list li { overflow-wrap: anywhere; }
+/* The Status screen's stage cards are buttons. */
+.status-stage { color: inherit; background: var(--bs-body-bg); }
+.status-stage:hover { border-color: var(--bs-primary); }
+.missing-table .paper-title { font-weight: 500; }
+/* A wide table scrolls in its box rather than squeezing titles to a word a line. */
+@media (min-width: 576px) { .missing-table td.missing-title { min-width: 18rem; } }
+/* With the room of a full-width screen, a row's links sit on one line
+   instead of stacking and making every row four lines tall. */
+@media (min-width: 1200px) { .missing-table td.missing-links .paper-links { flex-wrap: nowrap; white-space: nowrap; } }

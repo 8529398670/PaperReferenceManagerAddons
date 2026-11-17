@@ -1192,6 +1192,134 @@
       "annotations": {
         "destructiveHint": false,
         "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "What is ready, for many papers"
+      },
+      "description": "A short summary of each paper's content, for the badges on every row that shows a paper.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "keys": {
+            "description": "Paper keys. At most 5000.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "keys"
+        ],
+        "type": "object"
+      },
+      "name": "content_badges",
+      "route": "POST /api/papers/badges",
+      "title": "What is ready, for many papers"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "The papers a stage has not finished"
+      },
+      "description": "A stage's papers in some states, a page at a time: the ones still to do, or the failures with why, when they first and last failed, and how many tries -- the Status and Errors screens.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "dir": {
+            "default": "desc",
+            "description": "Default desc.",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "type": "string"
+          },
+          "limit": {
+            "default": 100,
+            "description": "Rows to return. Default 100.",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Rows to skip: the next value of the previous page.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "q": {
+            "description": "Only papers whose title, DOI or error contains this.",
+            "type": "string"
+          },
+          "sort": {
+            "default": "added",
+            "description": "Default added (newest first).",
+            "enum": [
+              "added",
+              "title",
+              "year",
+              "attempts",
+              "last_failed"
+            ],
+            "type": "string"
+          },
+          "stage": {
+            "default": "openalex",
+            "description": "The stage.",
+            "enum": [
+              "openalex",
+              "methods",
+              "code",
+              "datasets",
+              "modalities"
+            ],
+            "type": "string"
+          },
+          "state": {
+            "default": "unfinished",
+            "description": "\"unfinished\" (default): pending, running and failed. \"errors\": failed and not found.",
+            "enum": [
+              "unfinished",
+              "failed",
+              "not_found",
+              "errors",
+              "pending",
+              "done"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "content_papers",
+      "route": "GET /api/content/papers",
+      "title": "The papers a stage has not finished"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "How far the content queue has got"
+      },
+      "description": "Per stage, how many papers are done, pending, running, failed or not found; the missing pool's size; what is running.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "content_status",
+      "route": "GET /api/content/status",
+      "title": "How far the content queue has got"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
         "readOnlyHint": false,
         "title": "A login link for yourself"
       },
@@ -1272,6 +1400,29 @@
       "name": "get_paper",
       "route": "GET /api/paper",
       "title": "One paper"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "What is known about a paper"
+      },
+      "description": "Everything derived about one paper so far: its sections (the methods split), code and dataset links, modality tags, its OpenAlex network, and the state of each stage. Asking moves its unfinished stages to the front of the queue, so what someone is looking at is done first.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "description": "The paper's key, from search_library.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_paper_content",
+      "route": "GET /api/paper/content",
+      "title": "What is known about a paper"
     },
     {
       "adminOnly": false,
@@ -1666,6 +1817,24 @@
         "destructiveHint": false,
         "openWorldHint": false,
         "readOnlyHint": true,
+        "title": "Who you cite most and lack"
+      },
+      "description": "The top 100 authors of the works your library cites and does not have, by summed connections then paper count.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "missing_authors",
+      "route": "GET /api/missing/authors",
+      "title": "Who you cite most and lack"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
         "title": "Which of these papers are in the library"
       },
       "description": "The userscripts' question: which of these papers is in the library. A DOI settles it; a title is matched only without one. Called with an API key (Authorization: Bearer), so it needs no csrf_token; a browser session sends one like any other POST.",
@@ -1794,6 +1963,33 @@
     {
       "adminOnly": false,
       "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Try a failed stage again"
+      },
+      "description": "Put failed (and not-found) stages back in the queue at once: one paper's, one stage's across the library, or one paper's one stage. A not-found OpenAlex lookup is only ever asked again this way.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "description": "A paper's key. Empty: every paper.",
+            "type": "string"
+          },
+          "stage": {
+            "description": "One stage. Empty: every stage.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "retry_content",
+      "route": "POST /api/papers/retry",
+      "title": "Try a failed stage again"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
         "destructiveHint": true,
         "openWorldHint": false,
         "readOnlyHint": false,
@@ -1903,6 +2099,10 @@
             ],
             "type": "string"
           },
+          "has": {
+            "description": "Only papers with: \"code\" (code links found), \"data\" (dataset links or names), \"no_text\" (no PDF text), \"no_openalex\" (OpenAlex has no record, or the lookup failed). Several, comma-separated, must all hold.",
+            "type": "string"
+          },
           "limit": {
             "default": 50,
             "description": "Papers to return. Default 50.",
@@ -1945,6 +2145,68 @@
       "name": "search_library",
       "route": "GET /api/papers",
       "title": "Search the library"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Search the papers you do not have"
+      },
+      "description": "The missing pool: works your library cites, and works citing it, that are not in the library, with how many of your papers connect to each. Searched with the library's grammar, sorted on several columns, a page at a time. It fills in as each paper's OpenAlex stage lands.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "default": 100,
+            "description": "Rows to return. Default 100.",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Rows to skip: the next value of the previous page.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "paper": {
+            "description": "Only this library paper's network: its references and citers that you lack.",
+            "type": "string"
+          },
+          "pool": {
+            "default": "all",
+            "description": "\"all\" (default), \"refs\" (works your library cites), \"citing\" (works citing your library).",
+            "enum": [
+              "all",
+              "refs",
+              "citing"
+            ],
+            "type": "string"
+          },
+          "q": {
+            "description": "The search, the library's boolean grammar. Read up to 500 characters.",
+            "type": "string"
+          },
+          "skipped": {
+            "default": "hide",
+            "description": "Default hide.",
+            "enum": [
+              "hide",
+              "show"
+            ],
+            "type": "string"
+          },
+          "sort": {
+            "description": "Columns, most important first: \"conn:desc,year:desc\". Columns: relevance (only while searching), conn, cited_by, title, year. Default conn:desc.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "search_missing",
+      "route": "GET /api/missing",
+      "title": "Search the papers you do not have"
     },
     {
       "adminOnly": false,
@@ -2214,6 +2476,40 @@
       "name": "set_themes",
       "route": "POST /api/account/themes",
       "title": "Replace your own themes"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Skip or unskip missing papers"
+      },
+      "description": "Hide works from the Missing screen (a soft hide, undone by skip false), or bring them back.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "skip": {
+            "default": true,
+            "description": "true hides them (default); false shows them again.",
+            "type": "boolean"
+          },
+          "wids": {
+            "description": "OpenAlex ids (\"W123\"). At most 1000.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "wids"
+        ],
+        "type": "object"
+      },
+      "name": "skip_missing",
+      "route": "POST /api/missing/skip",
+      "title": "Skip or unskip missing papers"
     },
     {
       "adminOnly": false,

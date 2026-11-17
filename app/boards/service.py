@@ -23,6 +23,9 @@ class BoardService:
         self.catalogue = catalogue
         self.hub = sse.Hub(max_clients=32)
         self._loop: asyncio.AbstractEventLoop | None = None
+        # The content service (app/content/), for modality tags and the
+        # Code/Datasets links; main sets it. None in tests that need neither.
+        self.content: Any = None
 
     def start(self) -> None:
         self._loop = asyncio.get_running_loop()
@@ -60,6 +63,15 @@ class BoardService:
         close enough to be that paper (96, as the old app). Raises OpError
         naming the closest titles when it is none of those."""
         paper = self.catalogue.find(spec)
+        if paper is None and self.content is not None and spec.strip()[:1] == "W" and spec.strip()[1:].isdigit():
+            # An OpenAlex id: a paper the library cites or is cited by.
+            work = self.content.pool.work(spec.strip())
+            if work is not None:
+                return {
+                    "key": work["doi"] or work["wid"], "title": work["title"], "doi": work["doi"], "year": work["year"],
+                    "journal": work["journal"], "wid": work["wid"], "pdf": work["oa_pdf"], "authors": ", ".join(work["authors"][:6]),
+                    "in_library": False,
+                }
         if paper is None and len(spec) >= 8:
             result = self.catalogue.search(spec, mode="title")
             best = result.rows[0] if result.rows else None
@@ -84,13 +96,14 @@ class BoardService:
         }
 
     def meta(self, keys: list[str], mods: bool = False, links: bool = False, titles: dict | None = None) -> dict[str, Any]:
-        """What ops ask about papers: whether each is in the library. Modality
-        tags and code/dataset links arrive with the content stages (phase 4)."""
+        """What ops ask about papers: whether each is in the library, its
+        modality tags (mods) and the code and dataset links found in it
+        (links), as the content stages have them so far."""
         out = {}
-        for key in keys:
-            paper = self.catalogue.get(key)
-            if paper is not None:
-                out[key] = {"in_library": True}
+        here = [key for key in keys if self.catalogue.get(key) is not None]
+        found = self.content.meta(here, links) if (self.content is not None and (mods or links)) else {}
+        for key in here:
+            out[key] = {"in_library": True, **found.get(key, {})}
         return out
 
     def parse_refs(self, text: str) -> list[dict[str, Any]]:
@@ -131,14 +144,17 @@ class BoardService:
 
     def remaining(self, doc: dict[str, Any]) -> list[dict[str, Any]]:
         """Every library paper not on `doc` (list or shelf), newest added
-        first, as an add would take it. Modality stamps (mods) arrive with the
-        content stages (phase 4)."""
+        first, as an add would take it, each with its modality tags (mods) as
+        the content stages have them."""
         here = ops._here(doc)
         out = []
+        mods = {}
+        if self.content is not None:
+            mods = {key: entry.get("mods") or [] for key, entry in self.content.meta([p.key for p in self.catalogue.all()], False).items()}
         for paper in self.catalogue.all():
             record = paper.record
             row = {"key": record["key"], "title": record.get("title", ""), "doi": record.get("doi", ""), "year": record.get("year"),
-                   "journal": record.get("journal", ""), "in_library": True, "mods": [], "added": record.get("date_added") or ""}
+                   "journal": record.get("journal", ""), "in_library": True, "mods": mods.get(record["key"], []), "added": record.get("date_added") or ""}
             if not ops._is_here(here, row):
                 out.append(row)
         out.sort(key=lambda row: row["added"], reverse=True)
@@ -148,6 +164,7 @@ class BoardService:
         return ops.Ctx(
             resolve=self.resolve, meta=self.meta, parse_refs=self.parse_refs, cite_styles=cite.usable(),
             list_doc=self.list_doc, tiers_doc=self.tiers_doc, shared_docs=self.shared_docs, remaining=self.remaining,
+            modalities=self.content.vocab.labels if self.content is not None else [],
         )
 
     # -- one paper, the same on every list (app/boards/sync.py) -----------------
@@ -236,10 +253,13 @@ class BoardService:
 
     def papers_for(self, doc: dict[str, Any]) -> dict[str, Any]:
         """Per row key, what the library knows now: whether it is there, has a
-        PDF, has searchable text. The row itself keeps what it was added with,
-        so a paper deleted from Zotero still reads right on the list."""
+        PDF, has searchable text, and what of its content is ready (the badges).
+        The row itself keeps what it was added with, so a paper deleted from
+        Zotero still reads right on the list."""
         out = {}
-        for row in (doc.get("items") or []) + (doc.get("staging") or []):
+        rows = (doc.get("items") or []) + (doc.get("staging") or [])
+        badges = self.content.badges([row.get("key", "") for row in rows]) if self.content is not None else {}
+        for row in rows:
             paper = self.catalogue.get(row.get("key", ""))
             if paper is None:
                 out[row["key"]] = {"in_library": False}
@@ -250,6 +270,7 @@ class BoardService:
                     "has_text": paper.has_text,
                     "authors": paper.record.get("authors", [])[:3],
                     "n_authors": len(paper.record.get("authors", [])),
+                    "content": badges.get(row["key"]),
                 }
         return out
 

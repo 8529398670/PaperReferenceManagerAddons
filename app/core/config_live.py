@@ -20,6 +20,8 @@ server/config/live.go is the same for the Go template.
 """
 from __future__ import annotations
 
+import copy
+
 import hashlib
 import os
 import tempfile
@@ -171,7 +173,13 @@ def live_config(boot: Config, boot_file: config.File, file: config.File) -> Conf
             watch_seconds=file.library.watch_seconds,
             proxy_url=file.library.proxy_url,
             cite_style=file.library.cite_style,
+            openalex_enabled=file.library.openalex_enabled,
+            openalex_api_key=file.library.openalex_api_key,
         ),
+        enrich=copy.deepcopy(file.enrich),
+        llm=copy.deepcopy(file.llm),
+        google_sheets=copy.deepcopy(file.google_sheets),
+        mri_design=copy.deepcopy(file.mri_design),
         file=file,
     )
 

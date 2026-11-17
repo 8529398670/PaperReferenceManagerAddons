@@ -20,6 +20,7 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from app.core import bootstrap, config, db, rotate
 from app.core import backup
@@ -172,9 +173,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     commands.add_parser("paths", help="where this app keeps its state")
 
-    p = commands.add_parser("import-legacy", help="bring in the old prma's lists, once")
+    p = commands.add_parser("import-legacy", help="bring in the old prma's lists (or, with --openalex, its OpenAlex cache), once")
     p.add_argument("--from", dest="source", required=True, help="the old prma's output/ folder")
     p.add_argument("--replace", action="store_true", help="replace lists already here (their old version is kept)")
+    p.add_argument("--openalex", action="store_true",
+                   help="seed each paper's OpenAlex stage, the missing pool, methods text and enrichment caches from the old caches, instead of the lists")
 
     p = commands.add_parser("logs", help="the activity log: days, or one day's entries")
     p.add_argument("--day", default="", help="a UTC date, YYYY-MM-DD; without it, list the days")
@@ -256,6 +259,9 @@ def run(arguments: list[str]) -> None:
 def command_import_legacy(store: db.Store, cfg: config.Config, args: argparse.Namespace) -> None:
     from app.boards import legacy
 
+    if args.openalex:
+        import_legacy_openalex(store, cfg, Path(args.source).expanduser())
+        return
     try:
         done = legacy.import_lists(store, Path(args.source).expanduser(), replace=args.replace)
     except legacy.LegacyError as error:
@@ -268,6 +274,49 @@ def command_import_legacy(store: db.Store, cfg: config.Config, args: argparse.Na
     if any(item.action == "skipped" for item in done):
         print("Lists already here were skipped; --replace brings them in again.")
     print("Reload the Lists screen to see them.")
+    from app.content import legacy as content_legacy
+
+    content = open_content(store, cfg)
+    try:
+        skips = content_legacy.import_skips(content, Path(args.source).expanduser())
+    finally:
+        content.close()
+    if skips:
+        print(f"{skips} skipped missing papers brought over.")
+
+
+def open_content(store: db.Store, cfg: config.Config) -> Any:
+    """The content service without a server: the catalogue as the index last
+    saw it, then brought up to date with Zotero."""
+    from app.content.service import ContentService
+    from app.library.service import LibraryService
+
+    library = LibraryService(cfg)
+    library._load_and_sync()
+    content = ContentService(
+        cfg.library.content_dir, cfg.library.index_path, library.catalogue, store,
+        cfg.config_file.parent / "modalities.yaml", lambda: cfg.library,
+    )
+    content._library = library
+    return content
+
+
+def import_legacy_openalex(store: db.Store, cfg: config.Config, source: Path) -> None:
+    from app.content import legacy as content_legacy
+
+    content = open_content(store, cfg)
+    try:
+        print(f"Seeding from {source} for {len(content.catalogue.all())} papers. Safe to stop and run again.")
+        result = content_legacy.seed(content, source)
+        content.reconcile()
+    except FileNotFoundError as error:
+        raise ManageError(str(error)) from None
+    finally:
+        content.close()
+        content._library.close()
+    print(f"OpenAlex: {result.done} papers seeded, {result.not_found} marked not found, {result.already} already here, "
+          f"{result.absent} not in the old cache (fetched as the queue gets to them).")
+    print(f"Methods text: {result.methods} papers. Enrichment caches: " + (", ".join(f"{k} {v} files" for k, v in result.enrichment.items()) or "none") + ".")
 
 
 def require_user(store: db.Store, user_id: int) -> users.User:

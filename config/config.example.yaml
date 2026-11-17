@@ -253,8 +253,70 @@ library:
   # name in config/citation-styles/ without the extension. Empty, or a style
   # that is missing or unusable, means the-journal-of-neuroscience. [live]
   cite_style: ""
+  # Fetch each paper's OpenAlex record, references and citing works, one
+  # paper at a time as papers arrive. Off stops the fetching; what was fetched
+  # stays. [live]
+  openalex_enabled: true
+  # Your OpenAlex API key (free at openalex.org). Empty asks without one, at
+  # OpenAlex's much lower anonymous limit. [live]
+  openalex_api_key: ""
 
+# Keys for enriching each paper's code and dataset links with what the hosts
+# say about them (repository descriptions, stars, file lists). Empty asks
+# without a key, at the hosts' lower anonymous limits. Used from phase 5. [live]
+enrich:
+  # A GitHub personal access token (read-only public access is enough). [live]
+  github_token: ""
+  # An OSF personal access token. [live]
+  osf_token: ""
+  # A Zenodo access token. [live]
+  zenodo_token: ""
+  # A Kaggle API key. [live]
+  kaggle_key: ""
 
+# A language model for paper summaries and the rollup (phase 7). [live]
+llm:
+  # An OpenAI API key. Empty switches summaries off. [live]
+  openai_api_key: ""
+  # Which model writes the summaries. [live]
+  model: "gpt-5.4-nano"
+
+# Mirroring lists to Google Sheets (phase 7). Each list is switched on and off,
+# and one-way or two-way, from its list menu. The credentials are an
+# installed-app OAuth client and a refresh token for it. [live]
+google_sheets:
+  # Off: no list is mirrored, whatever its own setting says. [live]
+  enabled: false
+  # The OAuth client's id. [live]
+  client_id: ""
+  # The OAuth client's secret. [live]
+  client_secret: ""
+  # A refresh token for that client, with the Sheets and Drive scopes. [live]
+  refresh_token: ""
+  # The Google Cloud project billed for the quota; empty uses the client's. [live]
+  quota_project: ""
+  # What a list switched on mirrors by default: one-way or two-way. [live]
+  default_mode: "one-way"
+  # Seconds to wait after an edit before pushing it, so a burst goes as one. [live]
+  push_delay: 5
+  # How often, in seconds, a two-way sheet is read back. [live]
+  poll_seconds: 30
+  # A push that would delete more rows than this from a sheet is held. [live]
+  max_remove: 25
+  # Email addresses each new sheet is shared with. [live]
+  share_with: []
+  # The Drive folder new sheets go in; empty is My Drive. [live]
+  folder_id: ""
+  # What a sheet's title starts with, before the list's name. [live]
+  title_prefix: "Sort – "
+
+# The MRI experiment design planner (the Inner Speech study), reached with a
+# bearer key on its /api/v1. [live]
+mri_design:
+  # The planner's address; empty switches it off. [live]
+  base_url: ""
+  # Its API key. [live]
+  api_key: ""
 
 
 # [scripts] Read by docker/run.sh, which applies a change the next time it

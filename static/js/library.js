@@ -22,6 +22,7 @@ const Library = {
     Dom.get( "library-sort" ).addEventListener( "change" , () => this.refresh() );
     Dom.get( "library-title-mode" ).addEventListener( "change" , () => this.refresh() );
     Dom.onPress( Dom.get( "library-more" ) , () => this.more() );
+    Dom.all( "[data-library-has]" ).forEach( ( box ) => box.addEventListener( "change" , () => this.refresh() ) );
     this.listen();
     await this.refresh();
   },
@@ -39,6 +40,8 @@ const Library = {
     const sort = Dom.get( "library-sort" ).value;
     params.set( "sort" , sort );
     params.set( "dir" , sort === "title" ? "asc" : "desc" );
+    const has = Dom.all( "[data-library-has]" ).filter( ( box ) => box.checked ).map( ( box ) => box.getAttribute( "data-library-has" ) );
+    if ( has.length ) params.set( "has" , has.join( "," ) );
     params.set( "limit" , String( this.pageSize ) );
     params.set( "offset" , String( offset ) );
     return params;
@@ -67,9 +70,10 @@ const Library = {
     const searching = Dom.get( "library-search" ).value.trim() !== "";
     Dom.show( Dom.get( "library-fuzzy" ) , Boolean( answer.fuzzy ) );
     Dom.show( Dom.get( "library-empty" ) , !appending && answer.total === 0 && answer.status.ready );
+    const filtered = Dom.all( "[data-library-has]" ).some( ( box ) => box.checked );
     const count = Dom.get( "library-results-count" );
     Dom.text( count , I18n.get( "library.results" ).replace( "{total}" , answer.total.toLocaleString() ) );
-    Dom.show( count , searching && !answer.fuzzy );
+    Dom.show( count , ( searching || filtered ) && !answer.fuzzy );
     this.status( answer.status );
   },
 
@@ -93,7 +97,7 @@ const Library = {
       badges.push( Dom.el( "span" , { class: "badge text-bg-light border" , text: I18n.get( "library.no_pdf" ) } ) );
     } else if ( !paper.has_text ) {
       badges.push( Dom.el( "span" , {
-        class: "badge text-bg-warning-subtle border",
+        class: "badge bg-warning-subtle text-warning-emphasis border",
         text: I18n.get( "library.no_text" ),
         attrs: { title: I18n.get( "library.no_text_title" ) },
       } ) );
@@ -101,24 +105,24 @@ const Library = {
     return Dom.el( "li" , {
       class: "paper-item",
       children: [
-        Dom.el( "div" , { class: "paper-title" , text: paper.title } ),
+        Dom.el( "div" , { children: [ Content.titleLink( paper ) ] } ),
         Dom.el( "div" , { class: "paper-meta" , text: PaperLinks.meta( paper ) } ),
-        Dom.el( "div" , { class: "paper-foot" , children: [ PaperLinks.strip( paper ) , ...badges ] } ),
+        Dom.el( "div" , { class: "paper-foot" , children: [ PaperLinks.strip( paper ) , ...badges , Content.strip( paper.key , paper.content ) ] } ),
       ],
     } );
   },
 
   // Live: the server says when the library moved.
   listen() {
-    if ( this.stream || typeof EventSource === "undefined" ) return;
-    this.stream = new EventSource( "/api/library/stream" );
-    this.stream.addEventListener( "changed" , () => {
+    if ( this.stream ) return;
+    this.stream = true;
+    Content.on( "changed" , () => {
       // Not while someone is mid-scroll through a long list: fetching again
       // would throw away the pages they loaded. The status line still moves.
       if ( this.offset <= this.pageSize ) this.refresh();
       else this.refreshStatus();
     } );
-    this.stream.addEventListener( "progress" , () => this.refreshStatus() );
+    Content.on( "progress" , () => this.refreshStatus() );
   },
 
   async refreshStatus() {

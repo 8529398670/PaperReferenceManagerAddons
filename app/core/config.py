@@ -26,6 +26,8 @@ from the tags in defaults.yaml.
 """
 from __future__ import annotations
 
+import copy
+
 import ipaddress
 import os
 import re
@@ -177,6 +179,44 @@ class LibrarySection:
     watch_seconds: int
     proxy_url: str
     cite_style: str
+    openalex_enabled: bool
+    openalex_api_key: str
+
+
+@dataclass
+class EnrichSection:
+    github_token: str
+    osf_token: str
+    zenodo_token: str
+    kaggle_key: str
+
+
+@dataclass
+class LlmSection:
+    openai_api_key: str
+    model: str
+
+
+@dataclass
+class GoogleSheetsSection:
+    enabled: bool
+    client_id: str
+    client_secret: str
+    refresh_token: str
+    quota_project: str
+    default_mode: str
+    push_delay: int
+    poll_seconds: int
+    max_remove: int
+    share_with: list[str]
+    folder_id: str
+    title_prefix: str
+
+
+@dataclass
+class MriDesignSection:
+    base_url: str
+    api_key: str
 
 
 @dataclass
@@ -201,6 +241,10 @@ class File:
     logs: LogsSection
     backups: BackupsSection
     library: LibrarySection
+    enrich: EnrichSection
+    llm: LlmSection
+    google_sheets: GoogleSheetsSection
+    mri_design: MriDesignSection
     docker: DockerSection
 
 
@@ -215,6 +259,10 @@ SECTIONS: dict[str, type] = {
     "logs": LogsSection,
     "backups": BackupsSection,
     "library": LibrarySection,
+    "enrich": EnrichSection,
+    "llm": LlmSection,
+    "google_sheets": GoogleSheetsSection,
+    "mri_design": MriDesignSection,
     "docker": DockerSection,
 }
 
@@ -265,6 +313,12 @@ class LibraryConfig:
     proxy_url: str = ""
     cite_style: str = ""
     index_path: Path = Path("cache/search.db")
+    # Each paper's derived content (OpenAlex network, methods, links) and the
+    # queue that fills it. Derived, so outside storage/ like the index: the
+    # backups would otherwise carry gigabytes anyone can fetch again.
+    content_dir: Path = Path("papers")
+    openalex_enabled: bool = True
+    openalex_api_key: str = ""
 
 
 @dataclass(frozen=True)
@@ -387,6 +441,13 @@ class Config:
 
     # The Zotero library and the search index. See app/library/.
     library: LibraryConfig = field(default_factory=LibraryConfig)
+    # Keys and settings for what later phases reach (code-host enrichment,
+    # summaries, the Sheets mirror, the MRI planner), as config.yaml has them:
+    # every one is [live], so the running Config carries the sections whole.
+    enrich: EnrichSection = field(default_factory=lambda: EnrichSection("", "", "", ""))
+    llm: LlmSection = field(default_factory=lambda: LlmSection("", ""))
+    google_sheets: GoogleSheetsSection = field(default_factory=lambda: GoogleSheetsSection(False, "", "", "", "", "one-way", 5, 30, 25, [], "", ""))
+    mri_design: MriDesignSection = field(default_factory=lambda: MriDesignSection("", ""))
 
     # secret.key, beside config_file: the one file besides the app directory
     # that a backup must include. secret_created is true when this run
@@ -809,6 +870,13 @@ def validate(file: File) -> list[str]:
         library.proxy_url == "" or (library.proxy_url.startswith(("http://", "https://")) and "{doi}" in library.proxy_url),
         "library.proxy_url must be empty or an http(s) address containing {doi}",
     )
+    check(len(library.openalex_api_key) <= 200 and "\n" not in library.openalex_api_key, "library.openalex_api_key is not a key")
+    sheets = file.google_sheets
+    check(sheets.default_mode in ("one-way", "two-way"), "google_sheets.default_mode must be one-way or two-way")
+    check(sheets.push_delay >= 0 and sheets.poll_seconds >= 5 and sheets.max_remove >= 0,
+          "google_sheets.push_delay, poll_seconds (at least 5) and max_remove must not be negative")
+    check(file.mri_design.base_url == "" or file.mri_design.base_url.startswith(("http://", "https://")),
+          "mri_design.base_url must be empty or an http(s) address")
 
     docker = file.docker
     check(bool(_IMAGE.match(docker.image)), f"docker.image {docker.image!r} is not a valid lowercase image name")
@@ -1067,6 +1135,10 @@ def build_config(file: File, path: Path, paths: "Paths", secret_key: str) -> Con
             keep=file.backups.keep,
         ),
         library=library_config(file, paths),
+        enrich=copy.deepcopy(file.enrich),
+        llm=copy.deepcopy(file.llm),
+        google_sheets=copy.deepcopy(file.google_sheets),
+        mri_design=copy.deepcopy(file.mri_design),
         secret_file=config_secret.secret_path_for(path),
         file=file,
     )
@@ -1082,6 +1154,9 @@ def library_config(file: File, paths: "Paths") -> LibraryConfig:
         proxy_url=file.library.proxy_url,
         cite_style=file.library.cite_style,
         index_path=paths.app_dir / "cache" / "search.db",
+        content_dir=paths.app_dir / "papers",
+        openalex_enabled=file.library.openalex_enabled,
+        openalex_api_key=file.library.openalex_api_key,
     )
 
 

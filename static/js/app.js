@@ -181,6 +181,9 @@ const App = {
     const loading = [];
     loading.push( Library.init( me ) );
     loading.push( Lists.init( me ) );
+    PaperView.init();
+    Missing.init();
+    StatusView.init();
     loading.push( Keys.init( me ) );
     Mcp.init( me );
     loading.push( Sessions.init() );

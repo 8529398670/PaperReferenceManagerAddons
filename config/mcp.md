@@ -36,9 +36,13 @@ Every tool POST /mcp offers. Written by scripts/api_docs.sh from the registered 
 | [`cancel_my_login_link`](#cancel_my_login_link) | [`POST /api/account/login-link/cancel`](api.md#post-apiaccountlogin-linkcancel) | any key | Stop your own login link working |
 | [`cite_papers`](#cite_papers) | [`POST /api/cite`](api.md#post-apicite) | any key | Cite papers |
 | [`cite_styles`](#cite_styles) | [`GET /api/cite/styles`](api.md#get-apicitestyles) | any key | The citation styles |
+| [`content_badges`](#content_badges) | [`POST /api/papers/badges`](api.md#post-apipapersbadges) | any key | What is ready, for many papers |
+| [`content_papers`](#content_papers) | [`GET /api/content/papers`](api.md#get-apicontentpapers) | any key | The papers a stage has not finished |
+| [`content_status`](#content_status) | [`GET /api/content/status`](api.md#get-apicontentstatus) | any key | How far the content queue has got |
 | [`create_my_login_link`](#create_my_login_link) | [`POST /api/account/login-link`](api.md#post-apiaccountlogin-link) | any key | A login link for yourself |
 | [`get_list`](#get_list) | [`GET /api/lists/{slug}`](api.md#get-apilistsslug) | any key | Read a list |
 | [`get_paper`](#get_paper) | [`GET /api/paper`](api.md#get-apipaper) | any key | One paper |
+| [`get_paper_content`](#get_paper_content) | [`GET /api/paper/content`](api.md#get-apipapercontent) | any key | What is known about a paper |
 | [`label_my_session`](#label_my_session) | [`POST /api/account/sessions/{session_id}/label`](api.md#post-apiaccountsessionssession_idlabel) | any key | Name one of your devices |
 | [`library_status`](#library_status) | [`GET /api/library/status`](api.md#get-apilibrarystatus) | any key | How the library is doing |
 | [`library_version`](#library_version) | [`GET /api/version`](api.md#get-apiversion) | any key | The library's version token |
@@ -51,17 +55,21 @@ Every tool POST /mcp offers. Written by scripts/api_docs.sh from the registered 
 | [`list_schema`](#list_schema) | [`GET /api/lists/schema`](api.md#get-apilistsschema) | any key | List ops reference |
 | [`list_team`](#list_team) | [`GET /api/team`](api.md#get-apiteam) | any key | List team |
 | [`list_version`](#list_version) | [`GET /api/lists/{slug}/history/{rev}`](api.md#get-apilistsslughistoryrev) | any key | One past version of a list |
+| [`missing_authors`](#missing_authors) | [`GET /api/missing/authors`](api.md#get-apimissingauthors) | any key | Who you cite most and lack |
 | [`papers_exist`](#papers_exist) | [`POST /api/exists`](api.md#post-apiexists) | any key | Which of these papers are in the library |
 | [`parse_refs`](#parse_refs) | [`POST /api/refs/parse`](api.md#post-apirefsparse) | any key | Read a reference list |
 | [`recent_papers`](#recent_papers) | [`GET /api/papers/recent`](api.md#get-apipapersrecent) | any key | Papers added lately |
 | [`rename_account`](#rename_account) | [`POST /api/account/rename`](api.md#post-apiaccountrename) | any key | Rename your account |
+| [`retry_content`](#retry_content) | [`POST /api/papers/retry`](api.md#post-apipapersretry) | any key | Try a failed stage again |
 | [`revoke_my_other_sessions`](#revoke_my_other_sessions) | [`POST /api/account/sessions/revoke-others`](api.md#post-apiaccountsessionsrevoke-others) | any key | Sign out all your devices |
 | [`revoke_my_session`](#revoke_my_session) | [`POST /api/account/sessions/{session_id}/revoke`](api.md#post-apiaccountsessionssession_idrevoke) | any key | Sign out one of your devices |
 | [`revoke_my_session_bulk`](#revoke_my_session_bulk) | [`POST /api/bulk/account/sessions/revoke`](api.md#post-apibulkaccountsessionsrevoke) | any key | Sign out one of your devices, for many at once |
 | [`search_library`](#search_library) | [`GET /api/papers`](api.md#get-apipapers) | any key | Search the library |
+| [`search_missing`](#search_missing) | [`GET /api/missing`](api.md#get-apimissing) | any key | Search the papers you do not have |
 | [`set_shortcuts`](#set_shortcuts) | [`POST /api/account/shortcuts`](api.md#post-apiaccountshortcuts) | any key | Change your keyboard shortcuts |
 | [`set_theme`](#set_theme) | [`POST /api/account/theme`](api.md#post-apiaccounttheme) | any key | Pick your theme |
 | [`set_themes`](#set_themes) | [`POST /api/account/themes`](api.md#post-apiaccountthemes) | any key | Replace your own themes |
+| [`skip_missing`](#skip_missing) | [`POST /api/missing/skip`](api.md#post-apimissingskip) | any key | Skip or unskip missing papers |
 | [`whoami`](#whoami) | [`GET /api/me`](api.md#get-apime) | any key | Who am I |
 
 ## admin_cancel_login_link
@@ -508,6 +516,59 @@ The CSL styles on this server, usable or not (with why), and the default.
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
 
+## content_badges
+
+A short summary of each paper's content, for the badges on every row that shows a paper.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/papers/badges`](api.md#post-apipapersbadges) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `keys` | array of string | yes |  | Paper keys. At most 5000. |
+
+## content_papers
+
+A stage's papers in some states, a page at a time: the ones still to do, or the failures with why, when they first and last failed, and how many tries -- the Status and Errors screens.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/content/papers`](api.md#get-apicontentpapers) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `dir` | string | no | one of `asc`, `desc`; default `desc` | Default desc. |
+| `limit` | integer | no | 1 to 1000; default `100` | Rows to return. Default 100. |
+| `offset` | integer | no | at least 0 | Rows to skip: the next value of the previous page. |
+| `q` | string | no |  | Only papers whose title, DOI or error contains this. |
+| `sort` | string | no | one of `added`, `title`, `year`, `attempts`, `last_failed`; default `added` | Default added (newest first). |
+| `stage` | string | no | one of `openalex`, `methods`, `code`, `datasets`, `modalities`; default `openalex` | The stage. |
+| `state` | string | no | one of `unfinished`, `failed`, `not_found`, `errors`, `pending`, `done`; default `unfinished` | "unfinished" (default): pending, running and failed. "errors": failed and not found. |
+
+## content_status
+
+Per stage, how many papers are done, pending, running, failed or not found; the missing pool's size; what is running.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/content/status`](api.md#get-apicontentstatus) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+
 ## create_my_login_link
 
 A link that signs your own account in on a browser or another device. An API key may ask only if your account let it, from a browser session (POST /api/keys/{key_id}/sign-in); its link works once, for at most 15 minutes. Only works if this key was allowed to make sign-in links, on the API keys card. Answers with login_url (open it to sign in; it works once, for at most 15 minutes), expires_at and max_uses. Any older link the account could still use stops working; its signed-in devices stay signed in. Revoking or deleting this API key voids the link while it is unused, and signs out every device it signed in.
@@ -556,6 +617,22 @@ One paper in full: everything the library knows of it.
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
 | `key` | string | no |  | The paper's Zotero key, from search_library. |
+
+## get_paper_content
+
+Everything derived about one paper so far: its sections (the methods split), code and dataset links, modality tags, its OpenAlex network, and the state of each stage. Asking moves its unfinished stages to the front of the queue, so what someone is looking at is done first.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/paper/content`](api.md#get-apipapercontent) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `key` | string | no |  | The paper's key, from search_library. |
 
 ## label_my_session
 
@@ -763,6 +840,21 @@ One kept version of a list, with its whole document.
 | `rev` | integer | yes | at least 1 | The version's rev, from list_history. |
 | `slug` | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
 
+## missing_authors
+
+The top 100 authors of the works your library cites and does not have, by summed connections then paper count.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/missing/authors`](api.md#get-apimissingauthors) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+
 ## papers_exist
 
 The userscripts' question: which of these papers is in the library. A DOI settles it; a title is matched only without one. Called with an API key (Authorization: Bearer), so it needs no csrf_token; a browser session sends one like any other POST.
@@ -832,6 +924,23 @@ Change your own display name (1-80 characters). expect, when given, is the name 
 | `display_name` | string | yes | 1 to 80 characters |  |
 | `expect` | string or null | no |  |  |
 
+## retry_content
+
+Put failed (and not-found) stages back in the queue at once: one paper's, one stage's across the library, or one paper's one stage. A not-found OpenAlex lookup is only ever asked again this way.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/papers/retry`](api.md#post-apipapersretry) |
+| Read only | no |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `key` | string | no |  | A paper's key. Empty: every paper. |
+| `stage` | string | no |  | One stage. Empty: every stage. |
+
 ## revoke_my_other_sessions
 
 End every session your account has: through an API key there is no current device to keep, so every browser signs in again. API keys keep working. Answers with how many were removed.
@@ -896,11 +1005,34 @@ Search the papers in the Zotero library, a page at a time. mode "text" (default)
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
 | `dir` | string | no | one of `asc`, `desc`; default `desc` | Default desc. |
+| `has` | string | no |  | Only papers with: "code" (code links found), "data" (dataset links or names), "no_text" (no PDF text), "no_openalex" (OpenAlex has no record, or the lookup failed). Several, comma-separated, must all hold. |
 | `limit` | integer | no | 1 to 1000; default `50` | Papers to return. Default 50. |
 | `mode` | string | no | one of `text`, `title`; default `text` | "text" (default): boolean full-text search. "title": a half-remembered title, typos and all, or a DOI. |
 | `offset` | integer | no | at least 0 | Papers to skip: the next value of the previous page. |
 | `q` | string | no |  | The search. Empty lists every paper. Read up to 500 characters. |
 | `sort` | string | no | one of `relevance`, `added`, `year`, `title`; default `relevance` | Default relevance. |
+
+## search_missing
+
+The missing pool: works your library cites, and works citing it, that are not in the library, with how many of your papers connect to each. Searched with the library's grammar, sorted on several columns, a page at a time. It fills in as each paper's OpenAlex stage lands.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/missing`](api.md#get-apimissing) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `limit` | integer | no | 1 to 1000; default `100` | Rows to return. Default 100. |
+| `offset` | integer | no | at least 0 | Rows to skip: the next value of the previous page. |
+| `paper` | string | no |  | Only this library paper's network: its references and citers that you lack. |
+| `pool` | string | no | one of `all`, `refs`, `citing`; default `all` | "all" (default), "refs" (works your library cites), "citing" (works citing your library). |
+| `q` | string | no |  | The search, the library's boolean grammar. Read up to 500 characters. |
+| `skipped` | string | no | one of `hide`, `show`; default `hide` | Default hide. |
+| `sort` | string | no |  | Columns, most important first: "conn:desc,year:desc". Columns: relevance (only while searching), conn, cited_by, title, year. Default conn:desc. |
 
 ## set_shortcuts
 
@@ -976,6 +1108,23 @@ Replace your whole list of color themes (1 to 40) and pick the one you use. them
 | `themes[].overrides` | map of string | no |  | Worked-out colors replaced by name: text, accent, accentFg, accentText, second, secondFg, secondText, link, navLink, background, surface, nested, chrome, info, infoBorder, border, and for each button variant V (Secondary, Success, Danger, Warning, Info, Light, Dark) btnV, btnVFg and btnVText. Leaving one out puts the readable color back. |
 | `themes[].second` | string | yes |  | Says where you are: active nav item, headings, info. |
 | `themes[].surface` | string | no |  | Cards. Left out: the mode's own. |
+
+## skip_missing
+
+Hide works from the Missing screen (a soft hide, undone by skip false), or bring them back.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/missing/skip`](api.md#post-apimissingskip) |
+| Read only | no |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `skip` | boolean | no | default `true` | true hides them (default); false shows them again. |
+| `wids` | array of string | yes |  | OpenAlex ids ("W123"). At most 1000. |
 
 ## whoami
 

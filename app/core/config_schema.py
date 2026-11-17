@@ -243,8 +243,24 @@ def diff(old: config.File, new: config.File) -> list[dict[str, Any]]:
     for section in schema():
         for key in section.keys:
             if before[key.path] != after[key.path]:
-                changes.append({"key": key.path, "old": before[key.path], "new": after[key.path], "apply": key.mode})
+                old_value, new_value = before[key.path], after[key.path]
+                if is_secret(key.path):
+                    old_value, new_value = _masked(old_value), _masked(new_value)
+                changes.append({"key": key.path, "old": old_value, "new": new_value, "apply": key.mode})
     return changes
+
+
+# Settings that are credentials (API keys, tokens, client secrets). A change to
+# one is reported, and goes in the activity log, without its value.
+SECRET_SUFFIXES = ("_key", "_token", "_secret")
+
+
+def is_secret(path: str) -> bool:
+    return path.rsplit(".", 1)[-1].endswith(SECRET_SUFFIXES)
+
+
+def _masked(value: Any) -> str:
+    return "(set)" if value else ""
 
 
 def keys_in_file(raw: str) -> set[str]:

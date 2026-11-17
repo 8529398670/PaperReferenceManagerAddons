@@ -22,6 +22,7 @@ const Lists = {
   me: null,
   lists: [],
   slug: null,
+  paperContext: { slug: "" , name: "" , keys: [] },
   view: null,
   items: new Map(),
   positions: new Map(),
@@ -226,7 +227,14 @@ const Lists = {
     const visible = ( doc.items || [] ).filter( ( item ) => ListTools.matches( item , view.papers[ item.key ] ) ).map( ( item ) => item.key );
     const handlers = this.handlers();
     const anchor = ListTools.anchor();
+    // One object, updated in place, so a row drawn before still steps through
+    // the list as it is now (Paper screen's Prev / Next).
+    this.paperContext.slug = this.slug;
+    this.paperContext.name = view.name || this.slug;
+    // Only papers in the library have a Paper screen to step to.
+    this.paperContext.keys = visible.filter( ( key ) => ( view.papers[ key ] || {} ).in_library !== false );
     BoardView.render( Dom.get( "list-rows" ) , {
+      paperContext: this.paperContext,
       doc: doc , papers: view.papers || {} , handlers: handlers , locked: view.locked , columns: columns ,
       items: this.items , visible: visible , positions: this.positions , cites: this.cites , anchor: anchor ,
       sections: doc.sections || [] , sectionCounts: this.sectionCounts , target: ( doc.options && doc.options.section_target ) || "" ,

@@ -1,0 +1,217 @@
+// The Status screen: how far each paper's content has got, and what failed.
+// The old /status and /errors pages, made from the queue itself rather than
+// a scan of the disk, and live: counts move as the queue works.
+//
+// One card per stage (done / pending / failed / not found, with a bar); below,
+// the papers of one stage in one state -- what is still to do, or the
+// failures with why, when, and how many tries -- with Retry one or all.
+const StatusView = {
+  stages: [ "openalex" , "methods" , "code" , "datasets" , "modalities" ],
+  stage: "openalex",
+  state: "errors",
+  sort: "added",
+  dir: "desc",
+  offset: 0,
+  pageSize: 100,
+  ticket: 0,
+  timer: null,
+  counts: null,
+
+  init() {
+    Dom.show( Dom.get( "status-panel" ) , true );
+    Dom.get( "status-state" ).addEventListener( "change" , ( event ) => {
+      this.state = event.target.value;
+      this.loadTable();
+    } );
+    Dom.typed( Dom.get( "status-search" ) , () => this.loadTable() , 250 );
+    Dom.onPress( Dom.get( "status-more" ) , () => this.loadTable( true ) );
+    Dom.onPress( Dom.get( "status-retry-all" ) , () => this.retryAll() );
+    Dom.all( "[data-status-sort]" ).forEach( ( head ) => head.addEventListener( "click" , () => {
+      const col = head.getAttribute( "data-status-sort" );
+      if ( this.sort === col ) this.dir = this.dir === "desc" ? "asc" : "desc";
+      else {
+        this.sort = col;
+        this.dir = col === "title" ? "asc" : "desc";
+      }
+      this.loadTable();
+    } ) );
+    // The counts every few seconds at most; the table only when its own
+    // counts moved, and far less often (see Content.throttle).
+    const counts = Content.throttle( () => this.loadCounts() , 5000 );
+    this.tableSoon = Content.throttle( () => this.loadTable() , 30000 );
+    const later = () => {
+      if ( Nav.current() !== "status" ) {
+        this.stale = true;
+        return;
+      }
+      counts();
+    };
+    Content.on( "queue" , later );
+    window.addEventListener( "hashchange" , () => {
+      if ( Nav.current() === "status" && ( this.stale || !this.counts ) ) this.load();
+    } );
+    if ( Nav.current() === "status" ) this.load();
+  },
+
+  async load() {
+    this.stale = false;
+    await this.loadCounts();
+    await this.loadTable();
+  },
+
+  async loadCounts() {
+    let answer;
+    try {
+      answer = await Api.request( "/api/content/status" );
+    } catch ( error ) {
+      return;
+    }
+    const before = this.counts ? JSON.stringify( this.counts.stages[ this.stage ] ) : "";
+    this.counts = answer;
+    this.drawCards( answer );
+    this.drawLines( answer );
+    this.drawTabs( answer );
+    if ( before && before !== JSON.stringify( answer.stages[ this.stage ] ) && this.offset <= this.pageSize ) this.tableSoon();
+  },
+
+  drawLines( answer ) {
+    const library = answer.library;
+    Dom.text( Dom.get( "status-library" ) , I18n.get( "status.library_line" )
+      .replace( "{papers}" , library.papers.toLocaleString() )
+      .replace( "{with_text}" , library.with_text.toLocaleString() )
+      .replace( "{no_pdf}" , library.no_pdf.toLocaleString() ) );
+    const pool = answer.pool;
+    Dom.text( Dom.get( "status-pool" ) , I18n.get( "status.pool_line" )
+      .replace( "{all}" , pool.all.toLocaleString() ).replace( "{refs}" , pool.refs.toLocaleString() )
+      .replace( "{citing}" , pool.citing.toLocaleString() ).replace( "{papers}" , pool.papers.toLocaleString() ) );
+    let note = "";
+    if ( !answer.openalex_enabled ) note = I18n.get( "status.openalex_off" );
+    else if ( !answer.openalex_key ) note = I18n.get( "status.openalex_no_key" );
+    Dom.text( Dom.get( "status-openalex-note" ) , note );
+    Dom.show( Dom.get( "status-openalex-note" ) , Boolean( note ) );
+  },
+
+  drawCards( answer ) {
+    const holder = Dom.get( "status-cards" );
+    Dom.clear( holder );
+    this.stages.forEach( ( stage ) => {
+      const counts = answer.stages[ stage ] || {};
+      const total = [ "done" , "pending" , "running" , "failed" , "not_found" ].reduce( ( sum , state ) => sum + ( counts[ state ] || 0 ) , 0 );
+      const settled = ( counts.done || 0 ) + ( counts.not_found || 0 );
+      const percent = total ? Math.floor( ( settled / total ) * 100 ) : 0;
+      const bar = Dom.el( "div" , { class: "progress-bar" } );
+      bar.style.width = percent + "%";
+      const running = Object.values( answer.running || {} ).length && ( answer.running.net && stage === "openalex" || answer.running.local && stage !== "openalex" );
+      const line = ( key , n ) => Dom.el( "li" , { class: "d-flex justify-content-between" , children: [
+        Dom.el( "span" , { text: I18n.get( "content.state_" + key ) } ) , Dom.el( "span" , { class: "fw-semibold" , text: ( n || 0 ).toLocaleString() } ),
+      ] } );
+      const button = Dom.el( "button" , {
+        class: "card h-100 text-start status-stage w-100" + ( stage === this.stage ? " border-primary" : "" ),
+        attrs: { type: "button" , "aria-pressed": String( stage === this.stage ) },
+        on: { click: () => { this.stage = stage; this.drawCards( answer ); this.drawTabs( answer ); this.loadTable(); } },
+        children: [ Dom.el( "div" , { class: "card-body" , children: [
+          Dom.el( "div" , { class: "d-flex align-items-center gap-2 mb-2" , children: [
+            Dom.el( "h3" , { class: "h6 mb-0" , text: Content.stageName( stage ) } ),
+            running ? Dom.el( "span" , { class: "spinner-border spinner-border-sm text-secondary" , attrs: { "aria-hidden": "true" } } ) : null,
+            Dom.el( "span" , { class: "ms-auto small text-body-secondary" , text: percent + "%" } ),
+          ].filter( Boolean ) } ),
+          Dom.el( "div" , { class: "progress mb-2" , attrs: { role: "progressbar" , "aria-valuenow": String( percent ) , "aria-valuemin": "0" , "aria-valuemax": "100" } , children: [ bar ] } ),
+          Dom.el( "ul" , { class: "list-unstyled small mb-0" , children: [
+            line( "done" , counts.done ), line( "pending" , ( counts.pending || 0 ) + ( counts.running || 0 ) ),
+            line( "failed" , counts.failed ), line( "not_found" , counts.not_found ),
+          ] } ),
+        ] } ) ],
+      } );
+      holder.appendChild( Dom.el( "div" , { class: "col" , children: [ button ] } ) );
+    } );
+  },
+
+  drawTabs( answer ) {
+    Dom.text( Dom.get( "status-table-heading" ) , I18n.get( "status.table_heading" ).replace( "{stage}" , Content.stageName( this.stage ) ) );
+    const counts = answer.stages[ this.stage ] || {};
+    const options = {
+      errors: ( counts.failed || 0 ) + ( counts.not_found || 0 ), failed: counts.failed || 0, not_found: counts.not_found || 0,
+      unfinished: ( counts.pending || 0 ) + ( counts.running || 0 ) + ( counts.failed || 0 ), pending: ( counts.pending || 0 ) + ( counts.running || 0 ),
+      done: counts.done || 0,
+    };
+    Dom.all( "#status-state option" ).forEach( ( option ) => {
+      Dom.text( option , I18n.get( "status.show_" + option.value ).replace( "{n}" , ( options[ option.value ] || 0 ).toLocaleString() ) );
+    } );
+  },
+
+  params( offset ) {
+    const params = new URLSearchParams( { stage: this.stage , state: this.state , sort: this.sort , dir: this.dir , limit: String( this.pageSize ) , offset: String( offset ) } );
+    const text = Dom.get( "status-search" ).value.trim();
+    if ( text ) params.set( "q" , text );
+    return params;
+  },
+
+  async loadTable( more ) {
+    const ticket = ++this.ticket;
+    const offset = more ? this.offset : 0;
+    let answer;
+    try {
+      answer = await Api.request( "/api/content/papers?" + this.params( offset ) );
+    } catch ( error ) {
+      if ( ticket === this.ticket ) Dom.toast( error.message , "error" );
+      return;
+    }
+    if ( ticket !== this.ticket ) return;
+    const body = Dom.get( "status-rows" );
+    if ( !more ) Dom.clear( body );
+    answer.papers.forEach( ( row ) => body.appendChild( this.row( row ) ) );
+    Content.label( body.closest( "table" ) );
+    this.offset = answer.next == null ? offset + answer.papers.length : answer.next;
+    Dom.show( Dom.get( "status-more" ) , answer.next != null );
+    Dom.show( Dom.get( "status-empty" ) , answer.total === 0 );
+    Dom.text( Dom.get( "status-total" ) , I18n.get( "missing.showing" ).replace( "{shown}" , this.offset.toLocaleString() ).replace( "{total}" , answer.total.toLocaleString() ) );
+    const retryable = [ "errors" , "failed" , "not_found" ].includes( this.state ) && answer.total > 0;
+    Dom.show( Dom.get( "status-retry-all" ) , retryable );
+    Dom.all( "[data-status-sort]" ).forEach( ( head ) => {
+      const col = head.getAttribute( "data-status-sort" );
+      const th = head.closest( "th" );
+      th.setAttribute( "aria-sort" , col === this.sort ? ( this.dir === "desc" ? "descending" : "ascending" ) : "none" );
+    } );
+  },
+
+  when( seconds ) {
+    return Dom.when( seconds ? new Date( seconds * 1000 ).toISOString() : "" , "" );
+  },
+
+  row( row ) {
+    const links = [];
+    if ( row.doi ) links.push( PaperLinks.link( "https://doi.org/" + row.doi , "links.doi" , "links.doi_title" ) );
+    if ( row.doi ) links.push( PaperLinks.link( "https://api.openalex.org/works/https://doi.org/" + row.doi , "missing.openalex" , "missing.openalex_title" ) );
+    const actions = Dom.el( "td" , { class: "text-end" } );
+    if ( row.state === "failed" || row.state === "not_found" ) {
+      actions.appendChild( Dom.el( "button" , {
+        class: "btn btn-outline-secondary btn-sm",
+        text: I18n.get( "content.retry" ),
+        on: { click: async () => {
+          await Api.post( "/api/papers/retry" , { key: row.key , stage: this.stage } );
+          await this.load();
+        } },
+      } ) );
+    }
+    return Dom.el( "tr" , { children: [
+      Dom.el( "td" , { children: [
+        Content.titleLink( row ),
+        Dom.el( "div" , { class: "paper-meta" , text: [ row.year || "" , row.journal || "" ].filter( Boolean ).join( " · " ) } ),
+        Dom.el( "span" , { class: "paper-links small" , children: links } ),
+      ] } ),
+      Dom.el( "td" , { children: [ PaperView.stateBadge( row.state ) ] } ),
+      Dom.el( "td" , { class: "small" , text: row.error || "" } ),
+      Dom.el( "td" , { class: "small text-nowrap" , children: [ this.when( row.first_failed ) ] } ),
+      Dom.el( "td" , { class: "small text-nowrap" , children: [ this.when( row.last_failed ) ] } ),
+      Dom.el( "td" , { class: "text-end" , text: String( row.attempts || 0 ) } ),
+      actions,
+    ] } );
+  },
+
+  async retryAll() {
+    if ( !( await Dom.confirm( I18n.get( "status.retry_all_confirm" ).replace( "{stage}" , Content.stageName( this.stage ) ) ) ) ) return;
+    const answer = await Api.post( "/api/papers/retry" , { stage: this.stage } );
+    Dom.toast( I18n.get( "status.retried" ).replace( "{n}" , answer.queued ) , "success" );
+    await this.load();
+  },
+};

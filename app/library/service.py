@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any
+from typing import Any, Callable
 
 from app.core import graceful, sse
 from app.core.config import Config
@@ -26,21 +26,32 @@ class LibraryService:
         library = Library(cfg.library.zotero_dir, cfg.library.index_path.parent)
         self.index = Index(cfg.library.index_path)
         self.catalogue = Catalogue(library, self.index)
-        self.hub = sse.Hub()
+        self.hub = sse.Hub(max_clients=32)
         self._loop: asyncio.AbstractEventLoop | None = None
         self._task: asyncio.Task[None] | None = None
         self._loaded = False
         self.catalogue.on_event = self._publish
+        # Hears that a look at Zotero found something (or was the first):
+        # the content queue works out what to do about it. See app/content/.
+        self.after_sync: Callable[[], None] | None = None
 
     def _publish(self, name: str, data: dict[str, Any]) -> None:
         if self._loop is not None:
             sse.publish_from_thread(self._loop, self.hub, sse.event(name, json.dumps(data)))
 
+    def publish(self, name: str, data: dict[str, Any]) -> None:
+        """An event for the library's stream from any thread."""
+        self._publish(name, data)
+
     def _load_and_sync(self, force: bool = False) -> Any:
-        if not self._loaded:
+        first = not self._loaded
+        if first:
             self.catalogue.load()
             self._loaded = True
-        return self.catalogue.sync(force=force)
+        result = self.catalogue.sync(force=force)
+        if self.after_sync is not None and (first or (result is not None and result.any())):
+            self.after_sync()
+        return result
 
     async def _watch(self, settings: Holder) -> None:
         while True:

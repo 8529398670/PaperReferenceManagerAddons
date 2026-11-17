@@ -1,0 +1,60 @@
+# The MODALITY vocabulary: which recording / imaging methods a paper used.
+#
+# One list, used everywhere a paper (or a code / data record) is tagged with a
+# modality: the pills under a paper's title, the modality filter, and any
+# per-modality column. Add a modality here and every surface picks it up on
+# the next scan -- no code change. Editing this file changes its signature, so
+# papers tagged under the old vocabulary are re-tagged on their next pass.
+#
+# Each entry is:
+#
+#   - label: fMRI
+#     phrases: ["functional MRI", "functional magnetic resonance"]
+#
+#   label     what you write is BOTH what's displayed (casing kept exactly)
+#             and what gets searched for. Matched as a WHOLE WORD, so "PET"
+#             can't fire inside "dataset", and case-insensitively, so "fMRI"
+#             finds fMRI / FMRI / fmri on its own.
+#   phrases   OPTIONAL spelled-out forms, matched as substrings -- so a STEM
+#             like "electroencephalogra" covers -phy / -m / -phic in one go.
+#             A list, or a bare string for one phrase. Leave it off and the
+#             entry can just be the label string (`- MRI`).
+#
+# WRITE THINGS THE WAY YOU SAY THEM. The lowercasing is handled for you, so
+# "functional MRI" is fine -- nothing here needs to be pre-lowercased.
+#
+# ORDER MATTERS: it's the order pills, chips and columns render in. Appending
+# is free; reordering reshuffles those, so only do it on purpose.
+#
+# What gets scanned is deliberately NOT the full text of a paper: a reference
+# list names every modality a paper merely cites. See app/content/modalities.py
+# (tag) for what is read and why.
+
+modalities:
+  - label: fMRI
+    phrases: ["functional MRI", "functional magnetic resonance"]
+  - label: sMRI
+    phrases: ["structural MRI"]
+  - label: rsMRI
+    phrases: ["resting state MRI"]
+  - label: EEG
+    phrases: [electroencephalogra]
+  - label: ECoG
+    phrases: [electrocorticogra]
+  - label: fNIRS
+    phrases: ["functional near-infrared", "functional near infrared", "near-infrared spectroscopy"]
+  - label: MEG
+    phrases: [magnetoencephalogra]
+  - label: PET
+    phrases: ["positron emission"]
+  - label: EMG
+    phrases: [electromyography]
+
+  # --- add your own below ----------------------------------------------
+  # - label: DTI
+  #   phrases: ["diffusion tensor"]
+  # - label: sEEG
+  #   phrases: [stereoelectroencephalogra, stereo-EEG]
+  # - label: TMS
+  #   phrases: transcranial magnetic stimulation   # one phrase: a bare string is fine
+  # - MRI                                          # no phrases: just the label

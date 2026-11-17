@@ -29,6 +29,7 @@ from app.core.request_log import RequestLog
 from app.core.security import LoadActor
 from app.core.static_files import StaticServer
 from app.boards.service import BoardService
+from app.content.service import ContentService
 from app.library.service import LibraryService
 from app.routes import build_routes
 
@@ -77,6 +78,15 @@ def build_app(
     registry.register("library-sync", housekeeping.HOUR_SECONDS, library.sync_job)
     boards = BoardService(store, library.catalogue)
     registry.register("lists-purge", housekeeping.HOUR_SECONDS, boards.purge_job)
+    # Each paper's derived content, queued and filled one paper at a time.
+    # See app/content/.
+    content = ContentService(
+        cfg.library.content_dir, cfg.library.index_path, library.catalogue, store,
+        cfg.config_file.parent / "modalities.yaml", lambda: settings.get().library,
+    )
+    content.publish = library.publish
+    library.after_sync = lambda: setattr(content, "dirty", True)
+    boards.content = content
 
     @asynccontextmanager
     async def lifespan(app: Starlette) -> AsyncIterator[None]:
@@ -88,6 +98,7 @@ def build_app(
             logger.system(logs.LEVEL_WARN, "secret key moved to secret.key", {"config": str(cfg.config_file), "secret": str(cfg.secret_file)})
         watcher = asyncio.create_task(config_watch(settings))
         library.start(settings)
+        content.start()
         boards.start()
         registry.start()
         try:
@@ -97,10 +108,12 @@ def build_app(
             # on_stop). Jobs next, since they write to the log; the log last.
             watcher.cancel()
             await library.stop()
+            await content.stop()
             boards.stop()
             await registry.stop()
             log_hub.close()
             await run_in_threadpool(library.close)
+            await run_in_threadpool(content.close)
             logger.on_flushed = None
             logger.system(logs.LEVEL_INFO, "server stopped")
             await run_in_threadpool(logger.close)
@@ -135,6 +148,7 @@ def build_app(
     app.state.log_hub = log_hub
     app.state.library = library
     app.state.boards = boards
+    app.state.content = content
     app.state.language = lang
     # Reported to MCP clients as serverInfo.version.
     app.state.version = version
