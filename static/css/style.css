@@ -920,6 +920,8 @@ body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-ins
    with a backdrop of its own between them. */
 #confirm-modal { z-index: 1070; }
 .modal-backdrop ~ .modal-backdrop { z-index: 1065; }
+/* phone-only: the add-a-paper box's narrow form, the field on its own line
+   above its buttons. */
 @media (max-width: 575.98px) {
   #list-add-wrap .input-group { flex-wrap: wrap; }
   #list-add { flex-basis: 100%; border-radius: var(--bs-border-radius) !important; margin-bottom: 0.25rem; }

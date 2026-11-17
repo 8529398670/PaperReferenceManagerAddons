@@ -78,7 +78,7 @@ class MCPParity(RoutesTestCase):
         RequireSession and RequireOwner can say no to the key itself."""
         problems = []
         for name, operation in sorted(operations(api_spec()[0]).items()):
-            if operation["public"] or operation["path"] in ("/api/logout", "/api/owner/logs/stream"):
+            if operation["public"] or operation["path"] in ("/api/logout", "/api/owner/logs/stream", "/api/library/stream", "/api/lists/stream"):
                 continue
             path = re.sub(r"\{\w+\}", "999", operation["path"])
             status, reply = self.call(operation["method"], path, key=self.admin_key, body={})

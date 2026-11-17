@@ -75,7 +75,7 @@ class LibraryRoutesTest(LibraryCase):
         self.assertEqual(self.call("POST", "/api/exists", cookie=self.user_cookie, body={"queries": []})[0], 403)
         token = self.csrf(self.user_cookie)
         self.assertEqual(self.call("POST", "/api/exists", cookie=self.user_cookie, body={"queries": [], "csrf_token": token})[0], 200)
-        self.assertEqual(self.call("POST", "/api/exists", key=self.user_key, body={"queries": [{}] * 5001})[0], 413)
+        self.assertEqual(self.call("POST", "/api/exists", key=self.user_key, body={"queries": [{}] * 5001})[0], 400)
         status, body = self.call("GET", "/api/version", key=self.user_key)
         self.assertEqual((status, body["papers"]), (200, 3))
 
@@ -150,7 +150,7 @@ class LibraryRoutesTest(LibraryCase):
             self.assertEqual(status, 200)
             return body["result"]
 
-        found = tool("search_library", {"query": "embeddings"}, self.user_key)["structuredContent"]
+        found = tool("search_library", {"q": "embeddings"}, self.user_key)["structuredContent"]
         self.assertEqual([p["key"] for p in found["papers"]], [MINDALIGN])
         result = tool("list_ops", {"slug": "agent", "ops": [{"op": "add", "paper": MINDALIGN}]}, self.user_key)
         self.assertEqual(result["structuredContent"]["rev"], 2)

@@ -9,7 +9,7 @@ from starlette.routing import Route
 
 from app.tests.route_support import RoutesTestCase
 
-STREAMS = {"/api/owner/logs/stream"}  # never end; app/core/sse.py sets no-store itself
+STREAMS = {"/api/owner/logs/stream", "/api/library/stream", "/api/lists/stream"}  # never end; app/core/sse.py sets no-store itself
 
 
 class NoStoreTest(RoutesTestCase):
