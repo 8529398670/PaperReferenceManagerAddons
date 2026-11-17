@@ -20,6 +20,7 @@ This file is generated: do not edit it. Change the docs next to the handlers and
 - [Library](#library)
 - [Lists](#lists)
 - [Missing papers](#missing-papers)
+- [Screener](#screener)
 - [Schemas](#schemas)
 
 ## Calling the API
@@ -3421,6 +3422,357 @@ Hide works from the Missing screen (a soft hide, undone by skip false), or bring
 |---|---|---|---|---|
 | `changed` | integer | yes |  |  |
 
+## Screener
+
+| Method | Path | Summary | Who may call |
+|---|---|---|---|
+| POST | [`/api/review/check`](#post-apireviewcheck) | Check screener rules without saving | browser session or API key, admins |
+| GET | [`/api/review/guide`](#get-apireviewguide) | How screener rules are written | browser session or API key, admins |
+| GET | [`/api/review/overrides`](#get-apireviewoverrides) | Hand-checked review values | browser session or API key, admins |
+| POST | [`/api/review/overrides`](#post-apireviewoverrides) | Set a paper's hand-checked values | browser session or API key, admins |
+| GET | [`/api/review/progress`](#get-apireviewprogress) | How far the screener has got | browser session or API key, admins |
+| GET | [`/api/review/setups`](#get-apireviewsetups) | The screener's rule setups | browser session or API key, admins |
+| POST | [`/api/review/setups`](#post-apireviewsetups) | Make a rule setup | browser session or API key, admins |
+| GET | [`/api/review/setups/{setup}`](#get-apireviewsetupssetup) | One rule setup | browser session or API key, admins |
+| POST | [`/api/review/setups/{setup}`](#post-apireviewsetupssetup) | Save a rule setup | browser session or API key, admins |
+| POST | [`/api/review/setups/{setup}/activate`](#post-apireviewsetupssetupactivate) | Use a rule setup | browser session or API key, admins |
+| POST | [`/api/review/setups/{setup}/delete`](#post-apireviewsetupssetupdelete) | Delete a rule setup | browser session or API key, admins |
+| GET | [`/api/review/setups/{setup}/export`](#get-apireviewsetupssetupexport) | A rule setup as YAML | browser session or API key, admins |
+| POST | [`/api/review/setups/{setup}/reset`](#post-apireviewsetupssetupreset) | Reset the default rule setup | browser session or API key, admins |
+| POST | [`/api/review/test`](#post-apireviewtest) | Try the screener on one paper | browser session or API key, admins |
+
+### POST /api/review/check
+
+Check screener rules without saving
+
+Whether rules load (every pattern compiles, every value has the right type): a whole document, a setup, or a setup with changes made. And how many papers using them would re-screen.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, admins |
+| MCP tool | [`check_screener_rules`](mcp.md#check_screener_rules) |
+| Errors | 400, 401, 403, 404, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `changes` | array of object or null | no |  | Changes to make to the setup's rules instead of sending them whole: [{path, value}] or [{path, remove: true}]. A change's path is how differences() names a place: keys joined by dots (thresholds.full.fmri_full_min.value), [name] for the item of a list whose name is that (extraction.fields[TR].patterns, datasets[NSD (Natural Scenes Dataset)]), [3] for an item by its place from 0, and [+] at the end to append. {path, value} sets it; {path, remove: true} takes it out. |
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `rules` | object or null | no |  | A whole rules document to check. |
+| `setup` | string | no |  | A setup to check, or to make changes to first. |
+
+**Reply 200**: Success
+
+[`ReviewCheck`](#reviewcheck).
+
+### GET /api/review/guide
+
+How screener rules are written
+
+What an agent needs to write a setup: how patterns, macros and templates work, the change-path syntax, and the document's schema.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, admins |
+| MCP tool | [`screener_rules_guide`](mcp.md#screener_rules_guide) |
+| Errors | 401, 403, 429, 503 |
+
+**Reply 200**: Success
+
+[`ScreenerGuide`](#screenerguide).
+
+### GET /api/review/overrides
+
+Hand-checked review values
+
+Values typed in by hand, by paper: each wins over what the screener extracted, whatever the setup, and flags the paper.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, admins |
+| MCP tool | [`list_review_overrides`](mcp.md#list_review_overrides) |
+| Errors | 401, 403, 429, 503 |
+
+**Reply 200**: Success
+
+[`ReviewOverrides`](#reviewoverrides).
+
+### POST /api/review/overrides
+
+Set a paper's hand-checked values
+
+Replaces one paper's overrides; sending no fields removes them. Nothing is re-screened: overrides apply when read.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, admins |
+| MCP tool | [`set_review_override`](mcp.md#set_review_override) |
+| Errors | 400, 401, 403, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `fields` | map of string | yes |  | Field -> value. Empty values are dropped; none at all deletes the override. |
+| `key` | string | yes | at least 1 characters | The paper's key (or its DOI). |
+
+**Reply 200**: Success
+
+[`ReviewOverrides`](#reviewoverrides).
+
+### GET /api/review/progress
+
+How far the screener has got
+
+Candidates, and how many are screened under the setup in use, waiting, or failed.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, admins |
+| MCP tool | [`screener_progress`](mcp.md#screener_progress) |
+| Errors | 401, 403, 429, 503 |
+
+**Reply 200**: Success
+
+[`ReviewProgress`](#reviewprogress).
+
+### GET /api/review/setups
+
+The screener's rule setups
+
+Every named set of screener rules, and which one is in use.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, admins |
+| MCP tool | [`list_screener_setups`](mcp.md#list_screener_setups) |
+| Errors | 401, 403, 429, 503 |
+
+**Reply 200**: Success
+
+[`ScreenerSetups`](#screenersetups).
+
+### POST /api/review/setups
+
+Make a rule setup
+
+A new named setup: a copy of another (source), or a whole rules document (rules), with changes made to it. Rules that do not load are a 400 listing each problem with where it is; nothing is made. It is not used until activated.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, admins |
+| MCP tool | [`create_screener_setup`](mcp.md#create_screener_setup) |
+| Errors | 400, 401, 403, 404, 409, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `activate` | boolean | no |  | Use it at once (re-screens the candidate papers). |
+| `changes` | array of object or null | no |  | Changes to make to the setup's rules instead of sending them whole: [{path, value}] or [{path, remove: true}]. A change's path is how differences() names a place: keys joined by dots (thresholds.full.fmri_full_min.value), [name] for the item of a list whose name is that (extraction.fields[TR].patterns, datasets[NSD (Natural Scenes Dataset)]), [3] for an item by its place from 0, and [+] at the end to append. {path, value} sets it; {path, remove: true} takes it out. |
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `description` | string | no | at most 2000 characters | What it is for. |
+| `name` | string | yes | 1 to 80 characters | Its name, unique. |
+| `rules` | object or null | no |  | A whole rules document to start from instead of a copy. |
+| `source` | string | no | default `default` | The setup to copy (default "default"). Ignored when rules are sent. |
+
+**Reply 201**: Success
+
+[`ScreenerSetup`](#screenersetup).
+
+### GET /api/review/setups/{setup}
+
+One rule setup
+
+A setup's whole rules -- every word list, threshold, extraction field and dataset -- with config/review.yaml's defaults beside them and the paths where they differ.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, admins |
+| MCP tool | [`get_screener_setup`](mcp.md#get_screener_setup) |
+| Errors | 400, 401, 403, 404, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `setup` | path | string | yes | 1 to 64 characters | The setup's id, from list_screener_setups ("default" is config/review.yaml). |
+
+**Reply 200**: Success
+
+[`ScreenerSetup`](#screenersetup).
+
+### POST /api/review/setups/{setup}
+
+Save a rule setup
+
+Changes a setup's rules (whole, or by changes), name or description. A pattern that does not compile, or a missing or wrong-typed value, is a 400 listing each problem with where it is; nothing is saved. Saving the setup in use re-screens the candidate papers one at a time; saving another re-screens nothing.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, admins |
+| MCP tool | [`save_screener_setup`](mcp.md#save_screener_setup) |
+| Errors | 400, 401, 403, 404, 409, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `setup` | path | string | yes | 1 to 64 characters | The setup's id, from list_screener_setups ("default" is config/review.yaml). |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `base_signature` | string | no |  | The signature the setup had when read: if it has changed since, nothing is saved and the answer is a 409 with the current signature. |
+| `changes` | array of object or null | no |  | Changes to make to the setup's rules instead of sending them whole: [{path, value}] or [{path, remove: true}]. A change's path is how differences() names a place: keys joined by dots (thresholds.full.fmri_full_min.value), [name] for the item of a list whose name is that (extraction.fields[TR].patterns, datasets[NSD (Natural Scenes Dataset)]), [3] for an item by its place from 0, and [+] at the end to append. {path, value} sets it; {path, remove: true} takes it out. |
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `description` | string or null | no | at most 2000 characters | A new description (not for the default). |
+| `name` | string or null | no | at most 80 characters | A new name (not for the default). |
+| `rules` | object or null | no |  | The whole rules document. |
+
+**Reply 200**: Success
+
+[`ScreenerSetup`](#screenersetup).
+
+### POST /api/review/setups/{setup}/activate
+
+Use a rule setup
+
+Screens with this setup from now on. Each candidate paper takes the result it already has for this setup's rules when its text has not changed, and is re-screened in the background otherwise.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, admins |
+| MCP tool | [`use_screener_setup`](mcp.md#use_screener_setup) |
+| Errors | 400, 401, 403, 404, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `setup` | path | string | yes | 1 to 64 characters | The setup's id, from list_screener_setups ("default" is config/review.yaml). |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+
+**Reply 200**: Success
+
+[`ScreenerSetup`](#screenersetup).
+
+### POST /api/review/setups/{setup}/delete
+
+Delete a rule setup
+
+Deletes a setup for good. The default, and the setup in use, cannot be deleted.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, admins |
+| MCP tool | [`delete_screener_setup`](mcp.md#delete_screener_setup) |
+| Errors | 400, 401, 403, 404, 409, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `setup` | path | string | yes | 1 to 64 characters | The setup's id, from list_screener_setups ("default" is config/review.yaml). |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+
+**Reply 200**: Success
+
+[`ScreenerSetups`](#screenersetups).
+
+### GET /api/review/setups/{setup}/export
+
+A rule setup as YAML
+
+A setup's rules in config/review.yaml's shape: to keep, or to paste in as the new defaults.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, admins |
+| MCP tool | None, HTTP only: A file to download; get_screener_setup gives the same rules as JSON. |
+| Errors | 400, 401, 403, 404, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `setup` | path | string | yes | 1 to 64 characters | The setup's id, from list_screener_setups ("default" is config/review.yaml). |
+
+**Reply 200**: Success
+
+Text, as `application/yaml`.
+
+### POST /api/review/setups/{setup}/reset
+
+Reset the default rule setup
+
+Drops the default setup's edits: config/review.yaml as it is. Only the default can be reset.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, admins |
+| MCP tool | [`reset_screener_setup`](mcp.md#reset_screener_setup) |
+| Errors | 400, 401, 403, 404, 409, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `setup` | path | string | yes | 1 to 64 characters | The setup's id, from list_screener_setups ("default" is config/review.yaml). |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+
+**Reply 200**: Success
+
+[`ScreenerSetup`](#screenersetup).
+
+### POST /api/review/test
+
+Try the screener on one paper
+
+Screens one library paper (key) or pasted text with the rules sent (unsaved), a setup, or the setup in use -- with changes made first, if sent -- and returns the verdict, why, and every extracted field with its quote. Nothing is stored.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, admins |
+| MCP tool | [`test_screener`](mcp.md#test_screener) |
+| Errors | 400, 401, 403, 404, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `abstract` | string | no |  |  |
+| `changes` | array of object or null | no |  | Changes to make to the setup's rules instead of sending them whole: [{path, value}] or [{path, remove: true}]. A change's path is how differences() names a place: keys joined by dots (thresholds.full.fmri_full_min.value), [name] for the item of a list whose name is that (extraction.fields[TR].patterns, datasets[NSD (Natural Scenes Dataset)]), [3] for an item by its place from 0, and [+] at the end to append. {path, value} sets it; {path, remove: true} takes it out. |
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `key` | string | no |  | A paper to screen, by its key. |
+| `mode` | string | no | one of `full`, `abstract`; default `full` |  |
+| `rules` | object or null | no |  | Rules to test with, not saved. |
+| `setup` | string | no |  | A setup to test with (when no rules are sent); none means the one in use. |
+| `text` | string | no |  | Pasted text to screen as the paper's body (and methods). |
+| `title` | string | no |  |  |
+
+**Reply 200**: Success
+
+[`ReviewTest`](#reviewtest).
+
 ## Schemas
 
 The shapes the routes above refer to by name.
@@ -3604,6 +3956,37 @@ The shapes the routes above refer to by name.
 | `compressed` | integer | yes |  |  |
 | `deleted` | integer | yes |  |  |
 
+### ReviewCheck
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `problems` | array of map of string | yes |  | Each problem: path (where it is) and message. Empty: the rules load. |
+| `rescreen` | integer | yes |  | Papers using these rules would re-screen (or take a kept result for). |
+| `signature` | string | yes |  | The rules' signature; the same as the one in use means using them changes nothing. |
+
+### ReviewOverrides
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `overrides` | map of map of string | yes |  | Paper key (or DOI) -> {field: value}. |
+
+### ReviewProgress
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `in_use` | string | yes |  |  |
+| `progress` | object | yes |  |  |
+| `signature` | string | yes |  |  |
+
+### ReviewTest
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `elapsed_ms` | integer | yes |  |  |
+| `paper` | object | yes |  |  |
+| `result` | object | yes |  | The review as the screens would show it: verdict with its why, fields with quotes. |
+| `saved` | object or null | yes |  | The same paper under the setup in use, when testing other rules on a paper. |
+
 ### Revoked
 
 | Field | Type | Required | Limits | Description |
@@ -3611,6 +3994,46 @@ The shapes the routes above refer to by name.
 | `api_keys` | integer | yes |  |  |
 | `login_links` | integer | yes |  |  |
 | `sessions` | integer | yes |  |  |
+
+### ScreenerGuide
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `about` | string | yes |  | How the rules work: patterns, macros, templates. |
+| `change_paths` | string | yes |  | The path syntax changes use. |
+| `groups` | array of string | yes |  |  |
+| `params` | array of string | yes |  |  |
+| `post_kinds` | array of string | yes |  |  |
+| `schema` | object | yes |  | The rules document's JSON schema. |
+| `vocab_names` | array of string | yes |  |  |
+
+### ScreenerSetup
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `changed` | array of string | yes |  | Paths where the setup differs from the defaults, in the change-path syntax. |
+| `defaults` | object | yes |  | config/review.yaml as shipped. |
+| `edited` | boolean | yes |  |  |
+| `groups` | array of string | yes |  |  |
+| `in_use` | string | yes |  | The id of the setup in use. |
+| `in_use_signature` | string | yes |  |  |
+| `params` | array of string | yes |  |  |
+| `post_kinds` | array of string | yes |  |  |
+| `problem` | string | yes |  |  |
+| `progress` | object | yes |  | Of the setup in use: candidates (papers on a list or with a picked figure), and of their review tasks: done, current (screened under the rules in use), waiting, failed, included, borderline. |
+| `rules` | object | yes |  | The setup's rules (config/review.yaml's shape). |
+| `setup` | object | yes |  | The setup's id, name, description and state, as in list_screener_setups. |
+| `signature` | string | yes |  | The setup's signature: send it back as base_signature when saving. |
+| `updated_at` | number or null | yes |  |  |
+| `updated_by` | string | yes |  |  |
+| `vocab_names` | array of string | yes |  |  |
+
+### ScreenerSetups
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `in_use` | string | yes |  | The id of the setup in use. |
+| `setups` | array of object | yes |  | Each setup, the default first: id, name, description, active (in use), builtin (the default), edited, signature, changed_count (places differing from config/review.yaml), based_on, updated_at, updated_by, problem (why it does not load). |
 
 ### Session
 

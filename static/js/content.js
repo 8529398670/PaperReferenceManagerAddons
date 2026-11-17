@@ -15,7 +15,7 @@ const Content = {
   // Keys waiting for a fresh badge, gathered for one request.
   stale: new Set(),
   timer: null,
-  local: [ "methods" , "code" , "datasets" , "modalities" ],
+  local: [ "methods" , "code" , "datasets" , "modalities" , "review" ],
   refreshSoon: null,
 
   on( name , handler ) {

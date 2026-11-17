@@ -187,6 +187,7 @@ const App = {
     FiguresView.init();
     CodeView.init();
     DatasetsView.init();
+    ReviewRules.init( me );
     loading.push( Keys.init( me ) );
     Mcp.init( me );
     loading.push( Sessions.init() );

@@ -70,6 +70,7 @@
           <a class="nav-link" href="#figures" data-nav="figures"><i class="bi bi-images" aria-hidden="true"></i><span data-i18n="nav.figures"></span></a>
           <a class="nav-link" href="#code" data-nav="code"><i class="bi bi-code-slash" aria-hidden="true"></i><span data-i18n="nav.code"></span></a>
           <a class="nav-link" href="#datasets" data-nav="datasets"><i class="bi bi-database" aria-hidden="true"></i><span data-i18n="nav.datasets"></span></a>
+          <a class="nav-link" href="#review-rules" data-nav="review-rules"><i class="bi bi-funnel" aria-hidden="true"></i><span data-i18n="nav.review_rules"></span></a>
           <a class="nav-link" href="#status" data-nav="status"><i class="bi bi-activity" aria-hidden="true"></i><span data-i18n="nav.status"></span></a>
           <hr class="sidebar-rule" />
           <!-- Account: its second line names who is signed in (App.labelAccount). -->
@@ -572,6 +573,123 @@
             </div>
             <div id="code-table" class="table-fill"></div>
           </section>
+        </section>
+
+        <!-- The review screener's rule setups, editable, with a test panel (admins). static/js/review_rules.js -->
+        <section class="view" data-view="review-rules" id="review-rules-panel" hidden>
+          <h2 class="view-title visually-hidden" data-i18n="review_rules.heading"></h2>
+          <section class="card mb-3">
+            <div class="card-body">
+              <p class="text-body-secondary mb-2" data-i18n="review_rules.description"></p>
+              <div class="row g-2 align-items-end mb-2">
+                <div class="col-12 col-md-6 col-xl-4">
+                  <label for="rr-setup" class="form-label small mb-1" data-i18n="review_rules.setup_label"></label>
+                  <select id="rr-setup" class="form-select"></select>
+                </div>
+                <div class="col-12 col-md-auto d-flex flex-wrap gap-2">
+                  <button type="button" id="rr-use" class="btn btn-success"><i class="bi bi-play-circle" aria-hidden="true"></i> <span data-i18n="review_rules.use"></span></button>
+                  <button type="button" id="rr-new" class="btn btn-outline-primary"><i class="bi bi-copy" aria-hidden="true"></i> <span data-i18n="review_rules.new_copy"></span></button>
+                  <button type="button" id="rr-rename" class="btn btn-outline-secondary"><i class="bi bi-pencil" aria-hidden="true"></i> <span data-i18n="review_rules.rename"></span></button>
+                  <button type="button" id="rr-delete" class="btn btn-outline-danger"><i class="bi bi-trash" aria-hidden="true"></i> <span data-i18n="review_rules.delete"></span></button>
+                </div>
+              </div>
+              <p id="rr-setup-description" class="small text-body-secondary mb-2" hidden></p>
+              <div id="rr-setup-note" class="alert alert-info py-2 small mb-3" role="status" hidden></div>
+              <div class="row g-2 align-items-center">
+                <div class="col-12 col-xxl">
+                  <div id="rr-progress" class="small" role="status"></div>
+                  <div id="rr-edited" class="small text-body-secondary"></div>
+                </div>
+                <div class="col-12 col-xxl-auto d-flex flex-wrap gap-2">
+                  <button type="button" id="rr-save" class="btn btn-primary" disabled><i class="bi bi-check2" aria-hidden="true"></i> <span id="rr-save-text" data-i18n="review_rules.save"></span></button>
+                  <button type="button" id="rr-discard" class="btn btn-outline-secondary" data-i18n="review_rules.discard" disabled></button>
+                  <button type="button" id="rr-reset" class="btn btn-outline-danger" data-i18n="review_rules.reset"></button>
+                  <a id="rr-export" class="btn btn-outline-secondary" href="/api/review/setups/default/export" download="review.yaml"><i class="bi bi-download" aria-hidden="true"></i> <span data-i18n="review_rules.export"></span></a>
+                </div>
+              </div>
+              <div id="rr-problem" class="alert alert-warning mt-3 mb-0" role="alert" hidden></div>
+              <div id="rr-problems" class="alert alert-danger mt-3 mb-0" role="alert" hidden></div>
+            </div>
+          </section>
+          <div class="row g-3">
+            <div class="col-12 col-xl-8">
+              <section class="card">
+                <div class="card-header pb-0 border-bottom-0">
+                  <ul id="rr-tabs" class="nav nav-tabs card-header-tabs flex-nowrap overflow-x-auto overflow-y-hidden text-nowrap rr-tabs" data-i18n-attr="aria-label:review_rules.tabs_label"></ul>
+                </div>
+                <div id="rr-body" class="card-body border-top"></div>
+              </section>
+            </div>
+            <div class="col-12 col-xl-4">
+              <section class="card sticky-xl-top rr-test">
+                <div class="card-body">
+                  <h3 class="h6" data-i18n="review_rules.test_heading"></h3>
+                  <p class="small text-body-secondary" data-i18n="review_rules.test_help"></p>
+                  <div id="rr-test-pick">
+                    <label for="rr-test-search" class="form-label small" data-i18n="review_rules.test_search"></label>
+                    <input id="rr-test-search" class="form-control" type="search" autocomplete="off" />
+                    <div id="rr-test-results" class="list-group list-group-flush small mt-1"></div>
+                    <div id="rr-test-paper" class="alert alert-secondary small py-2 mt-2 mb-0" hidden></div>
+                  </div>
+                  <div id="rr-test-text" hidden>
+                    <label for="rr-test-title" class="form-label small" data-i18n="review_rules.test_title"></label>
+                    <input id="rr-test-title" class="form-control form-control-sm mb-2" type="text" />
+                    <label for="rr-test-abstract" class="form-label small" data-i18n="review_rules.test_abstract"></label>
+                    <textarea id="rr-test-abstract" class="form-control form-control-sm mb-2" rows="3"></textarea>
+                    <label for="rr-test-body" class="form-label small" data-i18n="review_rules.test_text"></label>
+                    <textarea id="rr-test-body" class="form-control form-control-sm" rows="5"></textarea>
+                  </div>
+                  <div class="row g-2 align-items-center mt-2">
+                    <div class="col-12 col-sm">
+                      <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="rr-test-paste" />
+                        <label class="form-check-label small" for="rr-test-paste" data-i18n="review_rules.test_paste"></label>
+                      </div>
+                    </div>
+                    <div class="col-7 col-sm-auto">
+                      <label for="rr-test-mode" class="visually-hidden" data-i18n="review_rules.test_mode"></label>
+                      <select id="rr-test-mode" class="form-select form-select-sm">
+                        <option value="full" data-i18n="review_rules.mode_full"></option>
+                        <option value="abstract" data-i18n="review_rules.mode_abstract"></option>
+                      </select>
+                    </div>
+                    <div class="col-5 col-sm-auto">
+                      <button type="button" id="rr-test-run" class="btn btn-sm btn-primary w-100"><i class="bi bi-play" aria-hidden="true"></i> <span data-i18n="review_rules.test_run"></span></button>
+                    </div>
+                  </div>
+                  <div id="rr-test-out" class="mt-3" aria-live="polite"></div>
+                </div>
+              </section>
+            </div>
+          </div>
+          <div class="modal fade" id="rr-setup-dialog" tabindex="-1" aria-labelledby="rr-setup-heading" aria-hidden="true">
+            <div class="modal-dialog">
+              <form class="modal-content" id="rr-setup-form">
+                <div class="modal-header">
+                  <h3 class="modal-title h5" id="rr-setup-heading"></h3>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" data-i18n-attr="aria-label:nav.close"></button>
+                </div>
+                <div class="modal-body">
+                  <p id="rr-setup-from" class="small text-body-secondary"></p>
+                  <label for="rr-setup-name" class="form-label" data-i18n="review_rules.setup_name"></label>
+                  <input id="rr-setup-name" class="form-control mb-3" type="text" maxlength="80" required autocomplete="off" />
+                  <label for="rr-setup-about" class="form-label" data-i18n="review_rules.setup_about"></label>
+                  <textarea id="rr-setup-about" class="form-control" rows="3" maxlength="2000"></textarea>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" data-i18n="ui.cancel"></button>
+                  <button type="submit" class="btn btn-primary" id="rr-setup-submit"></button>
+                </div>
+              </form>
+            </div>
+          </div>
+          <div class="offcanvas offcanvas-end rr-editor" tabindex="-1" id="rr-editor" aria-labelledby="rr-editor-title">
+            <div class="offcanvas-header border-bottom">
+              <h3 class="offcanvas-title h5" id="rr-editor-title"></h3>
+              <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-i18n-attr="aria-label:nav.close"></button>
+            </div>
+            <div id="rr-editor-body" class="offcanvas-body"></div>
+          </div>
         </section>
 
         <!-- What public data the library stands on. static/js/datasets.js -->
@@ -1740,6 +1858,7 @@
   <script src="/js/figures.js"></script>
   <script src="/js/code.js"></script>
   <script src="/js/datasets.js"></script>
+  <script src="/js/review_rules.js"></script>
   <script src="/js/library.js"></script>
   <script src="/js/board_view.js"></script>
   <script src="/js/board_columns.js"></script>

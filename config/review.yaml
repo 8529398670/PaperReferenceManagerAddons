@@ -1,0 +1,1157 @@
+# The review screener's rules: the defaults.
+#
+# These are the "Default" setup. Edit it, or make other named setups, on the
+# Screener rules page (admins) or through the API and MCP tools
+# (list_screener_setups and the rest). Edits are kept in the database; this
+# file is what "Reset to defaults" goes back to. Export YAML on that page gives
+# a file in this shape to paste back here.
+#
+# Patterns are Python regular expressions, matched case-insensitively. In
+# extraction patterns <<NUM>> stands for a number and <<WORDS>> for the
+# word-numbers below. A post template uses ${v} (the group named v), ${0} (the
+# whole match), ${1} (group 1), ${n} (a counted number).
+#
+# Changing anything re-screens the papers one at a time in the background.
+version: 1
+criteria_text:
+  full:
+  - fMRI/BOLD is the dominant modality in the methods section (EEG/MEG/ECoG/fNIRS/intracortical-dominant papers are excluded even when they mention fMRI).
+  - 'The paper performs a DECODING task: fMRI in, stimulus / mental content / class label out. Encoding models (stimulus -> brain) and MRI reconstruction / acceleration are excluded.'
+  - 'Transformer or attention machinery sits inside the model the AUTHORS BUILT: self / cross-attention, a transformer backbone, or a pretrained transformer (CLIP / GPT / LLaMA / ViT / Whisper) inside the decoding pipeline. Papers that only cite transformers in related work are excluded.'
+  abstract:
+  - 'The abstract names fMRI/BOLD at least as often as any rival modality (EEG/MEG/ECoG/fNIRS). An abstract states its modality once if at all, so one mention counts, and an abstract that never names it cannot be screened in.'
+  - 'The abstract describes a DECODING task: brain in, stimulus / mental content / class label out. Encoding models and MRI reconstruction / acceleration are excluded.'
+  - 'The abstract names transformer or attention machinery. One mention counts here, where the full text needs two: an abstract has no related-work section, so a transformer named in it is almost always the authors'' own.'
+vocab:
+  fmri_evidence:
+    label: fMRI evidence
+    help: 'Words that count as fMRI evidence. BOLD, voxel and hemodynamics are fMRI-specific.'
+    patterns:
+    - '\bfMRI\b'
+    - '\bfunctional MRI\b'
+    - '\bfunctional magnetic resonance\b'
+    - '\bBOLD\b'
+    - '\bblood[- ]oxygen[- ]level'
+    - '\bvoxel'
+    - '\bhemodynamic\b'
+    - '\bh(?:a)?emodynamic response function\b'
+    - '\bHRF\b'
+    - '\bTR\s*[=:]'
+    - '\brepetition time\b'
+    - '\becho[- ]planar\b'
+    - '\bcortical surface\b'
+    - '\bgrayordinate'
+    - '\bMNI\b'
+    - '\bparcellat'
+    - '\bfunctional connectivity\b'
+  fmri_strong:
+    label: Strong fMRI phrases
+    help: Strong fMRI phrases. Reported beside the verdict; they do not decide it.
+    patterns:
+    - '\bfMRI (?:data|signal|scan|time ?series|volume|recording|response|activity|acquisition)'
+    - '\bBOLD (?:signal|response|time ?series|activity)'
+    - '\bvoxel[- ](?:wise|level|space)'
+    - '\b(?:whole[- ]brain|cortical) (?:fMRI|BOLD)'
+    - '\b4D fMRI\b'
+    - '\brs-?fMRI\b'
+    - '\bresting[- ]state fMRI\b'
+  other_modality:
+    label: Rival modalities
+    help: 'Rival modalities. If these dominate the methods, it is not an fMRI decoding paper.'
+    patterns:
+    - '\bEEG\b'
+    - '\belectroencephalograph'
+    - '\bMEG\b'
+    - '\bmagnetoencephalograph'
+    - '\bECoG\b'
+    - '\belectrocorticograph'
+    - '\bsEEG\b'
+    - '\bstereo-?EEG\b'
+    - '\bfNIRS\b'
+    - '\bnear[- ]infrared\b'
+    - '\boptode'
+    - '\bmicroelectrode'
+    - '\bUtah array\b'
+    - '\bspike (?:rate|count|train|band)'
+    - '\bintracranial\b'
+    - '\bintracortical\b'
+    - '\belectrode'
+    - '\bimplanted array'
+    - '\bpenetrating array'
+    - '\bfiring rate'
+    - '\bthreshold crossing'
+    - '\bneural spik'
+    - '\bBCI implant'
+    - '\bneuroprosthes'
+    - '\bEMG\b'
+    - '\bEOG\b'
+    - '\bMUA\b'
+    - '\bLFP\b'
+  attn_built:
+    label: Attention built
+    help: Transformer / attention machinery a paper builds.
+    patterns:
+    - '\bmulti-?head (?:self-?|cross-?)?attention\b'
+    - '\bself-?attention\b'
+    - '\bcross-?attention\b'
+    - '\bco-?attention\b'
+    - '\battention (?:heads?|module|block|mechanism|layer|weights?|map|pooling)\b'
+    - '\btransformer (?:encoder|decoder|block|layer|backbone|architecture|module|model)\b'
+    - '\bvision transformer\b'
+    - '\bViT\b'
+    - '\bSwin\b'
+    - '\bPerceiver\b'
+    - '\bconformer\b'
+    - '\bquery (?:tokens?|vectors?)\b'
+    - '\bkey[-,/ ]value\b'
+    - '\bQKV\b'
+    - '\bscaled dot[- ]product\b'
+    - '\bpositional (?:encoding|embedding)\b'
+    - '\bgraph attention\b'
+    - '\bdeformable attention\b'
+    - '\battentive\b'
+    - '\bCLS token\b'
+    - '\bclass token\b'
+    - '\btoken(?:iz|is)ation\b'
+  attn_pretrained:
+    label: Pretrained transformers
+    help: 'Pretrained transformer stacks used inside a decoding pipeline. Bare "language model" is deliberately left out: in this literature it often means the neuroanatomical language model.'
+    patterns:
+    - '\bCLIP\b'
+    - '\bOpenCLIP\b'
+    - '\bBLIP-?2?\b'
+    - '\bLLaVA\b'
+    - '\bGPT\b'
+    - '\bGPT-?[234]\b'
+    - '\bGenerative Pre-?[Tt]rained Transformer\b'
+    - '\bLLaMA\b'
+    - '\bLlama\b'
+    - '\bVicuna\b'
+    - '\bMistral\b'
+    - '\bBERT\b'
+    - '\bRoBERTa\b'
+    - '\bDeBERTa\b'
+    - '\bT5\b'
+    - '\bBART\b'
+    - '\bOPT-\d'
+    - '\bWhisper\b'
+    - '\bwav2vec\b'
+    - '\bHuBERT\b'
+    - '\bStable Diffusion\b'
+    - '\bVersatile Diffusion\b'
+    - '\bunCLIP\b'
+    - '\bDINOv2\b'
+    - '\bBEiT\b'
+    - '\bSigLIP\b'
+    - '\bQwen\b'
+    - '\bfoundation model\b'
+    - '\blarge language model\b'
+    - '\bLLM\b'
+    - '\bvision[- ]language model\b'
+    - '\bpre-?trained language model\b'
+    - '\bneural language model\b'
+    - '\bcausal language model\b'
+    - '\bautoregressive language model\b'
+    - '\bmasked language model\b'
+    - '\blanguage model (?:prior|head|decoder|embeddings?)\b'
+    - '\blanguage model\b(?=[^.]{0,80}\b(?:GPT|token|embedding|transformer|fine-?tun|pre-?train|beam|perplexity)\b)'
+    - '\bsentence (?:encoder|embedding|transformer)\b'
+    - '\bSentenceBERT\b'
+    - '\bSBERT\b'
+    - '\bcontextual(?:ized)? embeddings?\b'
+    - '\bword embeddings? from\b'
+    - '\bBERTScore\b'
+  ours:
+    label: '"We built it" phrases'
+    help: 'Phrases meaning "we built it": attention near one of these is the authors'' own.'
+    patterns:
+    - '\bwe (?:propose|present|introduce|design|develop|build|employ|adopt|use|utilize|implement|train|apply)\b'
+    - '\bour (?:model|method|framework|architecture|approach|network|encoder|decoder|pipeline)\b'
+    - '\bthe proposed\b'
+    - '\bthis (?:paper|work|study) (?:proposes|presents|introduces)\b'
+    - '\bconsists? of\b'
+    - '\bis composed of\b'
+    - '\bcomprises\b'
+    - '\bfollowed by\b'
+    - '\bwe first\b'
+  decode_generic:
+    label: Generic decoding phrases (abstract only)
+    help: The decoding phrasings an abstract uses. Abstract screen only; adding one never changes the full-text verdicts or the task category.
+    patterns:
+    - '\bbrain[- ]?decoding\b'
+    - '\bneural decoding\b'
+    - '\bmind[- ](?:reading|captioning)\b'
+    - '\b(?:brain|fMRI|neural|EEG|MEG)[- ]to[- ](?:text|image|speech|音|audio|music|video|語|semantic\w*)\b'
+    - '\bdecod\w+[^.]{0,40}\bfrom (?:the )?(?:brain|fMRI|neural|BOLD|cortical|human brain)\b'
+    - '\breconstruct\w*[^.]{0,40}\bfrom (?:the )?(?:brain|fMRI|neural|BOLD|cortical|human brain)\b'
+    - '\bfrom (?:brain|fMRI|neural|BOLD) (?:activity|recordings?|signals?|responses?|data)\b[^.]{0,70}\b(?:decod|reconstruct|generat|predict|translat|classif|retriev)'
+    - '\b(?:decod\w+|reconstruct\w+|translat\w+|generat\w+)\b[^.]{0,50}\b(?:stimul\w+|semantics?|language|speech|images?|visual (?:content|experience)|percept\w+|thoughts?|mental (?:content|imagery|states?))\b[^.]{0,40}\b(?:brain|fMRI|neural|BOLD)\b'
+survey_title:
+  label: Survey title
+  help: 'A title matching this is a review / survey, whatever the text says.'
+  pattern: '\b(?:a )?(?:comprehensive |systematic |scoping |brief |short |critical )?(?:review|survey|overview|taxonomy|perspective|tutorial|primer|meta-?analysis)\b'
+attention_roles:
+- label: transformer backbone over fMRI
+  patterns:
+  - '\btransformer (?:encoder|backbone|block|layer)'
+  - '\bvision transformer\b'
+  - '\bViT\b'
+  - '\bSwin\b'
+  - '\bBrain ?Network ?Transformer\b'
+- label: cross-attention fusion
+  patterns:
+  - '\bcross-?attention\b'
+  - '\bco-?attention\b'
+- label: self-attention layers
+  patterns:
+  - '\bself-?attention\b'
+  - '\bmulti-?head'
+- label: attention pooling / interpretability
+  patterns:
+  - '\battention pooling\b'
+  - '\battention weights? (?:were|are) (?:used|analy)'
+- label: pretrained transformer (LM/VLM/CLIP) in pipeline
+  patterns: []
+  use_vocab: attn_pretrained
+tasks:
+- name: inner/imagined speech
+  priority: 1
+  patterns:
+  - '\binner speech\b'
+  - '\bimagined speech\b'
+  - '\bcovert (?:speech|articulation|naming|reading|rehearsal)\b'
+  - '\bsilent (?:reading|naming|speech|verb generation|word generation)\b'
+  - '\bimagined (?:words?|sentences?|語)\b'
+  - '\bverbal imagery\b'
+  - '\bself-?generated (?:speech|language|thought)\b'
+  - '\bsubvocal'
+- name: language / semantic decoding
+  priority: 2
+  patterns:
+  - '\bbrain-?to-?text\b'
+  - '\bsemantic (?:decoding|reconstruction)\b'
+  - '\bdecod\w+ (?:language|text|words?|sentences?|semantics?|meaning|narrative|story|speech)\b'
+  - '\bcontinuous language\b'
+  - '\bword[- ]level decoding\b'
+  - '\bcloze\b'
+  - '\bfMRI-?to-?text\b'
+  - '\bopen[- ]vocabulary\b'
+  - '\blanguage (?:decoder|decoding)\b'
+  - '\bcaption(?:ing|s)? (?:from|of) (?:brain|fMRI|neural)\b'
+- name: visual reconstruction / decoding
+  priority: 3
+  patterns:
+  - '\bimage reconstruction\b'
+  - '\bvisual (?:reconstruction|decoding|stimulus decoding)\b'
+  - '\bfMRI-?to-?image\b'
+  - '\breconstruct\w* (?:the )?(?:images?|visual stimuli|seen images?|natural images?|video)\b'
+  - '\bbrain-?to-?image\b'
+  - '\bimage retrieval\b'
+  - '\bdecod\w+ (?:visual|images?|objects?|scenes?|faces?)\b'
+  - '\bstimulus reconstruction\b'
+  - '\bmind[- ]reading of images\b'
+- name: audio / music decoding
+  priority: 3
+  patterns:
+  - '\bbrain-?to-?(?:music|audio|speech signal)\b'
+  - '\breconstruct\w* (?:music|audio|sound|speech waveform)\b'
+  - '\bmusic (?:reconstruction|retrieval) from\b'
+  - '\bdecod\w+ (?:music|audio|sound|heard speech)\b'
+- name: clinical / psychiatric classification
+  priority: 5
+  patterns:
+  - '\b(?:autism|ASD|Alzheimer|AD\b|MCI\b|schizophrenia|depression|MDD\b|ADHD|bipolar|Parkinson|epilep\w+)\b[^.]{0,80}\b(?:classif|diagnos|detect|predict|identif)'
+  - '\b(?:classif|diagnos|detect)\w*[^.]{0,60}\b(?:autism|ASD|Alzheimer|schizophrenia|MDD|ADHD|bipolar|disorder|disease|patients? vs)\b'
+  - '\bneuropsychiatric (?:disorder|disease)\b'
+  - '\bdisease (?:classification|diagnosis|prediction)\b'
+- name: brain state / cognitive task decoding
+  priority: 4
+  patterns:
+  - '\btask (?:state )?(?:classification|decoding|identification)\b'
+  - '\bcognitive state (?:decoding|classification)\b'
+  - '\bbrain state (?:decoding|classification|prediction)\b'
+  - '\bmental state decoding\b'
+  - '\bdecod\w+ (?:task|cognitive states?|mental states?|conditions?)\b'
+  - '\bMVPA\b'
+- name: individual fingerprinting / trait prediction
+  priority: 5
+  patterns:
+  - '\bfingerprint\w*\b'
+  - '\bsubject identification\b'
+  - '\bindividual identification\b'
+  - '\b(?:age|sex|gender|IQ|intelligence|fluid intelligence|behaviou?ral trait)[^.]{0,40}\bpredict\w*'
+  - '\bphenotype prediction\b'
+unclassified_priority: 6
+exclusions:
+  survey:
+    label: review / survey (not a primary model paper)
+    patterns:
+    - '\b(?:this|our|the present)\s+(?:comprehensive\s+|systematic\s+|scoping\s+|narrative\s+)?(?:review|survey|overview|taxonomy|meta-?analysis)\b'
+    - '\bin this (?:review|survey)\b'
+    - '\bwe (?:review|survey|summarize the literature)\b'
+    - '\bwe provide a (?:comprehensive )?(?:review|survey|overview)\b'
+    - '\bPRISMA\b'
+    - '\bsystematic literature (?:review|search)\b'
+  encoding:
+    label: 'encoding model only (stimulus -> brain, not brain -> stimulus)'
+    patterns:
+    - '\bencoding model\b[^.]{0,120}\bpredict\w*[^.]{0,40}\b(?:brain|neural|voxel|BOLD)\s+(?:response|activity)'
+    - '\bwe (?:build|train|fit) (?:an? )?encoding model'
+    - '\bpredict\w* (?:voxel|brain|neural|BOLD) (?:responses?|activity) from\b'
+  reconstruction:
+    label: 'fMRI image reconstruction / acceleration (signal processing, not decoding)'
+    patterns:
+    - '\b(?:accelerat\w+|undersampl\w+|k-?space|compressed sensing)\b[^.]{0,100}\breconstruction\b'
+    - '\bimage reconstruction\b[^.]{0,80}\b(?:k-?space|MRI acquisition|scan time)\b'
+    - '\bdenoising of fMRI\b'
+    - '\bmotion (?:correction|artifact removal)\b'
+reasons:
+  survey: review / survey (not a primary model paper)
+  not_fmri: non-fMRI modality (EEG/MEG/ECoG/fNIRS dominant)
+  no_fmri_named: the abstract never names fMRI
+  no_attention: 'no transformer/attention inside the authors'' own model'
+  no_attention_abstract: the abstract names no transformer / attention machinery
+  encoding: 'encoding model only (stimulus -> brain, not brain -> stimulus)'
+  reconstruction: 'fMRI image reconstruction / acceleration (signal processing, not decoding)'
+  no_decoding: no clear fMRI decoding task
+  no_text: no paper text found
+thresholds:
+  full:
+    methods_min_chars:
+      value: 400
+      why: The methods section is the core text when it is longer than this; otherwise the whole body is.
+    fmri_full_min:
+      value: 8
+      why: fMRI evidence needed across the whole paper.
+    fmri_core_min:
+      value: 4
+      why: fMRI evidence needed in the methods (core) text.
+    dom_core_min:
+      value: 5
+      why: 'Dominance in the methods: fMRI evidence at least this...'
+    dom_core_ratio:
+      value: 0.9
+      why: '...and at least this times the rival-modality evidence in the methods.'
+    dom_full_min:
+      value: 10
+      why: 'Dominance over the whole paper: fMRI evidence at least this...'
+    dom_full_ratio:
+      value: 0.75
+      why: '...and at least this times the rival-modality evidence overall. Either dominance passes.'
+    multimodal_min:
+      value: 5
+      why: Flag multimodal when both fMRI and rival evidence in the methods reach this.
+    attn_near_window:
+      value: 500
+      why: 'Characters between an attention word and a "we built it" phrase for the attention to count as the authors'' own.'
+    attn_methods_min:
+      value: 2
+      why: Attention-built mentions in the methods that pass on their own.
+    attn_total_min:
+      value: 3
+      why: Built + pretrained mentions in the methods that pass on their own.
+    attn_total_with_ours_min:
+      value: 2
+      why: Built + pretrained mentions that pass when attributed to the authors.
+    attn_methods_with_ours_min:
+      value: 1
+      why: Attention-built mentions that pass when attributed to the authors.
+    task_weight_title:
+      value: 3
+      why: Weight of a task phrase in the title.
+    task_weight_abstract:
+      value: 2
+      why: Weight of a task phrase in the abstract.
+    task_weight_full:
+      value: 1
+      why: Weight of a task phrase in the full text.
+    decoding_min:
+      value: 2
+      why: 'The best task''s weighted score needed to call the paper a decoding paper.'
+    survey_weight_title:
+      value: 4
+      why: Weight of a survey phrase in the title.
+    survey_weight_abstract:
+      value: 2
+      why: Weight of a survey phrase in the abstract.
+    survey_weight_body:
+      value: 1
+      why: Weight of a survey phrase in the opening of the body.
+    survey_body_chars:
+      value: 6000
+      why: How much of the body opening is searched for survey phrases.
+    survey_min:
+      value: 4
+      why: Weighted survey score that excludes the paper.
+    encoding_min:
+      value: 2
+      why: Encoding-model phrases needed to name that as the exclusion reason.
+    reconstruction_min:
+      value: 2
+      why: Reconstruction / acceleration phrases needed to name that as the exclusion reason.
+    borderline_attn_min:
+      value: 1
+      why: 'Excluded only for weak attention, with at least this many attention mentions in the methods...'
+    borderline_attn_max:
+      value: 2
+      why: '...and at most this many: flagged borderline, worth a human look.'
+  abstract:
+    fmri_min:
+      value: 1
+      why: 'An abstract states its modality once: one mention counts, as long as fMRI is named at least as often as any rival.'
+    multimodal_min:
+      value: 1
+      why: Flag multimodal when both fMRI and a rival are named this often.
+    attn_near_window:
+      value: 300
+      why: 'Characters between an attention word and a "we built it" phrase.'
+    attn_total_min:
+      value: 1
+      why: 'An abstract has no related-work section, so one transformer mention is almost always the authors'' own.'
+    task_weight_title:
+      value: 3
+      why: Weight of a task phrase in the title.
+    task_weight_abstract:
+      value: 2
+      why: Weight of a task phrase in the abstract.
+    decoding_min:
+      value: 2
+      why: Best task score plus generic decoding phrases needed to call it decoding.
+    survey_weight_title:
+      value: 4
+      why: Weight of a survey phrase in the title.
+    survey_weight_abstract:
+      value: 2
+      why: Weight of a survey phrase in the abstract.
+    survey_min:
+      value: 4
+      why: Weighted survey score that excludes the paper.
+    encoding_min:
+      value: 1
+      why: Encoding-model phrases needed to name that as the reason.
+    reconstruction_min:
+      value: 1
+      why: Reconstruction / acceleration phrases needed to name that as the reason.
+extraction:
+  text_cap:
+    value: 150000
+    why: Characters of methods + body scanned for fields (guards against a runaway text dump).
+  context_window:
+    value: 200
+    why: Characters of context kept around each match as its quote.
+  evidence_quotes:
+    value: 3
+    why: Quotes kept per field.
+  evidence_chars:
+    value: 600
+    why: Longest quote kept.
+  word_numbers:
+    one: 1
+    two: 2
+    three: 3
+    four: 4
+    five: 5
+    six: 6
+    seven: 7
+    eight: 8
+    nine: 9
+    ten: 10
+    eleven: 11
+    twelve: 12
+    sixteen: 16
+    twenty: 20
+    twenty-four: 24
+    thirty-two: 32
+    forty: 40
+    sixty-four: 64
+  macros:
+    NUM: '[0-9]+(?:\.[0-9]+)?'
+  fields:
+  - name: N_Transformer_Layers
+    group: Architecture
+    patterns:
+    - '\b(?P<v>\d{1,3}|<<WORDS>>)\s+(?:stacked\s+|consecutive\s+|cascaded\s+)?(?:transformer|encoder|decoder|attention|self-?attention|ViT|Swin|conformer)\s+(?:encoder\s+|decoder\s+)?(?:layers|blocks|modules|stages)\b'
+    - '\b(?:cascade|stack|sequence|series)\s+of\s+(?P<v>\d{1,3}|<<WORDS>>)\s+(?:transformer\s+|attention\s+|encoder\s+|decoder\s+)?(?:layers|blocks|modules)\b'
+    - '\b(?:transformer|encoder|decoder|backbone|model)\s+(?:has|with|of|consists?\s+of|comprises?|contains?|is\s+composed\s+of|uses?|employs?)\s+(?P<v>\d{1,3}|<<WORDS>>)\s+(?:transformer\s+)?(?:layers|blocks|modules)\b'
+    - '\b(?:number\s+of\s+)?(?:transformer\s+|encoder\s+|hidden\s+)?layers?\s*(?:is|was|are|were|=|:)\s*(?P<v>\d{1,3})\b'
+    - '\b(?:num_?layers|n_?layers|depth|num_?blocks|n_?blocks)\s*[=:]\s*(?P<v>\d{1,3})\b'
+    - '\bdepth\s+(?:of|is|was|=|:)\s*(?P<v>\d{1,3}|<<WORDS>>)\b'
+    - '\b(?P<v>\d{1,3}|<<WORDS>>)[- ]layer(?:ed)?\s+(?:transformer|encoder|decoder|ViT|BERT|GPT|network|architecture|MLP)\b'
+    - '\bL\s*=\s*(?P<v>\d{1,3})\s*(?:transformer\s+)?layers?\b'
+    - '\b\|\s*(?:#\s*)?(?:layers|depth|blocks)\s*\|\s*(?P<v>\d{1,3})\s*\|'
+    - '\b(?:layer|block|stage)\s+numbers?\s*(?:of|is|was|=|:)\s*(?P<v>\d{1,3})\b'
+    post:
+      kind: count
+      template: '${n} layers'
+  - name: Layer_Depths_Per_Stage
+    group: Architecture
+    patterns:
+    - '\bnumbers?\s+of\s+layers?\b[^.]{0,60}?\{\s*(?P<v>\d{1,2}(?:\s*,\s*\d{1,2}){1,5})\s*\}'
+    - '\b(?:depths?|stage\s+depths?|layers?\s+per\s+stage)\s*(?:=|:|of)\s*[\{\[]\s*(?P<v>\d{1,2}(?:\s*,\s*\d{1,2}){1,5})\s*[\}\]]'
+    - '\bL\s*1\s*,\s*L\s*2[^=]{0,20}=\s*\{\s*(?P<v>\d{1,2}(?:\s*,\s*\d{1,2}){1,5})\s*\}'
+    post:
+      kind: template
+      template: '{${v}} blocks per stage'
+  - name: N_Attention_Heads
+    group: Architecture
+    patterns:
+    - '\b(?P<v>\d{1,3}|<<WORDS>>)\s+(?:parallel\s+)?(?:attention|self-?attention|cross-?attention|multi-?head)\s+heads\b'
+    - '\b(?:number\s+of\s+)?(?:attention\s+)?heads?\s*(?:is|was|are|were|=|:)\s*(?P<v>\d{1,3})\b'
+    - '\b(?:num_?heads|n_?heads|nhead|num_?attention_?heads)\s*[=:]\s*(?P<v>\d{1,3})\b'
+    - '\b(?:multi-?head\s+)?(?:self-?|cross-?)?attention\s+with\s+(?P<v>\d{1,3}|<<WORDS>>)\s+heads\b'
+    - '\bh\s*=\s*(?P<v>\d{1,2})\s+(?:attention\s+)?heads\b'
+    - '\b(?P<v>\d{1,3}|<<WORDS>>)[- ]head(?:ed|s)?\s+(?:self-?attention|cross-?attention|multi-?head|attention|MSA|MHA|MHSA)\b'
+    - '\b(?:with|using|of)\s+(?P<v>\d{1,3}|<<WORDS>>)\s+heads\b'
+    - '\b\|\s*(?:#\s*)?(?:heads|attention heads)\s*\|\s*(?P<v>\d{1,3})\s*\|'
+    - '\bhead\s+numbers?\s*(?:of|is|was|=|:)\s*(?P<v>\d{1,3})\b'
+    - '\bthe\s+(?:cross-?attention|self-?attention|attention)\s+layers?\s+with\s+(?P<v>\d{1,3}|<<WORDS>>)[- ]head'
+    post:
+      kind: count
+      template: '${n} heads'
+  - name: Hidden_Embed_Dim
+    group: Architecture
+    patterns:
+    - '\b(?:hidden|embedding|embed|latent|feature|model|token|channel|output)\s+(?:dimension(?:ality)?|dim|size|width|number)\s*(?:is|was|are|were|of|set\s+to|=|:)\s*(?P<v>\d{2,5})\b'
+    - '\bd_?(?:model|emb|embed|hidden|h)\s*[=:]\s*(?P<v>\d{2,5})\b'
+    - '\b(?:hidden_?size|hidden_?dim|embed_?dim|embedding_?dim|d_model|n_?embd|width)\s*[=:]\s*(?P<v>\d{2,5})\b'
+    - '\bdimension(?:ality)?\s+of\s+(?:the\s+)?(?:hidden|embedding|latent|feature|token)\s+(?:state|space|vector|representation)s?\s*(?:is|was|=|:|of)?\s*(?P<v>\d{2,5})\b'
+    - '\b(?:embedding|hidden|latent|feature)\s+(?:size|dimension(?:ality)?)\s+of\s+(?P<v>\d{2,5})\b'
+    - '\bC\s*=\s*(?P<v>\d{1,4})\b(?=[^.]{0,60}channel)'
+    - '\bchannel\s+numbers?\s+of\s+C\s*=\s*(?P<v>\d{1,4})\b'
+    - '\bchannel\s+numbers?\s*(?:of|is|was|=|:)\s*(?P<v>\d{1,4})\b'
+    - '\b\|\s*(?:hidden(?:\s+dim\w*)?|d_model|embedding\s+dim\w*)\s*\|\s*(?P<v>\d{2,5})\s*\|'
+    post:
+      kind: template
+      template: 'dim ${v}'
+  - name: FFN_MLP_Dim
+    group: Architecture
+    patterns:
+    - '\b(?:feed[- ]?forward|FFN|MLP)\s+(?:hidden\s+)?(?:dimension|dim|size|width|layer)\s*(?:is|was|of|=|:)\s*(?P<v>\d{2,5})'
+    - '\bMLP\s+ratio\s*(?:of|=|:)?\s*(?P<v><<NUM>>)'
+    - '\bexpansion\s+(?:factor|ratio)\s*(?:of|=|:)?\s*(?P<v><<NUM>>)'
+    post:
+      kind: template
+      template: '${0}'
+  - name: Patch_Token_Size
+    group: Architecture
+    patterns:
+    - '\bpatch\s+size\s*(?:of|is|was|=|:)?\s*(?P<v>\d{1,3}\s*(?:[x×]\s*\d{1,3}){0,3})'
+    - '\b(?P<v>\d{1,2}\s*[x×]\s*\d{1,2}(?:\s*[x×]\s*\d{1,2})?)\s+patches\b'
+    - '\bpatches?\s+of\s+size\s+(?P<v>\d{1,3}\s*(?:[x×]\s*\d{1,3})+)'
+    - '\bwindow\s+size\s*(?:of|is|was|=|:)?\s*(?P<v>\d{1,3}\s*(?:[x×]\s*\d{1,3}){0,3})'
+    - '\b(?:sequence|context|token)\s+length\s*(?:of|is|was|=|:)?\s*(?P<v>\d{1,5})'
+    - '\bT\s*=\s*(?P<v>\d{1,4})\s*TRs?\b'
+    post:
+      kind: template
+      template: '${0}'
+  - name: Attention_Variant
+    group: Architecture
+    patterns:
+    - '\b(multi[- ]head\s+self[- ]attention|multi[- ]head\s+cross[- ]attention|multi[- ]head\s+attention|self[- ]attention|cross[- ]attention|co[- ]attention|windowed\s+attention|shifted\s+window\s+attention|fused\s+window\s+attention|sparse\s+attention|linear\s+attention|deformable\s+attention|axial\s+attention|spatial[- ]temporal\s+attention|spatiotemporal\s+attention|channel\s+attention|graph\s+attention|hypergraph\s+attention|masked\s+(?:multi[- ]head\s+)?attention|flash\s?attention|scaled\s+dot[- ]product\s+attention|additive\s+attention|gated\s+attention|attention\s+pooling|temporal\s+attention|spatial\s+attention|region[- ]aware\s+attention|memory[- ]efficient\s+attention)\b'
+    post:
+      kind: template
+      template: '${1}'
+      lower: true
+  - name: Positional_Encoding
+    group: Architecture
+    patterns:
+    - '\b(sinusoidal\s+(?:positional\s+)?(?:encoding|embedding)s?|learnable\s+positional\s+(?:encoding|embedding)s?|learned\s+positional\s+(?:encoding|embedding)s?|absolute\s+positional\s+(?:encoding|embedding)s?|relative\s+positional\s+(?:encoding|embedding|bias)s?|rotary\s+(?:positional\s+)?embeddings?|RoPE|ALiBi|gradient\s+positioning|positional\s+(?:encoding|embedding)s?|position\s+(?:encoding|embedding)s?)\b'
+    post:
+      kind: template
+      template: '${1}'
+      lower: true
+  - name: Normalization
+    group: Architecture
+    patterns:
+    - '\b(layer\s*norm(?:alization|alisation)?|LayerNorm|LN\b|batch\s*norm(?:alization|alisation)?|BatchNorm|instance\s*norm(?:alization)?|group\s*norm(?:alization)?|RMSNorm|pre[- ]norm|post[- ]norm)\b'
+    post:
+      kind: template
+      template: '${1}'
+  - name: Activation
+    group: Architecture
+    patterns:
+    - '\b(GELU|ReLU|LeakyReLU|Leaky\s+ReLU|SiLU|Swish|ELU|Tanh|Sigmoid|Softmax|SwiGLU|GEGLU|Mish|PReLU)\b'
+    post:
+      kind: template
+      template: '${1}'
+  - name: Dropout
+    group: Architecture
+    patterns:
+    - '\bdropout\s*(?:rate|probability|ratio|of|=|:|with)?\s*(?:of|=|:)?\s*(?P<v>0?\.\d+|\d{1,2}\s*%)'
+    - '\b(?P<v>0?\.\d+)\s+dropout\b'
+    - '\bdrop[- ]?path\s*(?:rate)?\s*(?:of|=|:)?\s*(?P<v>0?\.\d+)'
+    post:
+      kind: template
+      template: 'dropout ${v}'
+  - name: Pooling
+    group: Architecture
+    patterns:
+    - '\b(global\s+average\s+pooling|global\s+max\s+pooling|average\s+pooling|mean\s+pooling|max\s+pooling|attention\s+pooling|CLS\s+token|class\s+token|\[CLS\]|GAP\b|adaptive\s+average\s+pooling|READOUT|readout\s+(?:layer|token)|SUM\s?POOL|concat(?:enation)?\s+pooling|temporal\s+pooling|spatial\s+pooling|hierarchical\s+pooling|SortPool|DiffPool|TopK\s+pooling)\b'
+    post:
+      kind: template
+      template: '${1}'
+  - name: Conv_GNN_Components
+    group: Architecture
+    patterns:
+    - '\b(1D\s+convolution(?:al)?|2D\s+convolution(?:al)?|3D\s+convolution(?:al)?|temporal\s+convolution|depthwise\s+separable\s+convolution|dilated\s+convolution|ResNet-?\d*|U-?Net|VGG-?\d*|Inception|graph\s+convolution(?:al)?(?:\s+network)?|GCN\b|GAT\b|GraphSAGE|GIN\b|BiLSTM|Bi-?LSTM|LSTM|GRU|bidirectional\s+LSTM|TCN\b|EfficientNet|DenseNet|MobileNet)\b'
+    post:
+      kind: template
+      template: '${1}'
+  - name: Pretrained_Backbone
+    group: Architecture
+    patterns:
+    - '\b(CLIP[- ]?ViT[- ]?[BLHg]/?\d*|ViT[- ]?[BLHgS]/?\d*|CLIP\b|OpenCLIP|BLIP-?2?|LLaVA(?:-?[\d.]+)?(?:-\w+)*|GPT-?2(?:-\w+)?|GPT-?3(?:\.5)?|GPT-?4[ov]?|LLaMA-?[\d.]*(?:-\w+)?|Llama\s?[\d.]+|Vicuna(?:-?\d+[Bb])?|Mistral(?:-\w+)?|BERT(?:-base|-large)?(?:-\w+)?|RoBERTa(?:-\w+)?|DeBERTa|ALBERT|DistilBERT|T5(?:-\w+)?|FLAN-?T5|BART(?:-\w+)?|OPT-?[\d.]+[Bb]?|Whisper(?:-\w+)?|wav2vec\s?2\.0|HuBERT|Stable\s+Diffusion(?:\s*(?:v?[\d.]+|XL))?|Versatile\s+Diffusion|unCLIP|DALL-?E\s?\d?|DINOv2|MAE\b|SwinT?(?:-\w+)?|BEiT|EVA-?CLIP|SigLIP|Qwen[\d.-]*(?:VL)?|InternVL|Flamingo|MusicLM|MuLan|AudioLDM|Imagen|IP-?Adapter|ControlNet)\b'
+    post:
+      kind: template
+      template: '${1}'
+  - name: Frozen_Finetuned
+    group: Architecture
+    patterns:
+    - '\b(frozen|freeze|kept\s+fixed|not\s+updated|fine[- ]?tun(?:e|ed|ing)|end[- ]to[- ]end\s+training|LoRA|low[- ]rank\s+adaptation|prefix[- ]tuning|soft\s+prompt|prompt\s+tuning|adapter\s+layers?|linear\s+prob(?:e|ing)|train(?:ed)?\s+from\s+scratch|zero[- ]shot|parameter[- ]efficient)\b'
+    post:
+      kind: template
+      template: '${1}'
+      lower: true
+  - name: Loss_Functions
+    group: Architecture
+    patterns:
+    - '\b(InfoNCE|NT-?Xent|contrastive\s+loss|CLIP\s+loss|triplet\s+loss|cross[- ]entropy(?:\s+loss)?|mean\s+squared\s+error|MSE(?:\s+loss)?|L1\s+loss|L2\s+loss|smooth\s+L1|Huber\s+loss|cosine\s+(?:similarity|embedding)\s+loss|KL\s+divergence|Kullback[- ]Leibler|adversarial\s+loss|GAN\s+loss|reconstruction\s+loss|diffusion\s+loss|denoising\s+loss|BiMixCo|SoftCLIP|MixCo|focal\s+loss|dice\s+loss|negative\s+log[- ]likelihood|NLL|binary\s+cross[- ]entropy|BCE|masked\s+(?:reconstruction|prediction)\s+loss|perceptual\s+loss)\b'
+    post:
+      kind: template
+      template: '${1}'
+  - name: Optimizer
+    group: Architecture
+    patterns:
+    - '\b(AdamW|Adam\b|SGD|RMSProp|Adagrad|Adadelta|Adafactor|LAMB|Lion|Ranger|Nadam)\b'
+    post:
+      kind: template
+      template: '${1}'
+  - name: Learning_Rate
+    group: Architecture
+    patterns:
+    - '\b(?:learning\s+rate|lr)\b[^.;\n]{0,40}?(?P<v>\d+(?:\.\d+)?\s*(?:[x×*·]\s*)?10\s*(?:\^|\*\*)?\s*\{?\s*[-−–]\s*\d+\s*\}?|\d+(?:\.\d+)?\s*[eE]\s*[-−–]\s*\d+|0\.\d{3,8})'
+    - '\blr\s*=\s*(?P<v>\d+(?:\.\d+)?(?:[eE][-−–]?\d+)?)'
+    post:
+      kind: template
+      template: 'lr ${v}'
+      replace:
+        −: '-'
+  - name: LR_Schedule
+    group: Architecture
+    patterns:
+    - '\b(cosine\s+(?:annealing|decay|schedule)|linear\s+(?:decay|warm-?up|schedule)|step\s+decay|OneCycle|one[- ]cycle|warm-?up|ReduceLROnPlateau|exponential\s+decay|polynomial\s+decay|constant\s+learning\s+rate)\b'
+    post:
+      kind: template
+      template: '${1}'
+      lower: true
+  - name: Weight_Decay
+    group: Architecture
+    patterns:
+    - '\bweight\s+decay\s*(?:of|is|was|=|:)?\s*(?P<v>[\d.e-]+)'
+    - '\bL2\s+regular(?:ization|isation)\s*(?:of|=|:)?\s*(?P<v>[\d.e-]+)'
+    post:
+      kind: template
+      template: 'weight decay ${v}'
+  - name: Batch_Size
+    group: Architecture
+    patterns:
+    - '\bbatch\s+size\s*(?:of|is|was|set\s+to|=|:)?\s*(?P<v>\d{1,5})'
+    - '\bmini[- ]?batch(?:es)?\s+of\s+(?P<v>\d{1,5})'
+    - '\bbatch\s*=\s*(?P<v>\d{1,5})'
+    post:
+      kind: template
+      template: 'batch ${v}'
+  - name: Epochs_Steps
+    group: Architecture
+    patterns:
+    - '\b(?:for\s+)?(?P<v>\d{1,6})\s+epochs\b'
+    - '\bepochs?\s*(?:is|was|=|:)\s*(?P<v>\d{1,6})'
+    - '\b(?P<v>\d{1,7})\s+(?:training\s+)?(?:steps|iterations|updates)\b'
+    post:
+      kind: template
+      template: '${0}'
+  - name: Params_Count
+    group: Architecture
+    patterns:
+    - '\b(?P<v>[\d.]+\s*[MBK]?)\s*(?:million|billion)?\s+(?:trainable\s+|learnable\s+|model\s+)?parameters\b'
+    - '\bparameters?\s*(?:count|:|=)\s*(?P<v>[\d.,]+\s*[MBK]?)'
+    - '\b(?P<v>\d+(?:\.\d+)?[MB])\s+params\b'
+    post:
+      kind: template
+      template: '${0}'
+  - name: Hardware
+    group: Architecture
+    patterns:
+    - '\b(NVIDIA\s+\w+[\w -]*|A100(?:\s*\d*\s*GB)?|H100|V100|RTX\s*\d{3,4}\s*(?:Ti|Super)?|GTX\s*\d{3,4}|Tesla\s+[PVAK]\d{2,3}|TPU(?:\s*v\d)?|L40S?|A6000|3090|4090|Titan\s+X[Pp]?)\b'
+    post:
+      kind: template
+      template: '${1}'
+  - name: Augmentation_Regularization
+    group: Architecture
+    patterns:
+    - '\b(MixUp|Mixup|CutMix|masking\s+ratio|random\s+masking|noise\s+injection|Gaussian\s+noise|label\s+smoothing|early\s+stopping|gradient\s+clipping|stochastic\s+depth|data\s+augmentation|temporal\s+jitter(?:ing)?|random\s+crop(?:ping)?|dropout\s+regular(?:ization|isation)|weight\s+averaging|EMA\b|ensembl(?:e|ing))\b'
+    post:
+      kind: template
+      template: '${1}'
+  - name: Validation_Scheme
+    group: Architecture
+    patterns:
+    - '\b(\d{1,2}[- ]fold\s+cross[- ]validation|k[- ]fold\s+cross[- ]validation|leave[- ]one[- ](?:subject|run|session|out)[- ]out|LOSO|nested\s+cross[- ]validation|stratified\s+(?:k[- ]fold|split)|hold[- ]?out|train/?val(?:idation)?/?test\s+split|cross[- ]subject|within[- ]subject|repeated\s+cross[- ]validation)\b'
+    post:
+      kind: template
+      template: '${1}'
+      lower: true
+  - name: Code_URL
+    group: Architecture
+    patterns:
+    - '(https?://(?:www\.)?(?:github\.com|gitlab\.com|codeberg\.org|huggingface\.co|osf\.io|zenodo\.org)/[^\s)\]\},;"\'']+)'
+    post:
+      kind: template
+      template: '${1}'
+      strip: '.,;'
+  - name: Field_Strength
+    group: Acquisition
+    patterns:
+    - '\b(?P<v>1\.5|3|4|7|9\.4|10\.5)\s*[- ]?\s*(?:T|Tesla)\b(?!\w)'
+    - '\b(?P<v>1\.5|3|7)\s*[- ]?\s*T\s+(?:MRI|scanner|Siemens|Philips|GE|magnet)'
+    post:
+      kind: template
+      template: '${v}T'
+  - name: Scanner_Vendor_Model
+    group: Acquisition
+    patterns:
+    - '\b(?:Siemens)\s+(?:MAGNETOM\s+)?(Prisma(?:\s*fit)?|Skyra|Trio(?:\s*Tim)?|TrioTim|Verio|Terra|Vida|Allegra|Avanto|Aera|Sola|Cima|Magnetom|Connectome)\b'
+    - '\b(?:Philips)\s+(Achieva(?:\s*TX)?|Ingenia(?:\s*Elition)?|Intera|Elition)\b'
+    - '\b(?:GE|General Electric)\s+(Signa(?:\s*(?:HDxt|Premier|Architect|Excite))?|Discovery\s*MR\d+|MR750w?|Premier)\b'
+    - '\b(Siemens|Philips|General Electric|GE Healthcare|Bruker|United Imaging|Canon|Toshiba)\b(?=[^.]{0,60}(?:scanner|MRI|magnet|system|3\s?T|7\s?T))'
+    post:
+      kind: template
+      template: '${0}'
+  - name: Head_Coil
+    group: Acquisition
+    patterns:
+    - '\b(?P<v>\d{1,3})[- ]channel\s+(?:head|volume|receive|phased[- ]array|head[- ]?neck)?\s*(?:coil|head coil|array)'
+    - '\bhead coil\b[^.]{0,40}?(?P<v>\d{1,3})[- ]channel'
+    post:
+      kind: template
+      template: '${v}-channel coil'
+  - name: TR
+    group: Acquisition
+    patterns:
+    - '\b(?:TR|repetition\s+time)\s*(?:\(TR\))?\s*[=:of]{1,3}\s*(?P<v><<NUM>>)\s*(?P<u>ms|msec|milliseconds?|s\b|sec|seconds?)?'
+    - '\brepetition\s+time\s*\(\s*TR\s*\)\s*(?:was|of|=|:)\s*(?P<v><<NUM>>)\s*(?P<u>ms|msec|s\b|sec|seconds?)?'
+    - '\bTR\s*/\s*TE\s*=\s*(?P<v><<NUM>>)\s*/\s*<<NUM>>\s*(?P<u>ms|s\b)?'
+    post:
+      kind: seconds_or_ms
+      ms_above: 50
+    plausible:
+      range:
+      - 300
+      - 6000
+      range_seconds:
+      - 0.3
+      - 6.0
+  - name: TE
+    group: Acquisition
+    patterns:
+    - '\b(?:TE|echo\s+time)\s*(?:\(TE\))?\s*[=:of]{1,3}\s*(?P<v><<NUM>>)\s*(?P<u>ms|msec|milliseconds?|s\b|sec)?'
+    - '\becho\s+time\s*\(\s*TE\s*\)\s*(?:was|of|=|:)\s*(?P<v><<NUM>>)\s*(?P<u>ms|msec|s\b)?'
+    - '\bTR\s*/\s*TE\s*=\s*<<NUM>>\s*/\s*(?P<v><<NUM>>)\s*(?P<u>ms|s\b)?'
+    post:
+      kind: seconds_or_ms
+      ms_above: 50
+    plausible:
+      range:
+      - 5
+      - 120
+      range_seconds:
+      - 0.005
+      - 0.12
+  - name: Flip_Angle
+    group: Acquisition
+    patterns:
+    - '\b(?:flip\s+angle|FA)\s*(?:\(FA\))?\s*[=:of]{1,3}\s*(?P<v><<NUM>>)\s*(?:°|deg|degrees?)?'
+    - '\b(?P<v><<NUM>>)\s*(?:°|deg\b|degree)\s+flip\s+angle'
+    post:
+      kind: template
+      template: '${v}°'
+    plausible:
+      range:
+      - 1
+      - 180
+  - name: Voxel_Size
+    group: Acquisition
+    patterns:
+    - '\b(?:voxel\s*(?:size|resolution|dimensions?)|spatial\s+resolution|isotropic\s+voxels?)\s*(?:of|was|were|=|:)?\s*(?P<v><<NUM>>\s*(?:[x×*]\s*<<NUM>>\s*){0,2}\s*mm(?:\s*3|³)?(?:\s*isotropic)?)'
+    - '\b(?P<v><<NUM>>\s*[x×]\s*<<NUM>>\s*[x×]\s*<<NUM>>\s*mm\s*3?)\b'
+    - '\b(?P<v><<NUM>>\s*mm\s*(?:isotropic|iso)\b)'
+    post:
+      kind: template
+      template: '${v}'
+    plausible:
+      range:
+      - 0.3
+      - 6.0
+  - name: Slices
+    group: Acquisition
+    patterns:
+    - '\b(?P<v>\d{1,3})\s+(?:axial|transverse|oblique|coronal|sagittal|interleaved|contiguous)?\s*slices\b'
+    - '\bnumber\s+of\s+slices\s*[=:]\s*(?P<v>\d{1,3})'
+    - '\bslices\s*[=:]\s*(?P<v>\d{1,3})'
+    post:
+      kind: template
+      template: '${v} slices'
+  - name: Slice_Thickness
+    group: Acquisition
+    patterns:
+    - '\bslice\s+thickness\s*(?:of|was|=|:)?\s*(?P<v><<NUM>>)\s*mm'
+    - '\b(?P<v><<NUM>>)\s*mm\s+(?:thick\s+)?slices?\b'
+    post:
+      kind: template
+      template: '${v} mm'
+    plausible:
+      range:
+      - 0.3
+      - 10.0
+  - name: Slice_Gap
+    group: Acquisition
+    patterns:
+    - '\b(?:slice\s+)?gap\s*(?:of|was|=|:)?\s*(?P<v><<NUM>>)\s*mm'
+    - '\bno\s+(?:slice\s+)?gap\b'
+    post:
+      kind: negation
+      when: '^no\b'
+      value: no gap
+      template: '${v} mm gap'
+  - name: FOV
+    group: Acquisition
+    patterns:
+    - '\b(?:FOV|field\s+of\s+view)\s*(?:\(FOV\))?\s*(?:of|was|=|:)\s*(?P<v><<NUM>>\s*(?:[x×]\s*<<NUM>>)?\s*(?:mm|cm)\s*2?)'
+    post:
+      kind: template
+      template: '${v}'
+  - name: Matrix_Size
+    group: Acquisition
+    patterns:
+    - '\b(?:matrix(?:\s+size)?|acquisition\s+matrix|image\s+matrix)\s*(?:of|was|=|:)\s*(?P<v>\d{2,4}\s*[x×]\s*\d{2,4})'
+    - '\b(?P<v>(?:64|80|96|100|104|112|128|200|220|256)\s*[x×]\s*(?:64|80|96|100|104|112|128|200|220|256))\s+matrix'
+    post:
+      kind: template
+      template: '${v}'
+  - name: Multiband_SMS
+    group: Acquisition
+    patterns:
+    - '\b(?:multi[- ]?band|simultaneous\s+multi[- ]?slice|SMS|MB)\s*(?:factor|acceleration)?\s*(?:of|=|:)?\s*(?P<v>\d)\b'
+    - '\bmulti[- ]?band\s+factor\s+(?P<v>\d)'
+    post:
+      kind: template
+      template: 'MB factor ${v}'
+  - name: Parallel_Imaging
+    group: Acquisition
+    patterns:
+    - '\b(?:GRAPPA|iPAT|SENSE|ASSET|ARC)\s*(?:factor|acceleration)?\s*(?:of|=|:)?\s*(?P<v>\d(?:\.\d)?)\b'
+    - '\b(?:in[- ]plane\s+acceleration)\s*(?:factor)?\s*(?:of|=|:)?\s*(?P<v>\d)'
+    post:
+      kind: template
+      template: '${0}'
+  - name: Sequence
+    group: Acquisition
+    patterns:
+    - '\b(gradient[- ]echo\s+echo[- ]planar\s+imaging|gradient\s+echo\s+EPI|GE[- ]EPI|T2\*[- ]weighted\s+(?:gradient[- ]echo\s+)?EPI|echo[- ]planar\s+imaging|EPI\s+sequence|spin[- ]echo\s+EPI|SE[- ]EPI|MP-?RAGE|MPRAGE|MP2RAGE|multi[- ]echo\s+EPI|multi[- ]?band\s+EPI|blipped[- ]CAIPI)\b'
+    post:
+      kind: template
+      template: '${1}'
+  - name: Phase_Encoding
+    group: Acquisition
+    patterns:
+    - '\bphase[- ]encod(?:ing|e)\s+(?:direction|dir)\s*(?:of|was|=|:)?\s*(?P<v>[APLRIS]{1,2}(?:\s*>>\s*[APLRIS]{1,2})?|anterior[- ]to[- ]posterior|posterior[- ]to[- ]anterior|LR|RL|AP|PA)'
+    - '\b(?P<v>AP\s*/\s*PA|LR\s*/\s*RL)\s+phase[- ]encoding'
+    post:
+      kind: template
+      template: '${v}'
+  - name: N_Volumes
+    group: Acquisition
+    patterns:
+    - '\b(?P<v>\d{2,5})\s+(?:functional\s+)?(?:volumes|TRs|time\s*points|timepoints|frames|brain\s+volumes)\b'
+    - '\b(?:volumes|TRs|time\s*points)\s*[=:]\s*(?P<v>\d{2,5})'
+    post:
+      kind: template
+      template: '${v} volumes/TRs'
+  - name: N_Runs_Sessions
+    group: Acquisition
+    patterns:
+    - '\b(?P<v>\d{1,3})\s+(?:functional\s+)?(?:runs|sessions|scanning\s+sessions|scan\s+sessions|blocks)\b'
+    - '\b(?:runs|sessions)\s*[=:]\s*(?P<v>\d{1,3})'
+    post:
+      kind: template
+      template: '${0}'
+  - name: Scan_Duration
+    group: Acquisition
+    patterns:
+    - '\b(?:scan(?:ning)?\s+(?:time|duration|length)|run\s+(?:duration|length)|session\s+(?:duration|lasted))\s*(?:of|was|=|:)?\s*(?P<v><<NUM>>\s*(?:min(?:utes)?|s\b|sec(?:onds)?|h(?:ours)?))'
+    - '\b(?:lasted|lasting)\s+(?:approximately\s+|about\s+)?(?P<v><<NUM>>\s*(?:min(?:utes)?|sec(?:onds)?|h(?:ours)?))'
+    post:
+      kind: template
+      template: '${v}'
+  - name: N_Subjects
+    group: Acquisition
+    patterns:
+    - '\b(?:N|n)\s*=\s*(?P<v>\d{1,5})\s*(?:subjects|participants|healthy|individuals|patients)?'
+    - '\b(?P<v>\d{1,5})\s+(?:healthy\s+)?(?:human\s+)?(?:subjects|participants|volunteers|individuals|patients)\b'
+    - '\bdata\s+from\s+(?P<v>\d{1,5})\s+(?:subjects|participants)'
+    post:
+      kind: template
+      template: '${0}'
+  - name: Preprocessing_Pipeline
+    group: Preprocessing
+    patterns:
+    - '\b(fMRIPrep|FMRIPREP|SPM\s*\d{1,2}|SPM12|SPM8|FSL\s*(?:FEAT|MELODIC)?|AFNI|FreeSurfer|Nilearn|CONN\s+toolbox|DPARSF|DPABI|C-PAC|CPAC|HCP\s+minimal\s+preprocessing|ciftify|ANTs|BrainVoyager|pypreprocess|nipype)\b'
+    post:
+      kind: template
+      template: '${1}'
+  - name: Smoothing_FWHM
+    group: Preprocessing
+    patterns:
+    - '\b(?:smooth(?:ed|ing)?)[^.]{0,60}?(?P<v><<NUM>>)\s*[- ]?mm\s*(?:FWHM|full[- ]width)'
+    - '\bFWHM\s*(?:of|=|:)?\s*(?P<v><<NUM>>)\s*mm'
+    - '\b(?:no|without)\s+(?:spatial\s+)?smoothing\b'
+    post:
+      kind: negation
+      when: '^(?:no|without)\b'
+      value: no smoothing
+      template: '${v} mm FWHM'
+  - name: Atlas_Parcellation
+    group: Preprocessing
+    patterns:
+    - '\b(Schaefer(?:[- ]\d{3})?|Desikan[- ]?Killiany|Destrieux|AAL\s*3?|Automated\s+Anatomical\s+Labeling|Craddock\s*\d*|Harvard[- ]Oxford|Power\s*264|Gordon\s*\d*|Glasser|HCP[- ]MMP1?|Brainnetome|Dosenbach|Shen\s*268|Yeo\s*\d*|DiFuMo|NeuroMark|Julich|Talairach)\b'
+    post:
+      kind: template
+      template: '${1}'
+  - name: Registration_Space
+    group: Preprocessing
+    patterns:
+    - '\b(MNI152(?:NLin\d{4}[a-zA-Z]*)?|MNI\s+space|fsaverage\d?|fsLR(?:32k)?|fs_?LR|native\s+space|Talairach\s+space|CIFTI|grayordinate)\b'
+    post:
+      kind: template
+      template: '${1}'
+  - name: Task_Paradigm
+    group: Preprocessing
+    patterns:
+    - '\b(resting[- ]state|rest[- ]fMRI|task[- ]based|block\s+design|event[- ]related|naturalistic\s+(?:viewing|listening|stimuli)|movie[- ]watching|story\s+listening|silent\s+(?:reading|naming|word\s+generation|verb\s+generation)|covert\s+(?:speech|naming|reading|articulation)|inner\s+speech|imagined\s+speech|verbal\s+fluency|picture\s+naming|semantic\s+decision|n[- ]back|working\s+memory\s+task|visual\s+imagery|mental\s+imagery)\b'
+    post:
+      kind: template
+      template: '${1}'
+      lower: true
+datasets:
+- name: HCP (Human Connectome Project)
+  aliases:
+  - '\bHuman Connectome Project\b'
+  - '\bHCP\b(?!-?MMP)'
+  - '\bHCP-?(?:YA|1200|S1200|Aging|D)\b'
+  home: 'https://www.humanconnectome.org/'
+  description: 'Large-scale multimodal MRI of healthy young adults — the field''s default resting-state and task reference.'
+- name: NSD (Natural Scenes Dataset)
+  aliases:
+  - '\bNatural Scenes Dataset\b'
+  - '\bNSD\b'
+  home: 'https://naturalscenesdataset.org/'
+  description: 7T fMRI of eight subjects viewing tens of thousands of COCO images — the standard for image reconstruction work.
+- name: ABIDE
+  aliases:
+  - '\bABIDE\s*(?:I{1,2}|1|2)?\b'
+  - '\bAutism Brain Imaging Data Exchange\b'
+  home: 'https://fcon_1000.projects.nitrc.org/indi/abide/'
+  description: 'Aggregated resting-state fMRI from autism and control participants, pooled across many independent sites.'
+- name: ADNI
+  aliases:
+  - '\bADNI\b'
+  - '\bAlzheimer''?s Disease Neuroimaging Initiative\b'
+  home: 'https://adni.loni.usc.edu/'
+  description: 'Longitudinal MRI, PET, genetics and clinical follow-up on Alzheimer''s disease and mild cognitive impairment.'
+- name: UK Biobank
+  aliases:
+  - '\bUK\s?Biobank\b'
+  - '\bUKB\b'
+  home: 'https://www.ukbiobank.ac.uk/'
+  description: 'Population-scale UK cohort pairing brain MRI with genetics, health records and lifestyle measures.'
+- name: ADHD-200
+  aliases:
+  - '\bADHD-?200\b'
+  home: 'https://fcon_1000.projects.nitrc.org/indi/adhd200/'
+  description: Multi-site resting-state fMRI of children and adolescents with ADHD alongside typically-developing controls.
+- name: Generic Object Decoding (Kamitani)
+  aliases:
+  - '\bGeneric Object Decoding\b'
+  - '\bGOD dataset\b'
+  - '\bDeepRecon\b'
+  - '\bKamitani\b'
+  home: 'https://openneuro.org/datasets/ds001246'
+  description: fMRI while subjects viewed ImageNet objects — the classic object-decoding benchmark.
+- name: BOLD5000
+  aliases:
+  - '\bBOLD5000\b'
+  home: 'https://bold5000-dataset.github.io/website/'
+  description: 'fMRI of subjects viewing 5,000 real-world scene images drawn from COCO, ImageNet and SUN.'
+- name: Narratives (Nastase)
+  aliases:
+  - '\bNarratives\b(?!\s+of)'
+  - '\bNastase\b'
+  home: 'https://openneuro.org/datasets/ds002345'
+  description: A large collection of fMRI datasets in which subjects listened to spoken stories.
+- name: Moth Radio Hour / Huth-LeBel story data
+  aliases:
+  - '\bMoth Radio Hour\b'
+  - '\bLeBel\b'
+  - '\bHuth\b'
+  home: 'https://openneuro.org/datasets/ds003020'
+  description: Hours of fMRI per subject during passive listening to natural spoken stories.
+- name: Pereira et al. 2018
+  aliases:
+  - '\bPereira\b'
+  home: 'https://osf.io/crwz7/'
+  description: 'fMRI of sentence and concept reading, built to train a general decoder of linguistic meaning.'
+- name: THINGS-fMRI
+  aliases:
+  - '\bTHINGS-?(?:fMRI|data)?\b'
+  home: 'https://things-initiative.org/'
+  description: 'Responses to the THINGS image database, which spans thousands of everyday object concepts.'
+- name: Algonauts
+  aliases:
+  - '\bAlgonauts\b'
+  home: 'http://algonauts.csail.mit.edu/'
+  description: A recurring challenge pairing brain responses to naturalistic images or video with model predictions.
+- name: CNeuroMod / Courtois
+  aliases:
+  - '\bCNeuroMod\b'
+  - '\bCourtois\b'
+  home: 'https://www.cneuromod.ca/'
+  description: 'Deeply-sampled individuals scanned for many hours each on movies, video games and audio.'
+- name: StudyForrest
+  aliases:
+  - '\bStudy\s?Forrest\b'
+  home: 'https://www.studyforrest.org/'
+  description: Extensive 3T and 7T fMRI of participants hearing and watching the film Forrest Gump.
+- name: REST-meta-MDD
+  aliases:
+  - '\bREST-?meta-?MDD\b'
+  home: 'http://rfmri.org/REST-meta-MDD'
+  description: Aggregated resting-state fMRI from major-depression patients and controls across Chinese sites.
+- name: OpenNeuro / ds00xxxx
+  aliases:
+  - '\bOpenNeuro\b'
+  - '\bds\d{6}\b'
+  home: 'https://openneuro.org/'
+  description: 'The open BIDS archive itself — a paper citing a bare ds###### accession is pointing here.'
+- name: SRPBS / Japanese multi-site
+  aliases:
+  - '\bSRPBS\b'
+  home: 'https://bicr-resource.atr.jp/srpbsopen/'
+  description: Japanese multi-site resting-state fMRI spanning several psychiatric diagnoses and healthy controls.
+- name: ABCD
+  aliases:
+  - '\bABCD\b'
+  - '\bAdolescent Brain Cognitive Development\b'
+  home: 'https://abcdstudy.org/'
+  description: Longitudinal US study following adolescent brain development with repeated imaging and behavioural batteries.
+- name: MSC (Midnight Scan Club)
+  aliases:
+  - '\bMidnight Scan Club\b'
+  - '\bMSC\b'
+  home: 'https://openneuro.org/datasets/ds000224'
+  description: 'Ten subjects scanned repeatedly across many sessions, for individual-level network mapping.'
+- name: Forrest Gump 7T
+  aliases:
+  - '\bForrest Gump\b'
+  home: 'https://www.studyforrest.org/'
+  description: 'The high-field arm of StudyForrest — 7T responses to the film''s audio-visual narrative.'
+- name: HCP-EP / HCP-D / HCP-A
+  aliases:
+  - '\bHCP-?(?:EP|D|A)\b'
+  home: 'https://www.humanconnectome.org/'
+  description: 'The Connectome lifespan and early-psychosis extensions — development, aging and clinical cohorts on HCP protocols.'
+- name: Deep Image Reconstruction (Shen)
+  aliases:
+  - '\bDeep Image Reconstruction\b'
+  home: 'https://openneuro.org/datasets/ds001506'
+  description: 'Kamitani-lab fMRI of seen and imagined images, built for reconstructing what was viewed.'
+- name: NOD (Natural Object Dataset)
+  aliases:
+  - '\bNatural Object Dataset\b'
+  - '\bNOD\b'
+  home: 'https://openneuro.org/datasets/ds004496'
+  description: Large-scale fMRI of many subjects viewing naturalistic object images.
+- name: Nifty/Neuromark ICA templates
+  aliases:
+  - '\bNeuroMark\b'
+  home: 'https://trendscenter.org/data/'
+  description: 'TReNDS''s spatially-constrained ICA templates, for extracting comparable networks across studies.'
+consensus:
+  min_hits_full:
+    value: 2
+    why: Mentions of a dataset a full paper needs before it counts as using it.
+  min_hits_abstract:
+    value: 1
+    why: 'The same for an abstract, which names its data once.'
+  window:
+    value: 700
+    why: Characters either side of a dataset mention searched for acquisition parameters.
+  max_spots:
+    value: 40
+    why: Dataset mentions per paper looked at.
+  voxel_max_mm:
+    value: 5.0
+    why: 'A larger "voxel" is a smoothing kernel or FOV, not a voxel.'
+  min_papers:
+    value: 2
+    why: 'Papers that must report a value before it is the dataset''s consensus.'
+  top_k:
+    value: 3
+    why: Values shown per dataset parameter (the consensus and its alternatives).
+  params:
+  - name: TR
+    pattern: '\b(?:TR|repetition time)\s*(?:\([A-Z]+\))?\s*[=:of ]{1,4}\s*(\d+(?:\.\d+)?)\s*(ms|msec|s\b|sec|seconds?)?'
+    ignore_case: true
+  - name: TE
+    pattern: '\b(?:TE|echo time)\s*(?:\([A-Z]+\))?\s*[=:of ]{1,4}\s*(\d+(?:\.\d+)?)\s*(ms|msec|s\b|sec)?'
+    ignore_case: true
+  - name: Flip_Angle
+    pattern: '\bflip angle\s*(?:\(FA\))?\s*[=:of ]{1,4}\s*(\d+(?:\.\d+)?)\s*(?:°|deg)?'
+    ignore_case: true
+  - name: Voxel_Size
+    pattern: '\b(\d+(?:\.\d+)?\s*(?:[x×]\s*\d+(?:\.\d+)?\s*){0,2}mm)(?:\s*3|³)?\s*(?:isotropic|iso)?'
+    ignore_case: true
+  - name: Field_Strength
+    pattern: '\b(1\.5|3|4|7|9\.4)\s*[- ]?(?:T|Tesla)\b'
+    ignore_case: true
+  - name: Multiband
+    pattern: '\bmulti-?band\s*(?:factor)?\s*(?:of|=|:)?\s*(\d)\b'
+    ignore_case: true
+  - name: N_Slices
+    pattern: '\b(\d{2,3})\s+slices\b'
+    ignore_case: true
+  - name: Scanner
+    pattern: '\b(Siemens\s+\w+|Philips\s+\w+|GE\s+\w+)\b'
+    ignore_case: false
+  voxel_noise_left: '(smooth\w*|FWHM|kernel|field of view|FOV|matrix|thickness|gap|in-?plane|slice)\W{0,20}$'
+  aliases_ignore_case: false
+  fallback:
+    Field_Strength: Field_Strength
+    Scanner_Vendor_Model: Scanner
+    TR: TR
+    TE: TE
+    Flip_Angle: Flip_Angle
+    Voxel_Size: Voxel_Size
+    Slices: N_Slices
+    Multiband_SMS: Multiband
+missing:
+  precision:
+    value: 0.94
+    why: 'Measured once over the 377 papers of the old built /review that had an OpenAlex abstract: 52 of the 55 this screen let through were also included by the full-text screen.'
+  max_nearmiss:
+    value: 400
+    why: Near misses kept (works failing exactly one criterion).
+  miss_labels:
+    attention: names no architecture
+    decoding: no decoding verb
+    fmri: modality contested
+  caveat: 'An abstract-only screen. Most of what it misses is papers whose abstract never names an architecture at all; there is no threshold that recovers a word the abstract does not contain. Read this as a shortlist of candidates, never as a review.'

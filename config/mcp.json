@@ -44,6 +44,10 @@
       "route": "GET /api/paper/pdf"
     },
     {
+      "reason": "A file to download; get_screener_setup gives the same rules as JSON.",
+      "route": "GET /api/review/setups/{setup}/export"
+    },
+    {
       "reason": "A file to download, made from the rows sent.",
       "route": "POST /api/export/xlsx"
     },
@@ -1145,6 +1149,54 @@
       "title": "Stop your own login link working"
     },
     {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Check screener rules without saving (admin)"
+      },
+      "description": "Whether rules load (every pattern compiles, every value has the right type): a whole document, a setup, or a setup with changes made. And how many papers using them would re-screen.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "changes": {
+            "description": "Changes to make to the setup's rules instead of sending them whole: [{path, value}] or [{path, remove: true}]. A change's path is how differences() names a place: keys joined by dots (thresholds.full.fmri_full_min.value), [name] for the item of a list whose name is that (extraction.fields[TR].patterns, datasets[NSD (Natural Scenes Dataset)]), [3] for an item by its place from 0, and [+] at the end to append. {path, value} sets it; {path, remove: true} takes it out.",
+            "oneOf": [
+              {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rules": {
+            "description": "A whole rules document to check.",
+            "oneOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "setup": {
+            "description": "A setup to check, or to make changes to first.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "check_screener_rules",
+      "route": "POST /api/review/check",
+      "title": "Check screener rules without saving (admin)"
+    },
+    {
       "adminOnly": false,
       "annotations": {
         "destructiveHint": false,
@@ -1371,6 +1423,101 @@
       "title": "A login link for yourself"
     },
     {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Make a rule setup (admin)"
+      },
+      "description": "A new named setup: a copy of another (source), or a whole rules document (rules), with changes made to it. Rules that do not load are a 400 listing each problem with where it is; nothing is made. It is not used until activated.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "activate": {
+            "description": "Use it at once (re-screens the candidate papers).",
+            "type": "boolean"
+          },
+          "changes": {
+            "description": "Changes to make to the setup's rules instead of sending them whole: [{path, value}] or [{path, remove: true}]. A change's path is how differences() names a place: keys joined by dots (thresholds.full.fmri_full_min.value), [name] for the item of a list whose name is that (extraction.fields[TR].patterns, datasets[NSD (Natural Scenes Dataset)]), [3] for an item by its place from 0, and [+] at the end to append. {path, value} sets it; {path, remove: true} takes it out.",
+            "oneOf": [
+              {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "description": "What it is for.",
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "name": {
+            "description": "Its name, unique.",
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          },
+          "rules": {
+            "description": "A whole rules document to start from instead of a copy.",
+            "oneOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "default": "default",
+            "description": "The setup to copy (default \"default\"). Ignored when rules are sent.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "name": "create_screener_setup",
+      "route": "POST /api/review/setups",
+      "title": "Make a rule setup (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Delete a rule setup (admin)"
+      },
+      "description": "Deletes a setup for good. The default, and the setup in use, cannot be deleted.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "setup": {
+            "description": "The setup's id, from list_screener_setups (\"default\" is config/review.yaml).",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "setup"
+        ],
+        "type": "object"
+      },
+      "name": "delete_screener_setup",
+      "route": "POST /api/review/setups/{setup}/delete",
+      "title": "Delete a rule setup (admin)"
+    },
+    {
       "adminOnly": false,
       "annotations": {
         "destructiveHint": false,
@@ -1469,6 +1616,34 @@
       "name": "get_paper_content",
       "route": "GET /api/paper/content",
       "title": "What is known about a paper"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "One rule setup (admin)"
+      },
+      "description": "A setup's whole rules -- every word list, threshold, extraction field and dataset -- with config/review.yaml's defaults beside them and the paths where they differ.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "setup": {
+            "description": "The setup's id, from list_screener_setups (\"default\" is config/review.yaml).",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "setup"
+        ],
+        "type": "object"
+      },
+      "name": "get_screener_setup",
+      "route": "GET /api/review/setups/{setup}",
+      "title": "One rule setup (admin)"
     },
     {
       "adminOnly": false,
@@ -1838,6 +2013,24 @@
       "title": "Library papers not on a list"
     },
     {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Hand-checked review values (admin)"
+      },
+      "description": "Values typed in by hand, by paper: each wins over what the screener extracted, whatever the setup, and flags the paper.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "list_review_overrides",
+      "route": "GET /api/review/overrides",
+      "title": "Hand-checked review values (admin)"
+    },
+    {
       "adminOnly": false,
       "annotations": {
         "destructiveHint": false,
@@ -1914,6 +2107,24 @@
       "name": "list_schema",
       "route": "GET /api/lists/schema",
       "title": "List ops reference"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "The screener's rule setups (admin)"
+      },
+      "description": "Every named set of screener rules, and which one is in use.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "list_screener_setups",
+      "route": "GET /api/review/setups",
+      "title": "The screener's rule setups (admin)"
     },
     {
       "adminOnly": false,
@@ -2171,6 +2382,34 @@
       "title": "Rename your account"
     },
     {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Reset the default rule setup (admin)"
+      },
+      "description": "Drops the default setup's edits: config/review.yaml as it is. Only the default can be reset.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "setup": {
+            "description": "The setup's id, from list_screener_setups (\"default\" is config/review.yaml).",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "setup"
+        ],
+        "type": "object"
+      },
+      "name": "reset_screener_setup",
+      "route": "POST /api/review/setups/{setup}/reset",
+      "title": "Reset the default rule setup (admin)"
+    },
+    {
       "adminOnly": false,
       "annotations": {
         "destructiveHint": false,
@@ -2287,6 +2526,115 @@
       "name": "revoke_my_session_bulk",
       "route": "POST /api/bulk/account/sessions/revoke",
       "title": "Sign out one of your devices, for many at once"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Save a rule setup (admin)"
+      },
+      "description": "Changes a setup's rules (whole, or by changes), name or description. A pattern that does not compile, or a missing or wrong-typed value, is a 400 listing each problem with where it is; nothing is saved. Saving the setup in use re-screens the candidate papers one at a time; saving another re-screens nothing.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "base_signature": {
+            "description": "The signature the setup had when read: if it has changed since, nothing is saved and the answer is a 409 with the current signature.",
+            "type": "string"
+          },
+          "changes": {
+            "description": "Changes to make to the setup's rules instead of sending them whole: [{path, value}] or [{path, remove: true}]. A change's path is how differences() names a place: keys joined by dots (thresholds.full.fmri_full_min.value), [name] for the item of a list whose name is that (extraction.fields[TR].patterns, datasets[NSD (Natural Scenes Dataset)]), [3] for an item by its place from 0, and [+] at the end to append. {path, value} sets it; {path, remove: true} takes it out.",
+            "oneOf": [
+              {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "description": "A new description (not for the default).",
+            "maxLength": 2000,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "description": "A new name (not for the default).",
+            "maxLength": 80,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rules": {
+            "description": "The whole rules document.",
+            "oneOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "setup": {
+            "description": "The setup's id, from list_screener_setups (\"default\" is config/review.yaml).",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "setup"
+        ],
+        "type": "object"
+      },
+      "name": "save_screener_setup",
+      "route": "POST /api/review/setups/{setup}",
+      "title": "Save a rule setup (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "How far the screener has got (admin)"
+      },
+      "description": "Candidates, and how many are screened under the setup in use, waiting, or failed.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "screener_progress",
+      "route": "GET /api/review/progress",
+      "title": "How far the screener has got (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "How screener rules are written (admin)"
+      },
+      "description": "What an agent needs to write a setup: how patterns, macros and templates work, the change-path syntax, and the document's schema.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "screener_rules_guide",
+      "route": "GET /api/review/guide",
+      "title": "How screener rules are written (admin)"
     },
     {
       "adminOnly": false,
@@ -2463,6 +2811,41 @@
       "name": "set_figure_picks",
       "route": "POST /api/figures/replace",
       "title": "Replace a view's picks"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Set a paper's hand-checked values (admin)"
+      },
+      "description": "Replaces one paper's overrides; sending no fields removes them. Nothing is re-screened: overrides apply when read.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "fields": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Field -> value. Empty values are dropped; none at all deletes the override.",
+            "type": "object"
+          },
+          "key": {
+            "description": "The paper's key (or its DOI).",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "fields",
+          "key"
+        ],
+        "type": "object"
+      },
+      "name": "set_review_override",
+      "route": "POST /api/review/overrides",
+      "title": "Set a paper's hand-checked values (admin)"
     },
     {
       "adminOnly": false,
@@ -2839,6 +3222,104 @@
       "name": "skip_missing",
       "route": "POST /api/missing/skip",
       "title": "Skip or unskip missing papers"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Try the screener on one paper (admin)"
+      },
+      "description": "Screens one library paper (key) or pasted text with the rules sent (unsaved), a setup, or the setup in use -- with changes made first, if sent -- and returns the verdict, why, and every extracted field with its quote. Nothing is stored.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "abstract": {
+            "type": "string"
+          },
+          "changes": {
+            "description": "Changes to make to the setup's rules instead of sending them whole: [{path, value}] or [{path, remove: true}]. A change's path is how differences() names a place: keys joined by dots (thresholds.full.fmri_full_min.value), [name] for the item of a list whose name is that (extraction.fields[TR].patterns, datasets[NSD (Natural Scenes Dataset)]), [3] for an item by its place from 0, and [+] at the end to append. {path, value} sets it; {path, remove: true} takes it out.",
+            "oneOf": [
+              {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "key": {
+            "description": "A paper to screen, by its key.",
+            "type": "string"
+          },
+          "mode": {
+            "default": "full",
+            "enum": [
+              "full",
+              "abstract"
+            ],
+            "type": "string"
+          },
+          "rules": {
+            "description": "Rules to test with, not saved.",
+            "oneOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "setup": {
+            "description": "A setup to test with (when no rules are sent); none means the one in use.",
+            "type": "string"
+          },
+          "text": {
+            "description": "Pasted text to screen as the paper's body (and methods).",
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "test_screener",
+      "route": "POST /api/review/test",
+      "title": "Try the screener on one paper (admin)"
+    },
+    {
+      "adminOnly": true,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Use a rule setup (admin)"
+      },
+      "description": "Screens with this setup from now on. Each candidate paper takes the result it already has for this setup's rules when its text has not changed, and is re-screened in the background otherwise.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "setup": {
+            "description": "The setup's id, from list_screener_setups (\"default\" is config/review.yaml).",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "setup"
+        ],
+        "type": "object"
+      },
+      "name": "use_screener_setup",
+      "route": "POST /api/review/setups/{setup}/activate",
+      "title": "Use a rule setup (admin)"
     },
     {
       "adminOnly": false,

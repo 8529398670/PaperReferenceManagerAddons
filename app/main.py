@@ -31,9 +31,10 @@ from app.core.static_files import StaticServer
 from app.boards.service import BoardService
 from app.content.enrich import Enricher
 from app.content.figures import Figures
-from app.content.screens import Screens
+from app.content.screens import Screens, memberships
 from app.content.service import ContentService
 from app.library.service import LibraryService
+from app.review.service import ReviewService
 from app.routes import build_routes
 
 # How often config.yaml is checked for edits made outside the Settings screen.
@@ -97,6 +98,18 @@ def build_app(
     content.on_figures = figures.forget
     enricher = Enricher(cfg.library.content_dir / "_enrich", lambda: (settings.get().enrich.github_token, settings.get().enrich.osf_token))
     screens = Screens(content, figures, enricher, store)
+    # The review screener: papers on a list or with a picked figure, screened
+    # as the content queue reaches them. See app/review/.
+    review = ReviewService(store, cfg.config_file.parent / "review.yaml", content.files)
+    review.candidates_fn = lambda: set(memberships(store)) | set(figures.picks_per_paper())
+    content.review = review
+
+    def candidates_changed() -> None:
+        review.candidates_changed()
+        content.dirty = True
+
+    boards.on_changed = candidates_changed
+    figures.on_picks = candidates_changed
     screens.publish = library.publish
 
     def publish(name: str, data: dict) -> None:
@@ -170,6 +183,7 @@ def build_app(
     app.state.content = content
     app.state.figures = figures
     app.state.screens = screens
+    app.state.review = review
     app.state.language = lang
     # Reported to MCP clients as serverInfo.version.
     app.state.version = version

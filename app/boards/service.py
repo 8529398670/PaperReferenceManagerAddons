@@ -26,6 +26,8 @@ class BoardService:
         # The content service (app/content/), for modality tags and the
         # Code/Datasets links; main sets it. None in tests that need neither.
         self.content: Any = None
+        # Told after any list changed (the review screener's candidates).
+        self.on_changed: Any = None
 
     def start(self) -> None:
         self._loop = asyncio.get_running_loop()
@@ -45,6 +47,8 @@ class BoardService:
         if renamed_from:
             data["renamed_from"] = renamed_from
         message = sse.event("list", json.dumps(data))
+        if self.on_changed is not None:
+            self.on_changed()
         if self._loop is None:
             return
         try:

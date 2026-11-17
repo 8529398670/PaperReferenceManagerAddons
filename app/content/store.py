@@ -41,14 +41,17 @@ METHODS = "methods"
 CODE = "code"
 DATASETS = "datasets"
 MODALITIES = "modalities"
+# The review screener (app/review/): only papers on a list or with a picked
+# figure, and redone when the screener's rules change.
+REVIEW = "review"
 # The heavy stages need ML packages the server does not have, so only the
 # optional worker process (`python -m app worker`, app/worker/) runs them. If
 # it never runs they stay pending, shown as "not available", and nothing else
 # waits on them.
 FIGURES = "figures"
 OCR = "ocr"
-STAGES = (OPENALEX, METHODS, CODE, DATASETS, MODALITIES, FIGURES, OCR)
-LOCAL = (METHODS, CODE, DATASETS, MODALITIES)
+STAGES = (OPENALEX, METHODS, CODE, DATASETS, MODALITIES, REVIEW, FIGURES, OCR)
+LOCAL = (METHODS, CODE, DATASETS, MODALITIES, REVIEW)
 HEAVY = (FIGURES, OCR)
 LANES = {"net": (OPENALEX,), "local": LOCAL}
 
@@ -208,6 +211,17 @@ class ContentStore:
                 raise
             self._db.execute("COMMIT")
         return changed
+
+    def drop(self, key: str, stage: str, name: str = "") -> None:
+        """One stage of one paper is no longer wanted: its task goes, and its
+        result file if named."""
+        with self._lock:
+            self._db.execute("DELETE FROM tasks WHERE key = ? AND stage = ?", (key, stage))
+        if name:
+            try:
+                (self.dir(key) / name).unlink()
+            except OSError:
+                pass
 
     def forget(self, keys: Iterable[str]) -> None:
         keys = list(keys)

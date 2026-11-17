@@ -288,6 +288,28 @@ def command_import_legacy(store: db.Store, cfg: config.Config, args: argparse.Na
         content.close()
     if skips:
         print(f"{skips} skipped missing papers brought over.")
+    import_legacy_overrides(store, cfg, Path(args.source).expanduser())
+
+
+def import_legacy_overrides(store: db.Store, cfg: config.Config, source: Path) -> None:
+    """The old config/review-overrides.json (beside the old output/ folder, or
+    in it): the hand-checked review values, by DOI. One already here is kept."""
+    import json
+
+    from app.review.service import ReviewService
+
+    for path in (source.parent / "config" / "review-overrides.json", source / "review-overrides.json"):
+        if path.is_file():
+            break
+    else:
+        return
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        print(f"{path} could not be read ({error}); review overrides not imported.")
+        return
+    n = ReviewService(store, cfg.config_file.parent / "review.yaml").import_overrides(data if isinstance(data, dict) else {})
+    print(f"{n} review overrides brought over from {path}.")
 
 
 def open_content(store: db.Store, cfg: config.Config) -> Any:

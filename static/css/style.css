@@ -1130,3 +1130,17 @@ body.data-table-dragging, body.data-table-dragging * { cursor: col-resize !impor
 /* The Code screen (static/js/code.js): a repository's description is kept to
    two lines (the whole of it is the tooltip), so a row stays a row. */
 .code-about { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* The Screener rules page (static/js/review_rules.js): number inputs stay
+   narrow, the field and dataset editor is wide enough for a long pattern, and
+   the test panel stays in view below the top bar on a wide screen. */
+.rr-number { max-width: 8rem; }
+.rr-tabs { scrollbar-width: none; }
+.rr-tabs::-webkit-scrollbar { display: none; }
+.rr-editor { --bs-offcanvas-width: min(40rem, 100vw); }
+@media (min-width: 1200px) {
+  .rr-test.sticky-xl-top { top: calc(var(--app-navbar-height) + 1rem); z-index: 1; }
+}
+.rr-col-value { width: 8rem; }
+.rr-test #rr-test-out { overflow-wrap: anywhere; }
+

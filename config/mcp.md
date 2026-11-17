@@ -34,16 +34,20 @@ Every tool POST /mcp offers. Written by scripts/api_docs.sh from the registered 
 | [`admin_set_user_role`](#admin_set_user_role) | [`POST /api/admin/users/{user_id}/role`](api.md#post-apiadminusersuser_idrole) | admin keys | Change an account's role (admin) |
 | [`admin_set_user_role_bulk`](#admin_set_user_role_bulk) | [`POST /api/bulk/admin/users/role`](api.md#post-apibulkadminusersrole) | admin keys | Change an account's role, for many at once (admin) |
 | [`cancel_my_login_link`](#cancel_my_login_link) | [`POST /api/account/login-link/cancel`](api.md#post-apiaccountlogin-linkcancel) | any key | Stop your own login link working |
+| [`check_screener_rules`](#check_screener_rules) | [`POST /api/review/check`](api.md#post-apireviewcheck) | admin keys | Check screener rules without saving (admin) |
 | [`cite_papers`](#cite_papers) | [`POST /api/cite`](api.md#post-apicite) | any key | Cite papers |
 | [`cite_styles`](#cite_styles) | [`GET /api/cite/styles`](api.md#get-apicitestyles) | any key | The citation styles |
 | [`content_badges`](#content_badges) | [`POST /api/papers/badges`](api.md#post-apipapersbadges) | any key | What is ready, for many papers |
 | [`content_papers`](#content_papers) | [`GET /api/content/papers`](api.md#get-apicontentpapers) | any key | The papers a stage has not finished |
 | [`content_status`](#content_status) | [`GET /api/content/status`](api.md#get-apicontentstatus) | any key | How far the content queue has got |
 | [`create_my_login_link`](#create_my_login_link) | [`POST /api/account/login-link`](api.md#post-apiaccountlogin-link) | any key | A login link for yourself |
+| [`create_screener_setup`](#create_screener_setup) | [`POST /api/review/setups`](api.md#post-apireviewsetups) | admin keys | Make a rule setup (admin) |
+| [`delete_screener_setup`](#delete_screener_setup) | [`POST /api/review/setups/{setup}/delete`](api.md#post-apireviewsetupssetupdelete) | admin keys | Delete a rule setup (admin) |
 | [`figure_picks`](#figure_picks) | [`GET /api/figures/state`](api.md#get-apifiguresstate) | any key | A view's picks and skipped papers |
 | [`get_list`](#get_list) | [`GET /api/lists/{slug}`](api.md#get-apilistsslug) | any key | Read a list |
 | [`get_paper`](#get_paper) | [`GET /api/paper`](api.md#get-apipaper) | any key | One paper |
 | [`get_paper_content`](#get_paper_content) | [`GET /api/paper/content`](api.md#get-apipapercontent) | any key | What is known about a paper |
+| [`get_screener_setup`](#get_screener_setup) | [`GET /api/review/setups/{setup}`](api.md#get-apireviewsetupssetup) | admin keys | One rule setup (admin) |
 | [`label_my_session`](#label_my_session) | [`POST /api/account/sessions/{session_id}/label`](api.md#post-apiaccountsessionssession_idlabel) | any key | Name one of your devices |
 | [`library_status`](#library_status) | [`GET /api/library/status`](api.md#get-apilibrarystatus) | any key | How the library is doing |
 | [`library_version`](#library_version) | [`GET /api/version`](api.md#get-apiversion) | any key | The library's version token |
@@ -55,8 +59,10 @@ Every tool POST /mcp offers. Written by scripts/api_docs.sh from the registered 
 | [`list_my_sessions`](#list_my_sessions) | [`GET /api/account/sessions`](api.md#get-apiaccountsessions) | any key | Your signed-in devices |
 | [`list_ops`](#list_ops) | [`POST /api/lists/{slug}/ops`](api.md#post-apilistsslugops) | any key | Change a list |
 | [`list_remaining`](#list_remaining) | [`GET /api/lists/{slug}/remaining`](api.md#get-apilistsslugremaining) | any key | Library papers not on a list |
+| [`list_review_overrides`](#list_review_overrides) | [`GET /api/review/overrides`](api.md#get-apireviewoverrides) | admin keys | Hand-checked review values (admin) |
 | [`list_rows`](#list_rows) | [`GET /api/lists/{slug}/rows`](api.md#get-apilistsslugrows) | any key | A list as flat rows |
 | [`list_schema`](#list_schema) | [`GET /api/lists/schema`](api.md#get-apilistsschema) | any key | List ops reference |
+| [`list_screener_setups`](#list_screener_setups) | [`GET /api/review/setups`](api.md#get-apireviewsetups) | admin keys | The screener's rule setups (admin) |
 | [`list_team`](#list_team) | [`GET /api/team`](api.md#get-apiteam) | any key | List team |
 | [`list_version`](#list_version) | [`GET /api/lists/{slug}/history/{rev}`](api.md#get-apilistsslughistoryrev) | any key | One past version of a list |
 | [`missing_authors`](#missing_authors) | [`GET /api/missing/authors`](api.md#get-apimissingauthors) | any key | Who you cite most and lack |
@@ -65,19 +71,26 @@ Every tool POST /mcp offers. Written by scripts/api_docs.sh from the registered 
 | [`pick_figures`](#pick_figures) | [`POST /api/figures/pick`](api.md#post-apifigurespick) | any key | Pick or unpick figures |
 | [`recent_papers`](#recent_papers) | [`GET /api/papers/recent`](api.md#get-apipapersrecent) | any key | Papers added lately |
 | [`rename_account`](#rename_account) | [`POST /api/account/rename`](api.md#post-apiaccountrename) | any key | Rename your account |
+| [`reset_screener_setup`](#reset_screener_setup) | [`POST /api/review/setups/{setup}/reset`](api.md#post-apireviewsetupssetupreset) | admin keys | Reset the default rule setup (admin) |
 | [`retry_content`](#retry_content) | [`POST /api/papers/retry`](api.md#post-apipapersretry) | any key | Try a failed stage again |
 | [`revoke_my_other_sessions`](#revoke_my_other_sessions) | [`POST /api/account/sessions/revoke-others`](api.md#post-apiaccountsessionsrevoke-others) | any key | Sign out all your devices |
 | [`revoke_my_session`](#revoke_my_session) | [`POST /api/account/sessions/{session_id}/revoke`](api.md#post-apiaccountsessionssession_idrevoke) | any key | Sign out one of your devices |
 | [`revoke_my_session_bulk`](#revoke_my_session_bulk) | [`POST /api/bulk/account/sessions/revoke`](api.md#post-apibulkaccountsessionsrevoke) | any key | Sign out one of your devices, for many at once |
+| [`save_screener_setup`](#save_screener_setup) | [`POST /api/review/setups/{setup}`](api.md#post-apireviewsetupssetup) | admin keys | Save a rule setup (admin) |
+| [`screener_progress`](#screener_progress) | [`GET /api/review/progress`](api.md#get-apireviewprogress) | admin keys | How far the screener has got (admin) |
+| [`screener_rules_guide`](#screener_rules_guide) | [`GET /api/review/guide`](api.md#get-apireviewguide) | admin keys | How screener rules are written (admin) |
 | [`search_library`](#search_library) | [`GET /api/papers`](api.md#get-apipapers) | any key | Search the library |
 | [`search_missing`](#search_missing) | [`GET /api/missing`](api.md#get-apimissing) | any key | Search the papers you do not have |
 | [`set_figure_picks`](#set_figure_picks) | [`POST /api/figures/replace`](api.md#post-apifiguresreplace) | any key | Replace a view's picks |
+| [`set_review_override`](#set_review_override) | [`POST /api/review/overrides`](api.md#post-apireviewoverrides) | admin keys | Set a paper's hand-checked values (admin) |
 | [`set_shortcuts`](#set_shortcuts) | [`POST /api/account/shortcuts`](api.md#post-apiaccountshortcuts) | any key | Change your keyboard shortcuts |
 | [`set_tag_colors`](#set_tag_colors) | [`POST /api/account/tag-colors`](api.md#post-apiaccounttag-colors) | any key | Choose where your tag colours come from |
 | [`set_theme`](#set_theme) | [`POST /api/account/theme`](api.md#post-apiaccounttheme) | any key | Pick your theme |
 | [`set_themes`](#set_themes) | [`POST /api/account/themes`](api.md#post-apiaccountthemes) | any key | Replace your own themes |
 | [`skip_figure_papers`](#skip_figure_papers) | [`POST /api/figures/skip`](api.md#post-apifiguresskip) | any key | Skip or unskip papers |
 | [`skip_missing`](#skip_missing) | [`POST /api/missing/skip`](api.md#post-apimissingskip) | any key | Skip or unskip missing papers |
+| [`test_screener`](#test_screener) | [`POST /api/review/test`](api.md#post-apireviewtest) | admin keys | Try the screener on one paper (admin) |
+| [`use_screener_setup`](#use_screener_setup) | [`POST /api/review/setups/{setup}/activate`](api.md#post-apireviewsetupssetupactivate) | admin keys | Use a rule setup (admin) |
 | [`whoami`](#whoami) | [`GET /api/me`](api.md#get-apime) | any key | Who am I |
 
 ## admin_cancel_login_link
@@ -491,6 +504,24 @@ Void your account's live login link without making a new one. Devices it already
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
 
+## check_screener_rules
+
+Whether rules load (every pattern compiles, every value has the right type): a whole document, a setup, or a setup with changes made. And how many papers using them would re-screen.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/review/check`](api.md#post-apireviewcheck) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `changes` | array of object or null | no |  | Changes to make to the setup's rules instead of sending them whole: [{path, value}] or [{path, remove: true}]. A change's path is how differences() names a place: keys joined by dots (thresholds.full.fmri_full_min.value), [name] for the item of a list whose name is that (extraction.fields[TR].patterns, datasets[NSD (Natural Scenes Dataset)]), [3] for an item by its place from 0, and [+] at the end to append. {path, value} sets it; {path, remove: true} takes it out. |
+| `rules` | object or null | no |  | A whole rules document to check. |
+| `setup` | string | no |  | A setup to check, or to make changes to first. |
+
 ## cite_papers
 
 Each paper's in-text and full citation in a CSL style.
@@ -594,6 +625,43 @@ A link that signs your own account in on a browser or another device. An API key
 | `expires_in_minutes` | integer or null | no | 0 to 525600 | 0 never expires. Default auth.login_token_ttl_seconds for a link that works once, auth.multi_use_login_token_ttl_seconds otherwise. |
 | `max_uses` | integer or null | no | 0 to 1000 | Sign-ins the link allows: 1-1000, or 0 for unlimited. Default 1. |
 
+## create_screener_setup
+
+A new named setup: a copy of another (source), or a whole rules document (rules), with changes made to it. Rules that do not load are a 400 listing each problem with where it is; nothing is made. It is not used until activated.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/review/setups`](api.md#post-apireviewsetups) |
+| Read only | no |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `activate` | boolean | no |  | Use it at once (re-screens the candidate papers). |
+| `changes` | array of object or null | no |  | Changes to make to the setup's rules instead of sending them whole: [{path, value}] or [{path, remove: true}]. A change's path is how differences() names a place: keys joined by dots (thresholds.full.fmri_full_min.value), [name] for the item of a list whose name is that (extraction.fields[TR].patterns, datasets[NSD (Natural Scenes Dataset)]), [3] for an item by its place from 0, and [+] at the end to append. {path, value} sets it; {path, remove: true} takes it out. |
+| `description` | string | no | at most 2000 characters | What it is for. |
+| `name` | string | yes | 1 to 80 characters | Its name, unique. |
+| `rules` | object or null | no |  | A whole rules document to start from instead of a copy. |
+| `source` | string | no | default `default` | The setup to copy (default "default"). Ignored when rules are sent. |
+
+## delete_screener_setup
+
+Deletes a setup for good. The default, and the setup in use, cannot be deleted.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/review/setups/{setup}/delete`](api.md#post-apireviewsetupssetupdelete) |
+| Read only | no |
+| Destructive | yes |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `setup` | string | yes | 1 to 64 characters | The setup's id, from list_screener_setups ("default" is config/review.yaml). |
+
 ## figure_picks
 
 Every picked figure (in pick order) and every skipped paper of one view.
@@ -657,6 +725,22 @@ Everything derived about one paper so far: its sections (the methods split), cod
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
 | `key` | string | no |  | The paper's key, from search_library. |
+
+## get_screener_setup
+
+A setup's whole rules -- every word list, threshold, extraction field and dataset -- with config/review.yaml's defaults beside them and the paths where they differ.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/review/setups/{setup}`](api.md#get-apireviewsetupssetup) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `setup` | string | yes | 1 to 64 characters | The setup's id, from list_screener_setups ("default" is config/review.yaml). |
 
 ## label_my_session
 
@@ -847,6 +931,21 @@ Every library paper not on the list (or its shelf), newest added first: what imp
 |---|---|---|---|---|
 | `slug` | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
 
+## list_review_overrides
+
+Values typed in by hand, by paper: each wins over what the screener extracted, whatever the setup, and flags the paper.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/review/overrides`](api.md#get-apireviewoverrides) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+
 ## list_rows
 
 The list as flat rows, each with its position and its cells under their column labels, filtered like the page's filter and tag bar.
@@ -876,6 +975,21 @@ Every op POST /api/lists/{slug}/ops takes, with its parameters, plus how rows an
 |  |  |
 |---|---|
 | Route | [`GET /api/lists/schema`](api.md#get-apilistsschema) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+
+## list_screener_setups
+
+Every named set of screener rules, and which one is in use.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/review/setups`](api.md#get-apireviewsetups) |
 | Read only | yes |
 | Destructive | no |
 
@@ -1020,6 +1134,22 @@ Change your own display name (1-80 characters). expect, when given, is the name 
 | `display_name` | string | yes | 1 to 80 characters |  |
 | `expect` | string or null | no |  |  |
 
+## reset_screener_setup
+
+Drops the default setup's edits: config/review.yaml as it is. Only the default can be reset.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/review/setups/{setup}/reset`](api.md#post-apireviewsetupssetupreset) |
+| Read only | no |
+| Destructive | yes |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `setup` | string | yes | 1 to 64 characters | The setup's id, from list_screener_setups ("default" is config/review.yaml). |
+
 ## retry_content
 
 Put failed (and not-found) stages back in the queue at once: one paper's, one stage's across the library, or one paper's one stage. A not-found OpenAlex lookup is only ever asked again this way.
@@ -1086,6 +1216,57 @@ Runs revoke_my_session once per item: items holds each call's arguments, shared 
 | `items[].session_id` | string | yes |  | The device's id, from GET /api/account/sessions or GET /api/admin/users/{user_id}/sessions (list_my_sessions or admin_list_user_sessions over MCP). |
 | `shared` | object | no |  | Fields every item gets, unless the item sets its own. |
 
+## save_screener_setup
+
+Changes a setup's rules (whole, or by changes), name or description. A pattern that does not compile, or a missing or wrong-typed value, is a 400 listing each problem with where it is; nothing is saved. Saving the setup in use re-screens the candidate papers one at a time; saving another re-screens nothing.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/review/setups/{setup}`](api.md#post-apireviewsetupssetup) |
+| Read only | no |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `base_signature` | string | no |  | The signature the setup had when read: if it has changed since, nothing is saved and the answer is a 409 with the current signature. |
+| `changes` | array of object or null | no |  | Changes to make to the setup's rules instead of sending them whole: [{path, value}] or [{path, remove: true}]. A change's path is how differences() names a place: keys joined by dots (thresholds.full.fmri_full_min.value), [name] for the item of a list whose name is that (extraction.fields[TR].patterns, datasets[NSD (Natural Scenes Dataset)]), [3] for an item by its place from 0, and [+] at the end to append. {path, value} sets it; {path, remove: true} takes it out. |
+| `description` | string or null | no | at most 2000 characters | A new description (not for the default). |
+| `name` | string or null | no | at most 80 characters | A new name (not for the default). |
+| `rules` | object or null | no |  | The whole rules document. |
+| `setup` | string | yes | 1 to 64 characters | The setup's id, from list_screener_setups ("default" is config/review.yaml). |
+
+## screener_progress
+
+Candidates, and how many are screened under the setup in use, waiting, or failed.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/review/progress`](api.md#get-apireviewprogress) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+
+## screener_rules_guide
+
+What an agent needs to write a setup: how patterns, macros and templates work, the change-path syntax, and the document's schema.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/review/guide`](api.md#get-apireviewguide) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+
 ## search_library
 
 Search the papers in the Zotero library, a page at a time. mode "text" (default) is boolean full-text search over title, authors, abstract and the PDF's text: words are ANDed, OR between alternatives, -word or NOT word excludes, "a phrase" is literal. mode "title" finds a half-remembered title, typos and all, or a pasted DOI. Each paper's key is what list_ops' add takes.
@@ -1147,6 +1328,23 @@ Set a view's picks and skipped papers outright: Clear sends both empty, and its 
 | `selected` | array of string | no |  | The picks to keep, in order. |
 | `skipped` | array of string | no |  | The skipped papers to keep. |
 | `view` | string | yes | one of `all`, `method` | "all" or "method": each view has its own picks. |
+
+## set_review_override
+
+Replaces one paper's overrides; sending no fields removes them. Nothing is re-screened: overrides apply when read.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/review/overrides`](api.md#post-apireviewoverrides) |
+| Read only | no |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `fields` | map of string | yes |  | Field -> value. Empty values are dropped; none at all deletes the override. |
+| `key` | string | yes | at least 1 characters | The paper's key (or its DOI). |
 
 ## set_shortcuts
 
@@ -1274,6 +1472,45 @@ Hide works from the Missing screen (a soft hide, undone by skip false), or bring
 | `skip` | boolean | no | default `true` | true hides them (default); false shows them again. |
 | `wids` | array of string | yes |  | OpenAlex ids ("W123"). At most 1000. |
 
+## test_screener
+
+Screens one library paper (key) or pasted text with the rules sent (unsaved), a setup, or the setup in use -- with changes made first, if sent -- and returns the verdict, why, and every extracted field with its quote. Nothing is stored.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/review/test`](api.md#post-apireviewtest) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `abstract` | string | no |  |  |
+| `changes` | array of object or null | no |  | Changes to make to the setup's rules instead of sending them whole: [{path, value}] or [{path, remove: true}]. A change's path is how differences() names a place: keys joined by dots (thresholds.full.fmri_full_min.value), [name] for the item of a list whose name is that (extraction.fields[TR].patterns, datasets[NSD (Natural Scenes Dataset)]), [3] for an item by its place from 0, and [+] at the end to append. {path, value} sets it; {path, remove: true} takes it out. |
+| `key` | string | no |  | A paper to screen, by its key. |
+| `mode` | string | no | one of `full`, `abstract`; default `full` |  |
+| `rules` | object or null | no |  | Rules to test with, not saved. |
+| `setup` | string | no |  | A setup to test with (when no rules are sent); none means the one in use. |
+| `text` | string | no |  | Pasted text to screen as the paper's body (and methods). |
+| `title` | string | no |  |  |
+
+## use_screener_setup
+
+Screens with this setup from now on. Each candidate paper takes the result it already has for this setup's rules when its text has not changed, and is re-screened in the background otherwise.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/review/setups/{setup}/activate`](api.md#post-apireviewsetupssetupactivate) |
+| Read only | no |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `setup` | string | yes | 1 to 64 characters | The setup's id, from list_screener_setups ("default" is config/review.yaml). |
+
 ## whoami
 
 The account this API key belongs to, the role it acts with (role -- never higher than the key's own scope), and the account's own role.
@@ -1305,6 +1542,7 @@ Routes an API key may call that have no tool, and why.
 | [`GET /api/lists/{slug}/export.csv`](api.md#get-apilistsslugexportcsv) | A file to download; list_rows gives the same rows as data. |
 | [`GET /api/mcp.json`](api.md#get-apimcpjson) | The MCP reference itself; tools/list gives the same list. |
 | [`GET /api/paper/pdf`](api.md#get-apipaperpdf) | The file itself, for a browser to show. |
+| [`GET /api/review/setups/{setup}/export`](api.md#get-apireviewsetupssetupexport) | A file to download; get_screener_setup gives the same rules as JSON. |
 | [`POST /api/export/xlsx`](api.md#post-apiexportxlsx) | A file to download, made from the rows sent. |
 | [`POST /api/lists`](api.md#post-apilists) | An agent edits lists; which lists exist is a person's decision. |
 | [`POST /api/lists/{slug}/delete`](api.md#post-apilistsslugdelete) | Which lists exist is a person's decision. |

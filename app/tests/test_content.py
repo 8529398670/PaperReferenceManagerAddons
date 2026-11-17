@@ -141,8 +141,11 @@ class ContentTest(unittest.TestCase):
         self.content.reconcile()
         self.drain("local")
         counts = self.content.files.counts()
+        # The review stage is only for papers on a list (app/review/), and
+        # this service has no screener: test_review.py covers it.
         for stage in st.LOCAL:
-            self.assertEqual(counts[stage]["done"], 3, stage)
+            if stage != st.REVIEW:
+                self.assertEqual(counts[stage]["done"], 3, stage)
         key = self.key("MindAlign")
         badge = self.content.badges([key])[key]
         self.assertEqual(badge["states"]["methods"], "done")

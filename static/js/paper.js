@@ -13,7 +13,7 @@ const PaperView = {
   context: null,
   ticket: 0,
   timer: null,
-  stages: [ "openalex" , "methods" , "code" , "datasets" , "modalities" , "figures" , "ocr" ],
+  stages: [ "openalex" , "methods" , "code" , "datasets" , "modalities" , "review" , "figures" , "ocr" ],
   // Run by the optional worker, not the server: with none running, waiting
   // reads "not available".
   heavy: [ "figures" , "ocr" ],
@@ -214,6 +214,11 @@ const PaperView = {
       return summary.methods_chars ? I18n.get( "paper.methods_summary" ).replace( "{sections}" , summary.sections || 0 ) : I18n.get( "paper.no_methods" );
     }
     if ( stage === "code" || stage === "datasets" ) return I18n.get( "paper.links_summary" ).replace( "{n}" , ( summary.n || 0 ) + ( summary.names || 0 ) );
+    if ( stage === "review" ) {
+      if ( summary.include ) return I18n.get( "paper.review_in" ).replace( "{task}" , () => summary.task || "" );
+      const key = summary.borderline ? "paper.review_borderline" : "paper.review_out";
+      return I18n.get( key ).replace( "{reason}" , () => ( summary.reason || "" ).replace( /_/g , " " ) );
+    }
     if ( stage === "modalities" ) {
       const used = ( summary.used || [] ).join( ", " ) || I18n.get( "paper.no_modalities" );
       return summary.inferred ? I18n.get( "paper.modalities_inferred" ).replace( "{used}" , () => used ) : used;

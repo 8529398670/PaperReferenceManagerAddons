@@ -42,6 +42,8 @@ COPY static ./static
 # secret.key, which .dockerignore keeps out of the build context entirely.
 COPY config/language.yaml config/defaults.yaml config/example_header.yaml ./config/
 COPY config/api.json ./config/
+# The review screener's default rules (edits live in the database).
+COPY config/review.yaml ./config/
 COPY config/citation-styles ./config/citation-styles
 
 # Version metadata, passed by docker/lib.sh so that

@@ -88,6 +88,8 @@ class Figures:
         self._keywords: Any = None
         self._keywords_mtime = -1.0
         self._state: dict[str, dict[str, list[str]]] = {}
+        # Told after picks changed (the review screener's candidates); main sets it.
+        self.on_picks: Any = None
 
     # -- a paper's figures ---------------------------------------------------------
 
@@ -202,6 +204,8 @@ class Figures:
             current["selected"] = list(dict.fromkeys(current["selected"]))
             current["skipped"] = sorted(set(current["skipped"]))
             tx.put(db.BUCKET_FIGURE_PICKS, view, {**current, "updated_at": time.time()})
+        if self.on_picks is not None:
+            self.on_picks()
         with self._lock:
             self._state[view] = current
         return {"selected": list(current["selected"]), "skipped": list(current["skipped"])}

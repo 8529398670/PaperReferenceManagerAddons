@@ -6,7 +6,7 @@
 // the papers of one stage in one state -- what is still to do, or the
 // failures with why, when, and how many tries -- with Retry one or all.
 const StatusView = {
-  stages: [ "openalex" , "methods" , "code" , "datasets" , "modalities" , "figures" , "ocr" ],
+  stages: [ "openalex" , "methods" , "code" , "datasets" , "modalities" , "review" , "figures" , "ocr" ],
   heavy: [ "figures" , "ocr" ],
   stage: "openalex",
   state: "errors",

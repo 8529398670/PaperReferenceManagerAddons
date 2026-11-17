@@ -711,6 +711,103 @@
         ],
         "type": "object"
       },
+      "ReviewCheck": {
+        "properties": {
+          "problems": {
+            "description": "Each problem: path (where it is) and message. Empty: the rules load.",
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "rescreen": {
+            "description": "Papers using these rules would re-screen (or take a kept result for).",
+            "type": "integer"
+          },
+          "signature": {
+            "description": "The rules' signature; the same as the one in use means using them changes nothing.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "problems",
+          "rescreen",
+          "signature"
+        ],
+        "type": "object"
+      },
+      "ReviewOverrides": {
+        "properties": {
+          "overrides": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "description": "Paper key (or DOI) -> {field: value}.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "overrides"
+        ],
+        "type": "object"
+      },
+      "ReviewProgress": {
+        "properties": {
+          "in_use": {
+            "type": "string"
+          },
+          "progress": {
+            "type": "object"
+          },
+          "signature": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "in_use",
+          "progress",
+          "signature"
+        ],
+        "type": "object"
+      },
+      "ReviewTest": {
+        "properties": {
+          "elapsed_ms": {
+            "type": "integer"
+          },
+          "paper": {
+            "type": "object"
+          },
+          "result": {
+            "description": "The review as the screens would show it: verdict with its why, fields with quotes.",
+            "type": "object"
+          },
+          "saved": {
+            "description": "The same paper under the setup in use, when testing other rules on a paper.",
+            "oneOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "elapsed_ms",
+          "paper",
+          "result",
+          "saved"
+        ],
+        "type": "object"
+      },
       "Revoked": {
         "properties": {
           "api_keys": {
@@ -727,6 +824,172 @@
           "api_keys",
           "login_links",
           "sessions"
+        ],
+        "type": "object"
+      },
+      "ScreenerGuide": {
+        "properties": {
+          "about": {
+            "description": "How the rules work: patterns, macros, templates.",
+            "type": "string"
+          },
+          "change_paths": {
+            "description": "The path syntax changes use.",
+            "type": "string"
+          },
+          "groups": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "params": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "post_kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "schema": {
+            "description": "The rules document's JSON schema.",
+            "type": "object"
+          },
+          "vocab_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "about",
+          "change_paths",
+          "groups",
+          "params",
+          "post_kinds",
+          "schema",
+          "vocab_names"
+        ],
+        "type": "object"
+      },
+      "ScreenerSetup": {
+        "properties": {
+          "changed": {
+            "description": "Paths where the setup differs from the defaults, in the change-path syntax.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "defaults": {
+            "description": "config/review.yaml as shipped.",
+            "type": "object"
+          },
+          "edited": {
+            "type": "boolean"
+          },
+          "groups": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "in_use": {
+            "description": "The id of the setup in use.",
+            "type": "string"
+          },
+          "in_use_signature": {
+            "type": "string"
+          },
+          "params": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "post_kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "problem": {
+            "type": "string"
+          },
+          "progress": {
+            "description": "Of the setup in use: candidates (papers on a list or with a picked figure), and of their review tasks: done, current (screened under the rules in use), waiting, failed, included, borderline.",
+            "type": "object"
+          },
+          "rules": {
+            "description": "The setup's rules (config/review.yaml's shape).",
+            "type": "object"
+          },
+          "setup": {
+            "description": "The setup's id, name, description and state, as in list_screener_setups.",
+            "type": "object"
+          },
+          "signature": {
+            "description": "The setup's signature: send it back as base_signature when saving.",
+            "type": "string"
+          },
+          "updated_at": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "updated_by": {
+            "type": "string"
+          },
+          "vocab_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "changed",
+          "defaults",
+          "edited",
+          "groups",
+          "in_use",
+          "in_use_signature",
+          "params",
+          "post_kinds",
+          "problem",
+          "progress",
+          "rules",
+          "setup",
+          "signature",
+          "updated_at",
+          "updated_by",
+          "vocab_names"
+        ],
+        "type": "object"
+      },
+      "ScreenerSetups": {
+        "properties": {
+          "in_use": {
+            "description": "The id of the setup in use.",
+            "type": "string"
+          },
+          "setups": {
+            "description": "Each setup, the default first: id, name, description, active (in use), builtin (the default), edited, signature, changed_count (places differing from config/review.yaml), based_on, updated_at, updated_by, problem (why it does not load).",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "in_use",
+          "setups"
         ],
         "type": "object"
       },
@@ -11656,6 +11919,1075 @@
         ]
       }
     },
+    "/api/review/check": {
+      "post": {
+        "description": "Whether rules load (every pattern compiles, every value has the right type): a whole document, a setup, or a setup with changes made. And how many papers using them would re-screen.",
+        "operationId": "post_api_review_check",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "changes": {
+                    "description": "Changes to make to the setup's rules instead of sending them whole: [{path, value}] or [{path, remove: true}]. A change's path is how differences() names a place: keys joined by dots (thresholds.full.fmri_full_min.value), [name] for the item of a list whose name is that (extraction.fields[TR].patterns, datasets[NSD (Natural Scenes Dataset)]), [3] for an item by its place from 0, and [+] at the end to append. {path, value} sets it; {path, remove: true} takes it out.",
+                    "oneOf": [
+                      {
+                        "items": {
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "rules": {
+                    "description": "A whole rules document to check.",
+                    "oneOf": [
+                      {
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "setup": {
+                    "description": "A setup to check, or to make changes to first.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewCheck"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Check screener rules without saving",
+        "tags": [
+          "Screener"
+        ],
+        "x-required-role": "admin"
+      }
+    },
+    "/api/review/guide": {
+      "get": {
+        "description": "What an agent needs to write a setup: how patterns, macros and templates work, the change-path syntax, and the document's schema.",
+        "operationId": "get_api_review_guide",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScreenerGuide"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "How screener rules are written",
+        "tags": [
+          "Screener"
+        ],
+        "x-required-role": "admin"
+      }
+    },
+    "/api/review/overrides": {
+      "get": {
+        "description": "Values typed in by hand, by paper: each wins over what the screener extracted, whatever the setup, and flags the paper.",
+        "operationId": "get_api_review_overrides",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewOverrides"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Hand-checked review values",
+        "tags": [
+          "Screener"
+        ],
+        "x-required-role": "admin"
+      },
+      "post": {
+        "description": "Replaces one paper's overrides; sending no fields removes them. Nothing is re-screened: overrides apply when read.",
+        "operationId": "post_api_review_overrides",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "fields": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "Field -> value. Empty values are dropped; none at all deletes the override.",
+                    "type": "object"
+                  },
+                  "key": {
+                    "description": "The paper's key (or its DOI).",
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "fields",
+                  "key"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewOverrides"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Set a paper's hand-checked values",
+        "tags": [
+          "Screener"
+        ],
+        "x-required-role": "admin"
+      }
+    },
+    "/api/review/progress": {
+      "get": {
+        "description": "Candidates, and how many are screened under the setup in use, waiting, or failed.",
+        "operationId": "get_api_review_progress",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewProgress"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "How far the screener has got",
+        "tags": [
+          "Screener"
+        ],
+        "x-required-role": "admin"
+      }
+    },
+    "/api/review/setups": {
+      "get": {
+        "description": "Every named set of screener rules, and which one is in use.",
+        "operationId": "get_api_review_setups",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScreenerSetups"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "The screener's rule setups",
+        "tags": [
+          "Screener"
+        ],
+        "x-required-role": "admin"
+      },
+      "post": {
+        "description": "A new named setup: a copy of another (source), or a whole rules document (rules), with changes made to it. Rules that do not load are a 400 listing each problem with where it is; nothing is made. It is not used until activated.",
+        "operationId": "post_api_review_setups",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "activate": {
+                    "description": "Use it at once (re-screens the candidate papers).",
+                    "type": "boolean"
+                  },
+                  "changes": {
+                    "description": "Changes to make to the setup's rules instead of sending them whole: [{path, value}] or [{path, remove: true}]. A change's path is how differences() names a place: keys joined by dots (thresholds.full.fmri_full_min.value), [name] for the item of a list whose name is that (extraction.fields[TR].patterns, datasets[NSD (Natural Scenes Dataset)]), [3] for an item by its place from 0, and [+] at the end to append. {path, value} sets it; {path, remove: true} takes it out.",
+                    "oneOf": [
+                      {
+                        "items": {
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "description": {
+                    "description": "What it is for.",
+                    "maxLength": 2000,
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name, unique.",
+                    "maxLength": 80,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "rules": {
+                    "description": "A whole rules document to start from instead of a copy.",
+                    "oneOf": [
+                      {
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "source": {
+                    "default": "default",
+                    "description": "The setup to copy (default \"default\"). Ignored when rules are sent.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScreenerSetup"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "409": {
+            "$ref": "#/components/responses/E409"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Make a rule setup",
+        "tags": [
+          "Screener"
+        ],
+        "x-required-role": "admin"
+      }
+    },
+    "/api/review/setups/{setup}": {
+      "get": {
+        "description": "A setup's whole rules -- every word list, threshold, extraction field and dataset -- with config/review.yaml's defaults beside them and the paths where they differ.",
+        "operationId": "get_api_review_setups_setup",
+        "parameters": [
+          {
+            "description": "The setup's id, from list_screener_setups (\"default\" is config/review.yaml).",
+            "in": "path",
+            "name": "setup",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScreenerSetup"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "One rule setup",
+        "tags": [
+          "Screener"
+        ],
+        "x-required-role": "admin"
+      },
+      "post": {
+        "description": "Changes a setup's rules (whole, or by changes), name or description. A pattern that does not compile, or a missing or wrong-typed value, is a 400 listing each problem with where it is; nothing is saved. Saving the setup in use re-screens the candidate papers one at a time; saving another re-screens nothing.",
+        "operationId": "post_api_review_setups_setup",
+        "parameters": [
+          {
+            "description": "The setup's id, from list_screener_setups (\"default\" is config/review.yaml).",
+            "in": "path",
+            "name": "setup",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "base_signature": {
+                    "description": "The signature the setup had when read: if it has changed since, nothing is saved and the answer is a 409 with the current signature.",
+                    "type": "string"
+                  },
+                  "changes": {
+                    "description": "Changes to make to the setup's rules instead of sending them whole: [{path, value}] or [{path, remove: true}]. A change's path is how differences() names a place: keys joined by dots (thresholds.full.fmri_full_min.value), [name] for the item of a list whose name is that (extraction.fields[TR].patterns, datasets[NSD (Natural Scenes Dataset)]), [3] for an item by its place from 0, and [+] at the end to append. {path, value} sets it; {path, remove: true} takes it out.",
+                    "oneOf": [
+                      {
+                        "items": {
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "description": {
+                    "description": "A new description (not for the default).",
+                    "maxLength": 2000,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "name": {
+                    "description": "A new name (not for the default).",
+                    "maxLength": 80,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "rules": {
+                    "description": "The whole rules document.",
+                    "oneOf": [
+                      {
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScreenerSetup"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "409": {
+            "$ref": "#/components/responses/E409"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Save a rule setup",
+        "tags": [
+          "Screener"
+        ],
+        "x-required-role": "admin"
+      }
+    },
+    "/api/review/setups/{setup}/activate": {
+      "post": {
+        "description": "Screens with this setup from now on. Each candidate paper takes the result it already has for this setup's rules when its text has not changed, and is re-screened in the background otherwise.",
+        "operationId": "post_api_review_setups_setup_activate",
+        "parameters": [
+          {
+            "description": "The setup's id, from list_screener_setups (\"default\" is config/review.yaml).",
+            "in": "path",
+            "name": "setup",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScreenerSetup"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Use a rule setup",
+        "tags": [
+          "Screener"
+        ],
+        "x-required-role": "admin"
+      }
+    },
+    "/api/review/setups/{setup}/delete": {
+      "post": {
+        "description": "Deletes a setup for good. The default, and the setup in use, cannot be deleted.",
+        "operationId": "post_api_review_setups_setup_delete",
+        "parameters": [
+          {
+            "description": "The setup's id, from list_screener_setups (\"default\" is config/review.yaml).",
+            "in": "path",
+            "name": "setup",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScreenerSetups"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "409": {
+            "$ref": "#/components/responses/E409"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Delete a rule setup",
+        "tags": [
+          "Screener"
+        ],
+        "x-required-role": "admin"
+      }
+    },
+    "/api/review/setups/{setup}/export": {
+      "get": {
+        "description": "A setup's rules in config/review.yaml's shape: to keep, or to paste in as the new defaults.",
+        "operationId": "get_api_review_setups_setup_export",
+        "parameters": [
+          {
+            "description": "The setup's id, from list_screener_setups (\"default\" is config/review.yaml).",
+            "in": "path",
+            "name": "setup",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/yaml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "A rule setup as YAML",
+        "tags": [
+          "Screener"
+        ],
+        "x-mcp-http": "A file to download; get_screener_setup gives the same rules as JSON.",
+        "x-required-role": "admin"
+      }
+    },
+    "/api/review/setups/{setup}/reset": {
+      "post": {
+        "description": "Drops the default setup's edits: config/review.yaml as it is. Only the default can be reset.",
+        "operationId": "post_api_review_setups_setup_reset",
+        "parameters": [
+          {
+            "description": "The setup's id, from list_screener_setups (\"default\" is config/review.yaml).",
+            "in": "path",
+            "name": "setup",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScreenerSetup"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "409": {
+            "$ref": "#/components/responses/E409"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Reset the default rule setup",
+        "tags": [
+          "Screener"
+        ],
+        "x-required-role": "admin"
+      }
+    },
+    "/api/review/test": {
+      "post": {
+        "description": "Screens one library paper (key) or pasted text with the rules sent (unsaved), a setup, or the setup in use -- with changes made first, if sent -- and returns the verdict, why, and every extracted field with its quote. Nothing is stored.",
+        "operationId": "post_api_review_test",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "abstract": {
+                    "type": "string"
+                  },
+                  "changes": {
+                    "description": "Changes to make to the setup's rules instead of sending them whole: [{path, value}] or [{path, remove: true}]. A change's path is how differences() names a place: keys joined by dots (thresholds.full.fmri_full_min.value), [name] for the item of a list whose name is that (extraction.fields[TR].patterns, datasets[NSD (Natural Scenes Dataset)]), [3] for an item by its place from 0, and [+] at the end to append. {path, value} sets it; {path, remove: true} takes it out.",
+                    "oneOf": [
+                      {
+                        "items": {
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "key": {
+                    "description": "A paper to screen, by its key.",
+                    "type": "string"
+                  },
+                  "mode": {
+                    "default": "full",
+                    "enum": [
+                      "full",
+                      "abstract"
+                    ],
+                    "type": "string"
+                  },
+                  "rules": {
+                    "description": "Rules to test with, not saved.",
+                    "oneOf": [
+                      {
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "setup": {
+                    "description": "A setup to test with (when no rules are sent); none means the one in use.",
+                    "type": "string"
+                  },
+                  "text": {
+                    "description": "Pasted text to screen as the paper's body (and methods).",
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewTest"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Try the screener on one paper",
+        "tags": [
+          "Screener"
+        ],
+        "x-required-role": "admin"
+      }
+    },
     "/api/sheet/csv": {
       "post": {
         "description": "A public Google Sheet's rows, and the links behind its cells, for an import. The request always goes to docs.google.com's own export, built from the sheet ID alone, so nothing else can be fetched. At most 20 MB.",
@@ -12033,6 +13365,9 @@
     },
     {
       "name": "Missing papers"
+    },
+    {
+      "name": "Screener"
     }
   ]
 }

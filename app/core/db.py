@@ -64,6 +64,14 @@ BUCKET_SKIPS = "skips"
 # "method"): {"selected": [figure ids, in pick order], "skipped": [paper keys]}.
 # See app/content/figures.py.
 BUCKET_FIGURE_PICKS = "figure_picks"
+# The review screener's rule setups: "rules" is the default setup's edits
+# (none means config/review.yaml as it is), "setup:<id>" each named setup
+# ({id, name, description, rules, based_on, ...}), "active" which one is in
+# use ({"setup": id}; none is the default). See app/review/service.py.
+BUCKET_REVIEW_RULES = "review_rules"
+# Hand-checked review values, by paper key: {field: value, ...}. They win over
+# what the screener extracted and flag the paper. See app/review/service.py.
+BUCKET_REVIEW_OVERRIDES = "review_overrides"
 
 BUCKETS = (
     BUCKET_USERS,
@@ -82,6 +90,8 @@ BUCKETS = (
     BUCKET_BOARD_VERSIONS,
     BUCKET_SKIPS,
     BUCKET_FIGURE_PICKS,
+    BUCKET_REVIEW_RULES,
+    BUCKET_REVIEW_OVERRIDES,
 )
 
 # How long a writer waits for another writer before giving up. Without it a
