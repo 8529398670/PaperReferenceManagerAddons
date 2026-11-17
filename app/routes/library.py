@@ -64,8 +64,9 @@ class SearchPapers(RequestType):
         description='"text" (default): boolean full-text search. "title": a half-remembered title, typos and all, or a DOI.',
         extra={"error": "mode must be text or title"},
     )] = "text"
-    sort: Annotated[Literal["relevance", "added", "year", "title"], QUERY, Meta(
-        description="Default relevance.", extra={"error": "sort must be one of: relevance, added, year, title"},
+    sort: Annotated[Literal["relevance", "added", "year", "title", "journal", "authors"], QUERY, Meta(
+        description="Default relevance. authors orders by the first author.",
+        extra={"error": "sort must be one of: relevance, added, year, title, journal, authors"},
     )] = "relevance"
     dir: Annotated[Literal["asc", "desc"], QUERY, Meta(description="Default desc.", extra={"error": "dir must be asc or desc"})] = "desc"
     has: Annotated[str, QUERY, Meta(description=(

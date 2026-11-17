@@ -550,7 +550,7 @@ A stage's papers in some states, a page at a time: the ones still to do, or the 
 | `limit` | integer | no | 1 to 1000; default `100` | Rows to return. Default 100. |
 | `offset` | integer | no | at least 0 | Rows to skip: the next value of the previous page. |
 | `q` | string | no |  | Only papers whose title, DOI or error contains this. |
-| `sort` | string | no | one of `added`, `title`, `year`, `attempts`, `last_failed`; default `added` | Default added (newest first). |
+| `sort` | string | no | one of `added`, `title`, `year`, `journal`, `state`, `error`, `attempts`, `first_failed`, `last_failed`; default `added` | Default added (newest first). |
 | `stage` | string | no | one of `openalex`, `methods`, `code`, `datasets`, `modalities`; default `openalex` | The stage. |
 | `state` | string | no | one of `unfinished`, `failed`, `not_found`, `errors`, `pending`, `done`; default `unfinished` | "unfinished" (default): pending, running and failed. "errors": failed and not found. |
 
@@ -1010,7 +1010,7 @@ Search the papers in the Zotero library, a page at a time. mode "text" (default)
 | `mode` | string | no | one of `text`, `title`; default `text` | "text" (default): boolean full-text search. "title": a half-remembered title, typos and all, or a DOI. |
 | `offset` | integer | no | at least 0 | Papers to skip: the next value of the previous page. |
 | `q` | string | no |  | The search. Empty lists every paper. Read up to 500 characters. |
-| `sort` | string | no | one of `relevance`, `added`, `year`, `title`; default `relevance` | Default relevance. |
+| `sort` | string | no | one of `relevance`, `added`, `year`, `title`, `journal`, `authors`; default `relevance` | Default relevance. authors orders by the first author. |
 
 ## search_missing
 

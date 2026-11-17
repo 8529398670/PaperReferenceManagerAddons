@@ -5522,7 +5522,11 @@
                 "added",
                 "title",
                 "year",
+                "journal",
+                "state",
+                "error",
                 "attempts",
+                "first_failed",
                 "last_failed"
               ],
               "type": "string"
@@ -10023,7 +10027,7 @@
             }
           },
           {
-            "description": "Default relevance.",
+            "description": "Default relevance. authors orders by the first author.",
             "in": "query",
             "name": "sort",
             "schema": {
@@ -10032,7 +10036,9 @@
                 "relevance",
                 "added",
                 "year",
-                "title"
+                "title",
+                "journal",
+                "authors"
               ],
               "type": "string"
             }

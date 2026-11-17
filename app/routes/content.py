@@ -182,8 +182,9 @@ class StageListing(RequestType):
         extra={"error": "state must be one of: unfinished, failed, not_found, errors, pending, done"},
     )] = "unfinished"
     q: Annotated[str, QUERY, Meta(description="Only papers whose title, DOI or error contains this.")] = ""
-    sort: Annotated[Literal["added", "title", "year", "attempts", "last_failed"], QUERY, Meta(
-        description="Default added (newest first).", extra={"error": "sort must be one of: added, title, year, attempts, last_failed"},
+    sort: Annotated[Literal["added", "title", "year", "journal", "state", "error", "attempts", "first_failed", "last_failed"], QUERY, Meta(
+        description="Default added (newest first).",
+        extra={"error": "sort must be one of: added, title, year, journal, state, error, attempts, first_failed, last_failed"},
     )] = "added"
     dir: Annotated[Literal["asc", "desc"], QUERY, Meta(description="Default desc.", extra={"error": "dir must be asc or desc"})] = "desc"
     limit: Limit = PAGE_DEFAULT
@@ -232,16 +233,17 @@ def stage_papers(request: Request, body: StageListing) -> StageReply:
             continue
         rows.append(row)
     descending = body.dir == "desc"
-    if body.sort == "title":
-        rows.sort(key=lambda r: (r["title"] or "").lower(), reverse=descending)
-    elif body.sort == "year":
-        rows.sort(key=lambda r: r["year"] or 0, reverse=descending)
-    elif body.sort == "attempts":
-        rows.sort(key=lambda r: r["attempts"], reverse=descending)
-    elif body.sort == "last_failed":
-        rows.sort(key=lambda r: r["last_failed"] or 0, reverse=descending)
-    else:
-        rows.sort(key=lambda r: r["added"] or "", reverse=descending)
+    keys = {
+        "title": lambda r: (r["title"] or "").lower(),
+        "year": lambda r: r["year"] or 0,
+        "journal": lambda r: (r["journal"] or "").lower(),
+        "state": lambda r: r["state"] or "",
+        "error": lambda r: (r["error"] or "").lower(),
+        "attempts": lambda r: r["attempts"],
+        "first_failed": lambda r: r["first_failed"] or 0,
+        "last_failed": lambda r: r["last_failed"] or 0,
+    }
+    rows.sort(key=keys.get(body.sort, lambda r: r["added"] or ""), reverse=descending)
     page = rows[body.offset : body.offset + body.limit]
     end = body.offset + len(page)
     return StageReply(papers=page, next=end if end < len(rows) else None, total=len(rows))

@@ -19,10 +19,25 @@ const Library = {
     await PaperLinks.init();
     const search = Dom.get( "library-search" );
     search.addEventListener( "input" , () => this.later() );
-    Dom.get( "library-sort" ).addEventListener( "change" , () => this.refresh() );
     Dom.get( "library-title-mode" ).addEventListener( "change" , () => this.refresh() );
     Dom.onPress( Dom.get( "library-more" ) , () => this.more() );
     Dom.all( "[data-library-has]" ).forEach( ( box ) => box.addEventListener( "change" , () => this.refresh() ) );
+    this.table = new DataTable( {
+      name: "library",
+      holder: Dom.get( "library-table" ),
+      menu: Dom.get( "library-columns" ),
+      columns: this.columns(),
+      sort: [ { col: "added" , desc: true } ],
+      onSort: () => this.refresh(),
+      onEnd: () => ( Dom.get( "library-more" ).hidden ? null : this.more() ),
+    } );
+    this.paintFilter = DataTable.filters( Dom.get( "library-filter" ) ,
+      () => Dom.all( "[data-library-has]" ).filter( ( box ) => box.checked ).length + ( Dom.get( "library-title-mode" ).checked ? 1 : 0 ),
+      () => {
+        Dom.all( "[data-library-has]" ).forEach( ( box ) => { box.checked = false; } );
+        Dom.get( "library-title-mode" ).checked = false;
+        this.refresh();
+      } );
     this.listen();
     await this.refresh();
   },
@@ -32,14 +47,36 @@ const Library = {
     this.timer = setTimeout( () => this.refresh() , 200 );
   },
 
+  searching() {
+    return Dom.get( "library-search" ).value.trim() !== "";
+  },
+
+  // The table's columns. Best match only while searching; the server sorts.
+  columns() {
+    return [
+      { id: "relevance" , label: "table.col_match" , sort: true , align: "end" , width: 5 , when: () => this.searching() ,
+        cell: ( paper ) => ( paper.score == null ? "" : String( Math.round( paper.score ) ) ) },
+      { id: "title" , label: "table.col_title" , sort: true , firstDesc: false , flex: true , lock: true , width: 20 , cell: ( paper ) => Content.titleLink( paper ) },
+      { id: "authors" , label: "table.col_authors" , sort: true , firstDesc: false , width: 12 , cellClass: "small" , cell: ( paper ) => PaperLinks.authors( paper.authors ) },
+      { id: "year" , label: "table.col_year" , sort: true , align: "end" , width: 5 , cell: ( paper ) => paper.year || "" },
+      { id: "journal" , label: "table.col_journal" , sort: true , firstDesc: false , width: 11 , cellClass: "small text-body-secondary" , cell: ( paper ) => paper.journal || "" },
+      { id: "added" , label: "table.col_added" , sort: true , width: 7 , cellClass: "small text-nowrap" , cell: ( paper ) => Dom.when( paper.added || "" , "" ) },
+      { id: "links" , label: "table.col_links" , width: 8 , cell: ( paper ) => PaperLinks.strip( paper ) },
+      { id: "text" , label: "table.col_text" , width: 6 , cell: ( paper ) => this.textBadge( paper ) },
+      { id: "content" , label: "table.col_content" , width: 12 , cell: ( paper ) => Content.strip( paper.key , paper.content ) },
+      { id: "tags" , label: "table.col_tags" , width: 12 , hide: true , cellClass: "small text-body-secondary" , cell: ( paper ) => ( paper.tags || [] ).join( ", " ) },
+    ];
+  },
+
   params( offset ) {
     const params = new URLSearchParams();
     const text = Dom.get( "library-search" ).value.trim();
     if ( text ) params.set( "q" , text );
     if ( Dom.get( "library-title-mode" ).checked ) params.set( "mode" , "title" );
-    const sort = Dom.get( "library-sort" ).value;
-    params.set( "sort" , sort );
-    params.set( "dir" , sort === "title" ? "asc" : "desc" );
+    // A search starts in best-match order; a header click picks another.
+    const first = this.table.activeSort()[ 0 ] || { col: this.searching() ? "relevance" : "added" , desc: true };
+    params.set( "sort" , first.col );
+    params.set( "dir" , first.desc ? "desc" : "asc" );
     const has = Dom.all( "[data-library-has]" ).filter( ( box ) => box.checked ).map( ( box ) => box.getAttribute( "data-library-has" ) );
     if ( has.length ) params.set( "has" , has.join( "," ) );
     params.set( "limit" , String( this.pageSize ) );
@@ -48,10 +85,17 @@ const Library = {
   },
 
   async refresh() {
+    // Starting or clearing a search: best match first, or newest first.
+    if ( this.hadSearch !== this.searching() ) {
+      this.hadSearch = this.searching();
+      this.table.setSort( [ { col: this.hadSearch ? "relevance" : "added" , desc: true } ] );
+      this.table.redraw();
+    }
+    this.paintFilter();
     const ticket = ++this.ticket;
     const answer = await Api.request( "/api/papers?" + this.params( 0 ) );
     if ( ticket !== this.ticket ) return;
-    Dom.clear( Dom.get( "library-results" ) );
+    this.offset = 0;
     this.show( answer , false );
   },
 
@@ -63,17 +107,12 @@ const Library = {
   },
 
   show( answer , appending ) {
-    const list = Dom.get( "library-results" );
-    answer.papers.forEach( ( paper ) => list.appendChild( this.row( paper ) ) );
+    this.table.rows( answer.papers , appending );
     this.offset = answer.next == null ? this.offset + answer.papers.length : answer.next;
     Dom.show( Dom.get( "library-more" ) , answer.next != null );
-    const searching = Dom.get( "library-search" ).value.trim() !== "";
     Dom.show( Dom.get( "library-fuzzy" ) , Boolean( answer.fuzzy ) );
     Dom.show( Dom.get( "library-empty" ) , !appending && answer.total === 0 && answer.status.ready );
-    const filtered = Dom.all( "[data-library-has]" ).some( ( box ) => box.checked );
-    const count = Dom.get( "library-results-count" );
-    Dom.text( count , I18n.get( "library.results" ).replace( "{total}" , answer.total.toLocaleString() ) );
-    Dom.show( count , ( searching || filtered ) && !answer.fuzzy );
+    Dom.text( Dom.get( "library-results-count" ) , I18n.get( "table.showing" ).replace( "{shown}" , this.offset.toLocaleString() ).replace( "{total}" , answer.total.toLocaleString() ) );
     this.status( answer.status );
   },
 
@@ -91,25 +130,16 @@ const Library = {
     Dom.text( Dom.get( "library-status" ) , text );
   },
 
-  row( paper ) {
-    const badges = [];
-    if ( !paper.has_pdf ) {
-      badges.push( Dom.el( "span" , { class: "badge text-bg-light border" , text: I18n.get( "library.no_pdf" ) } ) );
-    } else if ( !paper.has_text ) {
-      badges.push( Dom.el( "span" , {
+  textBadge( paper ) {
+    if ( !paper.has_pdf ) return Dom.el( "span" , { class: "badge text-bg-light border" , text: I18n.get( "library.no_pdf" ) } );
+    if ( !paper.has_text ) {
+      return Dom.el( "span" , {
         class: "badge bg-warning-subtle text-warning-emphasis border",
         text: I18n.get( "library.no_text" ),
         attrs: { title: I18n.get( "library.no_text_title" ) },
-      } ) );
+      } );
     }
-    return Dom.el( "li" , {
-      class: "paper-item",
-      children: [
-        Dom.el( "div" , { children: [ Content.titleLink( paper ) ] } ),
-        Dom.el( "div" , { class: "paper-meta" , text: PaperLinks.meta( paper ) } ),
-        Dom.el( "div" , { class: "paper-foot" , children: [ PaperLinks.strip( paper ) , ...badges , Content.strip( paper.key , paper.content ) ] } ),
-      ],
-    } );
+    return null;
   },
 
   // Live: the server says when the library moved.

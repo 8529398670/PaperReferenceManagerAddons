@@ -84,7 +84,7 @@ The idea that changes everything: **no reindex, no pipeline to run**.
 
 ## J. Accounts and running it (the template)
 - [x] **P1** Login links, users, roles, API keys, sessions, two-factor, activity log, jobs, settings, backups, maintenance, MCP.
-- [x] Every screen is full width beside the sidebar (no 60rem cap, unlike the template), laid out with Bootstrap: a toolbar card above a results card whose header holds the count and order (Library, Missing tabs, Status), tiles in `row-cols`, and the paper page's text beside its contents and "Code and datasets".
+- [x] Every screen is full width beside the sidebar (no 60rem cap, unlike the template). Library, Missing and Status are spreadsheet-style tables (`static/js/data_table.js`): click a header to sort (again to flip; Missing keeps tie-breakers), a Columns menu to show, hide and reorder columns, drag a header edge to resize, all remembered per browser; one Filter button whose menu holds every filter. Lists has the same toolbar (search, Filter, Columns, Order, Options) over its board.
 
 ## Left behind on purpose
 - `snapshot`, `reindex`, `process`, `reprocess`: nothing to run any more.

@@ -54,7 +54,6 @@ library:
   search_placeholder: "Search titles, authors, abstracts and full text"
   search_help: "Words must all appear. OR between alternatives, -word or NOT word to exclude, \"quotes\" for a phrase. A pasted DOI finds its paper."
   sort_label: "Order"
-  results_heading: "Papers"
   sort_relevance: "Best match"
   sort_added: "Recently added"
   sort_year: "Year"
@@ -641,6 +640,36 @@ lists:
   diff_back_titles: "Put back:"
   diff_gone_titles: "Taken off:"
   diff_more: "and {count} more"
+
+# The spreadsheet-style tables on Library, Missing and Status
+# (static/js/data_table.js): their Filter and Columns menus, and the columns
+# more than one screen has.
+table:
+  filter: "Filter"
+  clear_filters: "Clear filters"
+  columns: "Columns"
+  options: "Options"
+  columns_heading: "Show, hide and order columns"
+  reset_columns: "Reset columns"
+  move_left: "Move left"
+  move_right: "Move right"
+  # Shown under the table; {shown} rows of {total}.
+  showing: "{shown} of {total}"
+  col_title: "Title"
+  col_authors: "Authors"
+  col_year: "Year"
+  col_journal: "Journal"
+  col_added: "Added"
+  col_doi: "DOI"
+  col_links: "Links"
+  col_content: "Content"
+  col_text: "Text"
+  col_tags: "Tags"
+  col_match: "Match"
+  col_actions: "Actions"
+  col_rank: "#"
+  col_name: "Name"
+  col_papers: "Papers"
 
 # Short confirmations shown as a toast at the bottom of the screen.
 ui:

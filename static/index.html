@@ -154,59 +154,60 @@
           </div>
           <p id="library-status" class="view-description" role="status"></p>
 
-          <!-- What to look for: the search, its mode, and the "only papers with" filters. -->
           <section class="card">
-            <div class="card-body">
-              <div class="row g-2 g-lg-3 align-items-center" role="search">
-                <div class="col-12 col-lg-6 col-xxl-5">
+            <div class="card-body py-2">
+              <div class="row g-2 align-items-center" role="search">
+                <div class="col-12 col-md-6 col-xl-5">
                   <label for="library-search" class="visually-hidden" data-i18n="library.search_label"></label>
                   <input id="library-search" class="form-control" type="search" autocomplete="off" spellcheck="false"
-                         data-i18n-attr="placeholder:library.search_placeholder" />
+                         data-i18n-attr="placeholder:library.search_placeholder,title:library.search_help" />
                 </div>
-                <div class="col-auto">
-                  <div class="form-check form-switch mb-0">
-                    <input id="library-title-mode" class="form-check-input" type="checkbox" role="switch" />
-                    <label for="library-title-mode" class="form-check-label" data-i18n="library.mode_title"></label>
+                <div class="col-auto dropdown">
+                  <button id="library-filter" type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    <i class="bi bi-funnel" aria-hidden="true"></i> <span data-i18n="table.filter"></span> <span class="badge text-bg-light ms-1" hidden></span>
+                  </button>
+                  <div class="dropdown-menu p-3 filter-menu">
+                    <div class="form-check form-switch mb-3">
+                      <input id="library-title-mode" class="form-check-input" type="checkbox" role="switch" />
+                      <label for="library-title-mode" class="form-check-label" data-i18n="library.mode_title"></label>
+                    </div>
+                    <fieldset class="mb-3">
+                      <legend class="form-label fs-6" data-i18n="library.filters_label"></legend>
+                      <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="library-has-code" data-library-has="code" />
+                        <label class="form-check-label" for="library-has-code"><i class="bi bi-code-slash me-1" aria-hidden="true"></i><span data-i18n="library.has_code"></span></label>
+                      </div>
+                      <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="library-has-data" data-library-has="data" />
+                        <label class="form-check-label" for="library-has-data"><i class="bi bi-database me-1" aria-hidden="true"></i><span data-i18n="library.has_data"></span></label>
+                      </div>
+                      <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="library-has-no-text" data-library-has="no_text" />
+                        <label class="form-check-label" for="library-has-no-text"><i class="bi bi-file-earmark-x me-1" aria-hidden="true"></i><span data-i18n="library.has_no_text"></span></label>
+                      </div>
+                      <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="library-has-no-openalex" data-library-has="no_openalex" />
+                        <label class="form-check-label" for="library-has-no-openalex"><i class="bi bi-question-circle me-1" aria-hidden="true"></i><span data-i18n="library.has_no_openalex"></span></label>
+                      </div>
+                    </fieldset>
+                    <p class="form-text" data-i18n="library.search_help"></p>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-filter-clear data-i18n="table.clear_filters"></button>
                   </div>
                 </div>
-                <div class="col-12 col-lg">
-                  <div class="d-flex flex-wrap align-items-center gap-2 justify-content-lg-end" role="group" data-i18n-attr="aria-label:library.filters_label">
-                    <span class="small text-body-secondary" data-i18n="library.filters_label"></span>
-                    <input type="checkbox" class="btn-check" id="library-has-code" data-library-has="code" autocomplete="off" />
-                    <label class="btn btn-outline-secondary btn-sm" for="library-has-code"><i class="bi bi-code-slash" aria-hidden="true"></i> <span data-i18n="library.has_code"></span></label>
-                    <input type="checkbox" class="btn-check" id="library-has-data" data-library-has="data" autocomplete="off" />
-                    <label class="btn btn-outline-secondary btn-sm" for="library-has-data"><i class="bi bi-database" aria-hidden="true"></i> <span data-i18n="library.has_data"></span></label>
-                    <input type="checkbox" class="btn-check" id="library-has-no-text" data-library-has="no_text" autocomplete="off" />
-                    <label class="btn btn-outline-secondary btn-sm" for="library-has-no-text"><i class="bi bi-file-earmark-x" aria-hidden="true"></i> <span data-i18n="library.has_no_text"></span></label>
-                    <input type="checkbox" class="btn-check" id="library-has-no-openalex" data-library-has="no_openalex" autocomplete="off" />
-                    <label class="btn btn-outline-secondary btn-sm" for="library-has-no-openalex"><i class="bi bi-question-circle" aria-hidden="true"></i> <span data-i18n="library.has_no_openalex"></span></label>
-                  </div>
+                <div class="col-auto dropdown">
+                  <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    <i class="bi bi-layout-three-columns" aria-hidden="true"></i> <span data-i18n="table.columns"></span>
+                  </button>
+                  <ul id="library-columns" class="dropdown-menu data-table-menu"></ul>
                 </div>
               </div>
-              <p class="form-text mt-2 mb-0" data-i18n="library.search_help"></p>
+              <p id="library-fuzzy" class="alert alert-info py-2 mt-2 mb-0" role="status" hidden data-i18n="library.fuzzy"></p>
             </div>
-          </section>
-
-          <!-- What it found: count and order in the header, the papers below. -->
-          <section class="card">
-            <div class="card-header d-flex flex-wrap align-items-center gap-2">
-              <h3 class="card-title h6 mb-0" data-i18n="library.results_heading"></h3>
-              <span id="library-results-count" class="badge text-bg-light border" hidden></span>
-              <div class="ms-auto d-flex align-items-center gap-2">
-                <label for="library-sort" class="small text-body-secondary" data-i18n="library.sort_label"></label>
-                <select id="library-sort" class="form-select form-select-sm w-auto">
-                  <option value="relevance" data-i18n="library.sort_relevance"></option>
-                  <option value="added" data-i18n="library.sort_added"></option>
-                  <option value="year" data-i18n="library.sort_year"></option>
-                  <option value="title" data-i18n="library.sort_title"></option>
-                </select>
-              </div>
-            </div>
-            <div class="card-body">
-              <p id="library-fuzzy" class="alert alert-info py-2" role="status" hidden data-i18n="library.fuzzy"></p>
-              <ul id="library-results" class="list-unstyled paper-list"></ul>
-              <p id="library-empty" class="text-body-secondary mb-0" hidden data-i18n="ui.no_matches"></p>
-              <button id="library-more" type="button" class="btn btn-outline-secondary mt-2" hidden data-i18n="ui.load_more"></button>
+            <div id="library-table"></div>
+            <div class="card-footer d-flex flex-wrap align-items-center gap-2">
+              <span id="library-results-count" class="small text-body-secondary"></span>
+              <span id="library-empty" class="text-body-secondary" hidden data-i18n="ui.no_matches"></span>
+              <button id="library-more" type="button" class="btn btn-outline-secondary btn-sm ms-auto" hidden data-i18n="ui.load_more"></button>
             </div>
           </section>
         </section>
@@ -318,54 +319,41 @@
                 <li class="nav-item"><a class="nav-link" href="#missing" data-missing-tab="authors"><span data-i18n="missing.tab_authors"></span> <span class="badge text-bg-light border" hidden></span></a></li>
               </ul>
             </div>
-            <div class="card-body">
-              <div class="row g-2 g-lg-3 align-items-center" role="search">
-                <div class="col-12 col-md-7 col-xl-5">
+            <div class="card-body py-2">
+              <div class="row g-2 align-items-center" role="search">
+                <div class="col-12 col-md-6 col-xl-4">
                   <label for="missing-search" class="visually-hidden" data-i18n="missing.search_label"></label>
-                  <input id="missing-search" class="form-control" type="search" autocomplete="off" spellcheck="false" data-i18n-attr="placeholder:missing.search_placeholder" />
+                  <input id="missing-search" class="form-control" type="search" autocomplete="off" spellcheck="false" data-i18n-attr="placeholder:missing.search_placeholder,title:library.search_help" />
                 </div>
-                <div class="col-auto">
-                  <div class="form-check form-switch mb-0">
-                    <input id="missing-show-skipped" class="form-check-input" type="checkbox" role="switch" />
-                    <label for="missing-show-skipped" class="form-check-label" data-i18n="missing.show_skipped"></label>
+                <div class="col-auto dropdown">
+                  <button id="missing-filter" type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    <i class="bi bi-funnel" aria-hidden="true"></i> <span data-i18n="table.filter"></span> <span class="badge text-bg-light ms-1" hidden></span>
+                  </button>
+                  <div class="dropdown-menu p-3 filter-menu">
+                    <div class="form-check form-switch">
+                      <input id="missing-show-skipped" class="form-check-input" type="checkbox" role="switch" />
+                      <label for="missing-show-skipped" class="form-check-label" data-i18n="missing.show_skipped"></label>
+                    </div>
+                    <p class="small text-body-secondary mb-0" id="missing-skipped-count"></p>
+                    <hr class="dropdown-divider" />
+                    <p class="form-text mt-0" data-i18n="library.search_help"></p>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-filter-clear data-i18n="table.clear_filters"></button>
                   </div>
                 </div>
-                <div class="col-auto ms-md-auto small text-body-secondary" id="missing-skipped-count"></div>
+                <div class="col-auto dropdown">
+                  <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    <i class="bi bi-layout-three-columns" aria-hidden="true"></i> <span data-i18n="table.columns"></span>
+                  </button>
+                  <ul id="missing-columns" class="dropdown-menu data-table-menu"></ul>
+                </div>
               </div>
-              <p class="form-text mt-2 mb-3" data-i18n="library.search_help"></p>
-              <p id="missing-total" class="small text-body-secondary mb-1"></p>
-              <div id="missing-works" class="table-responsive">
-                <table class="table table-hover align-middle mb-0 missing-table">
-                  <thead>
-                    <tr>
-                      <th scope="col" id="missing-col-relevance" class="text-end" data-sort="relevance" hidden><button type="button" class="th-sort" data-missing-sort="relevance"><span data-i18n="missing.col_relevance"></span><span class="sort-mark"></span></button></th>
-                      <th scope="col" class="text-end" data-sort="conn"><button type="button" class="th-sort" data-missing-sort="conn" data-i18n-attr="title:missing.col_conn_title"><span data-i18n="missing.col_conn"></span><span class="sort-mark"></span></button></th>
-                      <th scope="col" class="text-end" data-sort="cited_by"><button type="button" class="th-sort" data-missing-sort="cited_by" data-i18n-attr="title:missing.col_cited_title"><span data-i18n="missing.col_cited"></span><span class="sort-mark"></span></button></th>
-                      <th scope="col" data-sort="title"><button type="button" class="th-sort" data-missing-sort="title"><span data-i18n="missing.col_title"></span><span class="sort-mark"></span></button></th>
-                      <th scope="col" data-sort="year"><button type="button" class="th-sort" data-missing-sort="year"><span data-i18n="missing.col_year"></span><span class="sort-mark"></span></button></th>
-                      <th scope="col" data-i18n="missing.col_links"></th>
-                      <th scope="col"><span class="visually-hidden" data-i18n="missing.col_actions"></span></th>
-                    </tr>
-                  </thead>
-                  <tbody id="missing-rows"></tbody>
-                </table>
-              </div>
-              <div id="missing-authors" class="table-responsive" hidden>
-                <table class="table table-hover align-middle mb-0">
-                  <thead>
-                    <tr>
-                      <th scope="col" class="text-end">#</th>
-                      <th scope="col" data-i18n="missing.author_name"></th>
-                      <th scope="col" data-i18n="missing.col_links"></th>
-                      <th scope="col" class="text-end" data-i18n="missing.author_papers"></th>
-                      <th scope="col" class="text-end" data-i18n="missing.col_conn"></th>
-                    </tr>
-                  </thead>
-                  <tbody id="missing-author-rows"></tbody>
-                </table>
-              </div>
-              <p id="missing-empty" class="text-body-secondary mt-2" hidden data-i18n="missing.empty"></p>
-              <button id="missing-more" type="button" class="btn btn-outline-secondary mt-2" hidden data-i18n="ui.load_more"></button>
+            </div>
+            <div id="missing-works"></div>
+            <div id="missing-authors" hidden></div>
+            <div class="card-footer d-flex flex-wrap align-items-center gap-2">
+              <span id="missing-total" class="small text-body-secondary"></span>
+              <span id="missing-empty" class="text-body-secondary" hidden data-i18n="missing.empty"></span>
+              <button id="missing-more" type="button" class="btn btn-outline-secondary btn-sm ms-auto" hidden data-i18n="ui.load_more"></button>
             </div>
           </section>
 
@@ -413,43 +401,42 @@
               <h3 class="card-title h6 mb-0 me-auto" id="status-table-heading"></h3>
               <button id="status-retry-all" type="button" class="btn btn-outline-secondary btn-sm" hidden><i class="bi bi-arrow-repeat" aria-hidden="true"></i> <span data-i18n="status.retry_all"></span></button>
             </div>
-            <div class="card-body">
-              <div class="row g-2 g-lg-3 align-items-center mb-2" role="search">
-                <div class="col-12 col-md-auto">
-                  <label for="status-state" class="visually-hidden" data-i18n="status.state_label"></label>
-                  <select id="status-state" class="form-select">
-                    <option value="errors" selected></option>
-                    <option value="failed"></option>
-                    <option value="not_found"></option>
-                    <option value="unfinished"></option>
-                    <option value="pending"></option>
-                    <option value="done"></option>
-                  </select>
-                </div>
+            <div class="card-body py-2">
+              <div class="row g-2 align-items-center" role="search">
                 <div class="col-12 col-md-6 col-xl-4">
                   <label for="status-search" class="visually-hidden" data-i18n="status.search_label"></label>
                   <input id="status-search" class="form-control" type="search" autocomplete="off" data-i18n-attr="placeholder:status.search_placeholder" />
                 </div>
+                <div class="col-auto dropdown">
+                  <button id="status-filter" type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    <i class="bi bi-funnel" aria-hidden="true"></i> <span data-i18n="table.filter"></span> <span class="badge text-bg-light ms-1" hidden></span>
+                  </button>
+                  <div class="dropdown-menu p-3 filter-menu">
+                    <label for="status-state" class="form-label" data-i18n="status.state_label"></label>
+                    <select id="status-state" class="form-select mb-3">
+                      <option value="errors" selected></option>
+                      <option value="failed"></option>
+                      <option value="not_found"></option>
+                      <option value="unfinished"></option>
+                      <option value="pending"></option>
+                      <option value="done"></option>
+                    </select>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-filter-clear data-i18n="table.clear_filters"></button>
+                  </div>
+                </div>
+                <div class="col-auto dropdown">
+                  <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    <i class="bi bi-layout-three-columns" aria-hidden="true"></i> <span data-i18n="table.columns"></span>
+                  </button>
+                  <ul id="status-columns" class="dropdown-menu data-table-menu"></ul>
+                </div>
               </div>
-              <p id="status-total" class="small text-body-secondary mb-1"></p>
-              <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                  <thead>
-                    <tr>
-                      <th scope="col" data-sort="title"><button type="button" class="th-sort" data-status-sort="title"><span data-i18n="status.col_paper"></span><span class="sort-mark"></span></button></th>
-                      <th scope="col" data-i18n="status.col_state"></th>
-                      <th scope="col" data-i18n="status.col_error"></th>
-                      <th scope="col" data-i18n="status.col_first"></th>
-                      <th scope="col" data-sort="last_failed"><button type="button" class="th-sort" data-status-sort="last_failed"><span data-i18n="status.col_last"></span><span class="sort-mark"></span></button></th>
-                      <th scope="col" class="text-end" data-sort="attempts"><button type="button" class="th-sort" data-status-sort="attempts"><span data-i18n="status.col_attempts"></span><span class="sort-mark"></span></button></th>
-                      <th scope="col"><span class="visually-hidden" data-i18n="paper.col_actions"></span></th>
-                    </tr>
-                  </thead>
-                  <tbody id="status-rows"></tbody>
-                </table>
-              </div>
-              <p id="status-empty" class="text-body-secondary mt-2" hidden data-i18n="status.empty"></p>
-              <button id="status-more" type="button" class="btn btn-outline-secondary mt-2" hidden data-i18n="ui.load_more"></button>
+            </div>
+            <div id="status-table"></div>
+            <div class="card-footer d-flex flex-wrap align-items-center gap-2">
+              <span id="status-total" class="small text-body-secondary"></span>
+              <span id="status-empty" class="text-body-secondary" hidden data-i18n="status.empty"></span>
+              <button id="status-more" type="button" class="btn btn-outline-secondary btn-sm ms-auto" hidden data-i18n="ui.load_more"></button>
             </div>
           </section>
         </section>
@@ -546,70 +533,107 @@
             </section>
 
             <section class="card">
-              <div class="card-header">
-                <div id="list-tagbar" class="list-tagbar">
-                  <div class="d-flex flex-wrap align-items-center gap-2">
-                    <input type="checkbox" class="btn-check" id="list-filter-on" autocomplete="off" />
-                    <label class="btn btn-outline-secondary btn-sm" for="list-filter-on">
-                      <i class="bi bi-funnel" aria-hidden="true"></i> <span data-i18n="lists.filter_tags"></span>
-                    </label>
-                    <label for="list-filter-match" class="visually-hidden" data-i18n="lists.filter_match_label"></label>
-                    <select id="list-filter-match" class="form-select form-select-sm w-auto" hidden>
-                      <option value="any" data-i18n="lists.match_any"></option>
-                      <option value="all" data-i18n="lists.match_all"></option>
-                      <option value="none" data-i18n="lists.match_none"></option>
-                    </select>
-                    <label for="list-tag-find" class="visually-hidden" data-i18n="lists.tag_find_label"></label>
-                    <input id="list-tag-find" class="form-control form-control-sm w-auto" type="text" list="list-tag-options" autocomplete="off"
-                           data-i18n-attr="placeholder:lists.tag_find_placeholder" />
+              <div class="card-body py-2">
+                <!-- The same toolbar as the other tables: search, Filter, Columns,
+                     then this board's own Order, Options and moves. -->
+                <div id="list-tools" class="row g-2 align-items-center" role="search">
+                  <div class="col-12 col-md-6 col-xl-4">
                     <label for="list-filter" class="visually-hidden" data-i18n="lists.filter_label"></label>
-                    <input id="list-filter" class="form-control form-control-sm w-auto flex-grow-1" type="text" autocomplete="off"
+                    <input id="list-filter" class="form-control" type="search" autocomplete="off"
                            data-i18n-attr="placeholder:lists.filter_placeholder" />
-                    <span id="list-paint" class="small" hidden></span>
                   </div>
-                  <div id="list-chips" class="list-chips mt-2" role="toolbar" data-i18n-attr="aria-label:lists.chips_label"></div>
-                  <button id="list-chips-more" type="button" class="btn btn-link btn-sm px-0" aria-controls="list-chips" hidden></button>
-                </div>
-
-                <div id="list-tools" class="d-flex flex-wrap align-items-center gap-2 mt-2">
-                  <div class="dropdown">
-                    <button id="list-order" type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                  <div class="col-auto dropdown">
+                    <button id="list-filter-button" type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                      <i class="bi bi-funnel" aria-hidden="true"></i> <span data-i18n="table.filter"></span> <span class="badge text-bg-light ms-1" hidden></span>
+                    </button>
+                    <div class="dropdown-menu p-3 filter-menu">
+                      <div class="form-check form-switch mb-2">
+                        <input id="list-filter-on" class="form-check-input" type="checkbox" role="switch" />
+                        <label for="list-filter-on" class="form-check-label" data-i18n="lists.filter_tags"></label>
+                      </div>
+                      <label for="list-filter-match" class="visually-hidden" data-i18n="lists.filter_match_label"></label>
+                      <select id="list-filter-match" class="form-select mb-2" hidden>
+                        <option value="any" data-i18n="lists.match_any"></option>
+                        <option value="all" data-i18n="lists.match_all"></option>
+                        <option value="none" data-i18n="lists.match_none"></option>
+                      </select>
+                      <label for="list-tag-find" class="form-label" data-i18n="lists.tag_find_label"></label>
+                      <input id="list-tag-find" class="form-control mb-2" type="text" list="list-tag-options" autocomplete="off"
+                             data-i18n-attr="placeholder:lists.tag_find_placeholder" />
+                      <p id="list-filter-tags" class="small text-body-secondary"></p>
+                      <button type="button" class="btn btn-outline-secondary btn-sm" data-filter-clear data-i18n="table.clear_filters"></button>
+                    </div>
+                  </div>
+                  <div class="col-auto dropdown">
+                    <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                      <i class="bi bi-layout-three-columns" aria-hidden="true"></i> <span data-i18n="table.columns"></span>
+                    </button>
+                    <div class="dropdown-menu p-3 filter-menu">
+                      <div class="form-check form-switch mb-2" id="list-extra-holder" hidden>
+                        <input id="list-extra" class="form-check-input" type="checkbox" role="switch" />
+                        <label for="list-extra" class="form-check-label" id="list-extra-label"></label>
+                      </div>
+                      <button id="list-columns-edit" type="button" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-pencil-square" aria-hidden="true"></i> <span data-i18n="lists.menu_columns"></span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="col-auto dropdown">
+                    <button id="list-order" type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
                       <i class="bi bi-sort-down" aria-hidden="true"></i> <span data-i18n="lists.order_by"></span>
                     </button>
                     <ul id="list-order-items" class="dropdown-menu"></ul>
                   </div>
-                  <input type="checkbox" class="btn-check" id="list-auto-move" autocomplete="off" />
-                  <label class="btn btn-outline-secondary btn-sm" for="list-auto-move" data-i18n="lists.auto_move" data-i18n-attr="title:lists.auto_move_help"></label>
-                  <label for="list-add-where" class="small text-body-secondary" data-i18n="lists.add_where"></label>
-                  <select id="list-add-where" class="form-select form-select-sm w-auto">
-                    <option value="bottom" data-i18n="lists.where_bottom"></option>
-                    <option value="top" data-i18n="lists.where_top"></option>
-                    <option value="placed" data-i18n="lists.where_placed"></option>
-                  </select>
-                  <span class="vr mx-1"></span>
-                  <label for="list-jump" class="visually-hidden" data-i18n="lists.jump_label"></label>
-                  <input id="list-jump" class="form-control form-control-sm board-row-num" type="text" inputmode="numeric" autocomplete="off"
-                         data-i18n-attr="placeholder:lists.jump_placeholder,title:lists.jump_label" />
-                  <button id="list-to-anchor" type="button" class="btn btn-outline-secondary btn-sm" disabled>
-                    <i class="bi bi-anchor" aria-hidden="true"></i> <span data-i18n="lists.to_anchor"></span>
-                  </button>
-                  <button id="list-to-top" type="button" class="btn btn-outline-secondary btn-sm" data-i18n-attr="title:lists.to_top,aria-label:lists.to_top">
-                    <i class="bi bi-arrow-up" aria-hidden="true"></i>
-                  </button>
-                  <button id="list-to-bottom" type="button" class="btn btn-outline-secondary btn-sm" data-i18n-attr="title:lists.to_bottom,aria-label:lists.to_bottom">
-                    <i class="bi bi-arrow-down" aria-hidden="true"></i>
-                  </button>
-                  <span class="vr mx-1"></span>
-                  <input type="checkbox" class="btn-check" id="list-extra" autocomplete="off" />
-                  <label class="btn btn-outline-secondary btn-sm" for="list-extra" id="list-extra-label"></label>
-                  <span id="list-selection" class="small ms-auto" hidden></span>
-                  <button id="list-copy-to" type="button" class="btn btn-outline-primary btn-sm" hidden>
-                    <i class="bi bi-box-arrow-right" aria-hidden="true"></i> <span data-i18n="lists.copy_to"></span>
-                  </button>
+                  <div class="col-auto dropdown" id="list-options-holder">
+                    <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                      <i class="bi bi-sliders" aria-hidden="true"></i> <span data-i18n="table.options"></span>
+                    </button>
+                    <div class="dropdown-menu p-3 filter-menu">
+                      <div class="form-check form-switch mb-3">
+                        <input id="list-auto-move" class="form-check-input" type="checkbox" role="switch" />
+                        <label for="list-auto-move" class="form-check-label" data-i18n="lists.auto_move" data-i18n-attr="title:lists.auto_move_help"></label>
+                        <div class="form-text" data-i18n="lists.auto_move_help"></div>
+                      </div>
+                      <label for="list-add-where" class="form-label" data-i18n="lists.add_where"></label>
+                      <select id="list-add-where" class="form-select">
+                        <option value="bottom" data-i18n="lists.where_bottom"></option>
+                        <option value="top" data-i18n="lists.where_top"></option>
+                        <option value="placed" data-i18n="lists.where_placed"></option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="col-auto">
+                    <div class="input-group">
+                      <label for="list-jump" class="visually-hidden" data-i18n="lists.jump_label"></label>
+                      <input id="list-jump" class="form-control board-row-num" type="text" inputmode="numeric" autocomplete="off"
+                             data-i18n-attr="placeholder:lists.jump_placeholder,title:lists.jump_label" />
+                      <button id="list-to-anchor" type="button" class="btn btn-outline-secondary" disabled data-i18n-attr="title:lists.to_anchor,aria-label:lists.to_anchor">
+                        <i class="bi bi-anchor" aria-hidden="true"></i>
+                      </button>
+                      <button id="list-to-top" type="button" class="btn btn-outline-secondary" data-i18n-attr="title:lists.to_top,aria-label:lists.to_top">
+                        <i class="bi bi-arrow-up" aria-hidden="true"></i>
+                      </button>
+                      <button id="list-to-bottom" type="button" class="btn btn-outline-secondary" data-i18n-attr="title:lists.to_bottom,aria-label:lists.to_bottom">
+                        <i class="bi bi-arrow-down" aria-hidden="true"></i>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="col-12 col-xl-auto ms-xl-auto d-flex align-items-center gap-2">
+                    <span id="list-selection" class="small" hidden></span>
+                    <button id="list-copy-to" type="button" class="btn btn-outline-primary btn-sm" hidden>
+                      <i class="bi bi-box-arrow-right" aria-hidden="true"></i> <span data-i18n="lists.copy_to"></span>
+                    </button>
+                  </div>
                 </div>
 
+                <!-- The tags: click to filter, tag the selection or paint (list_tools.js). -->
+                <div id="list-tagbar" class="list-tagbar mt-2">
+                  <span id="list-paint" class="small" hidden></span>
+                  <div id="list-chips" class="list-chips" role="toolbar" data-i18n-attr="aria-label:lists.chips_label"></div>
+                  <button id="list-chips-more" type="button" class="btn btn-link btn-sm px-0" aria-controls="list-chips" hidden></button>
+                </div>
               </div>
-              <div class="card-body">
+              <div class="card-body pt-0">
                 <p id="list-filtered" class="small text-body-secondary mb-2" hidden></p>
                 <div id="list-scroll" class="board-scroll">
                   <div id="list-head" class="board-head" aria-hidden="true"></div>
@@ -1407,6 +1431,7 @@
   <script src="/js/pager.js"></script>
   <script src="/js/paper_links.js"></script>
   <script src="/js/content.js"></script>
+  <script src="/js/data_table.js"></script>
   <script src="/js/paper.js"></script>
   <script src="/js/missing.js"></script>
   <script src="/js/status.js"></script>

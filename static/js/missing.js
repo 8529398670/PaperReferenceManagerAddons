@@ -34,9 +34,27 @@ const Missing = {
       this.confirmAdd().catch( ( error ) => Dom.toast( error.message , "error" ) );
     } );
     Dom.onPress( Dom.get( "missing-clear-paper" ) , () => { window.location.hash = "#missing"; } );
-    Dom.all( "[data-missing-sort]" ).forEach( ( head ) => {
-      head.addEventListener( "click" , () => this.sortBy( head.getAttribute( "data-missing-sort" ) ) );
+    this.works = new DataTable( {
+      name: "missing",
+      holder: Dom.get( "missing-works" ),
+      menu: Dom.get( "missing-columns" ),
+      columns: this.workColumns(),
+      sort: this.sort,
+      tiers: 3,
+      onSort: ( sort ) => { this.sort = sort; this.refresh(); },
+      onEnd: () => this.moreIfAny(),
+      rowClass: ( work ) => ( work.skipped ? "table-secondary" : "" ),
     } );
+    this.people = new DataTable( {
+      name: "missing-authors",
+      holder: Dom.get( "missing-authors" ),
+      menu: null,
+      columns: this.authorColumns(),
+      sort: [ { col: "rank" , desc: false } ],
+    } );
+    this.paintFilter = DataTable.filters( Dom.get( "missing-filter" ) ,
+      () => ( Dom.get( "missing-show-skipped" ).checked ? 1 : 0 ),
+      () => { Dom.get( "missing-show-skipped" ).checked = false; this.refresh(); } );
     window.addEventListener( "hashchange" , () => this.route() );
     // The pool grows as OpenAlex results land; refetch when the screen is
     // looked at, and live while it is (not mid-scroll, which would lose pages).
@@ -68,20 +86,49 @@ const Missing = {
     }
   },
 
-  sortBy( col ) {
-    const first = this.sort[ 0 ];
-    if ( first && first.col === col ) {
-      first.desc = !first.desc;
-    } else {
-      const rest = this.sort.filter( ( entry ) => entry.col !== col );
-      this.sort = [ { col: col , desc: col !== "title" } , ...rest ].slice( 0 , 3 );
-    }
-    this.refresh();
+  searching() {
+    return Dom.get( "missing-search" ).value.trim() !== "";
   },
 
   sortParam() {
-    const searching = Dom.get( "missing-search" ).value.trim() !== "";
-    return this.sort.filter( ( entry ) => searching || entry.col !== "relevance" ).map( ( entry ) => entry.col + ":" + ( entry.desc ? "desc" : "asc" ) ).join( "," );
+    return this.works.activeSort().map( ( entry ) => entry.col + ":" + ( entry.desc ? "desc" : "asc" ) ).join( "," );
+  },
+
+  // The columns of the works table. The match score only while searching.
+  workColumns() {
+    return [
+      { id: "relevance" , label: "table.col_match" , sort: true , align: "end" , width: 5 , when: () => this.searching() ,
+        cell: ( work ) => ( work.score == null ? "" : String( Math.round( work.score ) ) ) },
+      { id: "conn" , label: "missing.col_conn" , title: "missing.col_conn_title" , sort: true , align: "end" , width: 8 , cell: ( work ) => {
+        const span = Dom.el( "span" , { class: "fw-semibold" , text: String( work.conn ) } );
+        span.setAttribute( "title" , I18n.get( "missing.conn_title" ).replace( "{refs}" , work.lib_cites ).replace( "{citing}" , work.cites_lib ) );
+        return span;
+      } },
+      { id: "cited_by" , label: "missing.col_cited" , title: "missing.col_cited_title" , sort: true , align: "end" , width: 7 ,
+        cell: ( work ) => ( work.cited_by || 0 ).toLocaleString() },
+      { id: "title" , label: "table.col_title" , sort: true , firstDesc: false , flex: true , lock: true , width: 20 ,
+        cell: ( work ) => Dom.el( "span" , { class: "paper-title" , text: work.title || work.wid } ) },
+      { id: "authors" , label: "table.col_authors" , width: 12 , cellClass: "small" , cell: ( work ) => PaperLinks.authors( work.authors ) },
+      { id: "journal" , label: "table.col_journal" , width: 10 , cellClass: "small text-body-secondary" , cell: ( work ) => work.journal || "" },
+      { id: "year" , label: "table.col_year" , sort: true , align: "end" , width: 5 , cell: ( work ) => work.year || "" },
+      { id: "links" , label: "table.col_links" , width: 9 , cell: ( work ) => this.links( work ) },
+      { id: "actions" , label: "table.col_actions" , align: "end" , width: 7 , cell: ( work ) => this.actions( work ) },
+    ];
+  },
+
+  authorColumns() {
+    return [
+      { id: "rank" , label: "table.col_rank" , sort: true , firstDesc: false , align: "end" , width: 4 , cellClass: "text-body-secondary" },
+      { id: "name" , label: "table.col_name" , sort: true , firstDesc: false , flex: true , lock: true , width: 16 , cellClass: "fw-semibold" ,
+        value: ( author ) => author.name || author.openalex , cell: ( author ) => author.name || author.openalex },
+      { id: "links" , label: "table.col_links" , width: 10 , cell: ( author ) => {
+        const links = [ PaperLinks.link( "https://openalex.org/" + author.openalex , "missing.openalex" , "missing.openalex_title" ) ];
+        if ( author.orcid ) links.unshift( PaperLinks.link( "https://orcid.org/" + author.orcid , "missing.orcid" , "missing.orcid_title" ) );
+        return Dom.el( "span" , { class: "paper-links" , children: links } );
+      } },
+      { id: "papers" , label: "missing.author_papers" , sort: true , align: "end" , width: 7 },
+      { id: "lib_cites" , label: "missing.col_conn" , sort: true , align: "end" , width: 8 },
+    ];
   },
 
   params( offset ) {
@@ -118,35 +165,46 @@ const Missing = {
     this.paperLine( answer.paper );
     Dom.show( Dom.get( "missing-works" ) , !authors );
     Dom.show( Dom.get( "missing-authors" ) , authors );
+    this.paintFilter();
     if ( authors ) {
-      this.drawAuthors( people.authors );
+      this.people.options.menu = Dom.get( "missing-columns" );
+      this.people.drawMenu();
+      this.people.rows( people.authors.map( ( author , index ) => Object.assign( { rank: index + 1 } , author ) ) );
       Dom.show( Dom.get( "missing-more" ) , false );
       Dom.show( Dom.get( "missing-empty" ) , people.authors.length === 0 );
+      Dom.text( Dom.get( "missing-total" ) , I18n.get( "table.showing" ).replace( "{shown}" , people.authors.length.toLocaleString() ).replace( "{total}" , people.authors.length.toLocaleString() ) );
       return;
     }
-    Dom.clear( Dom.get( "missing-rows" ) );
+    this.works.drawMenu();
     this.offset = 0;
-    this.show( answer );
+    this.show( answer , false );
   },
 
   async more() {
     const ticket = ++this.ticket;
     const answer = await Api.request( "/api/missing?" + this.params( this.offset ) );
     if ( ticket !== this.ticket ) return;
-    this.show( answer );
+    this.show( answer , true );
   },
 
-  show( answer ) {
-    const searching = Dom.get( "missing-search" ).value.trim() !== "";
-    Dom.show( Dom.get( "missing-col-relevance" ) , searching );
-    this.paintSort( searching );
-    const body = Dom.get( "missing-rows" );
-    answer.works.forEach( ( work ) => body.appendChild( this.row( work , searching ) ) );
-    Content.label( body.closest( "table" ) );
+  // Scrolled near the bottom of the table: the next page, if there is one.
+  moreIfAny() {
+    if ( this.tab === "authors" || Dom.get( "missing-more" ).hidden ) return null;
+    return this.more();
+  },
+
+  show( answer , appending ) {
+    // The match column comes and goes with the search.
+    if ( !appending && this.hadSearch !== this.searching() ) {
+      this.hadSearch = this.searching();
+      this.works.redraw();
+    }
+    this.works.paintSort();
+    this.works.rows( answer.works , appending );
     this.offset = answer.next == null ? this.offset + answer.works.length : answer.next;
     Dom.show( Dom.get( "missing-more" ) , answer.next != null );
     Dom.show( Dom.get( "missing-empty" ) , answer.total === 0 );
-    Dom.text( Dom.get( "missing-total" ) , I18n.get( "missing.showing" ).replace( "{shown}" , this.offset.toLocaleString() ).replace( "{total}" , answer.total.toLocaleString() ) );
+    Dom.text( Dom.get( "missing-total" ) , I18n.get( "table.showing" ).replace( "{shown}" , this.offset.toLocaleString() ).replace( "{total}" , answer.total.toLocaleString() ) );
   },
 
   counts( answer , people ) {
@@ -174,36 +232,7 @@ const Missing = {
     link.setAttribute( "href" , "#paper/" + encodeURIComponent( paper.key ) );
   },
 
-  paintSort( searching ) {
-    const ranks = {};
-    this.sort.filter( ( entry ) => searching || entry.col !== "relevance" ).forEach( ( entry , index ) => { ranks[ entry.col ] = { rank: index + 1 , desc: entry.desc }; } );
-    Dom.all( "[data-missing-sort]" ).forEach( ( head ) => {
-      const col = head.getAttribute( "data-missing-sort" );
-      const th = head.closest( "th" );
-      const mark = head.querySelector( ".sort-mark" );
-      const found = ranks[ col ];
-      th.setAttribute( "aria-sort" , found && found.rank === 1 ? ( found.desc ? "descending" : "ascending" ) : "none" );
-      Dom.clear( mark );
-      // The primary column's arrow is style.css's (aria-sort); a tie-breaker
-      // carries its rank and its own arrow.
-      if ( found && found.rank > 1 ) mark.appendChild( Dom.el( "i" , { class: "bi bi-arrow-" + ( found.desc ? "down" : "up" ) + " small" , attrs: { "aria-hidden": "true" } } ) );
-      if ( found ) mark.appendChild( Dom.el( "sup" , { text: String( found.rank ) } ) );
-    } );
-  },
-
-  row( work , searching ) {
-    const cells = [];
-    if ( searching ) cells.push( Dom.el( "td" , { class: "text-end text-nowrap" , text: work.score == null ? "" : String( Math.round( work.score ) ) } ) );
-    const conn = Dom.el( "td" , { class: "text-end text-nowrap" , children: [ Dom.el( "span" , { class: "fw-semibold" , text: String( work.conn ) } ) ] } );
-    conn.setAttribute( "title" , I18n.get( "missing.conn_title" ).replace( "{refs}" , work.lib_cites ).replace( "{citing}" , work.cites_lib ) );
-    cells.push( conn );
-    cells.push( Dom.el( "td" , { class: "text-end text-nowrap" , text: ( work.cited_by || 0 ).toLocaleString() } ) );
-    const meta = [ PaperLinks.authors( work.authors ) , work.journal ].filter( Boolean ).join( " · " );
-    cells.push( Dom.el( "td" , { class: "missing-title" , children: [
-      Dom.el( "div" , { class: "paper-title" , text: work.title || work.wid } ),
-      Dom.el( "div" , { class: "paper-meta" , text: meta } ),
-    ] } ) );
-    cells.push( Dom.el( "td" , { class: "text-nowrap" , text: work.year || "" } ) );
+  links( work ) {
     const links = [];
     if ( work.doi ) {
       links.push( PaperLinks.link( "https://doi.org/" + work.doi , "links.doi" , "links.doi_title" ) );
@@ -211,7 +240,10 @@ const Missing = {
     }
     if ( work.oa_pdf ) links.push( PaperLinks.link( work.oa_pdf , "missing.oa_pdf" , "missing.oa_pdf_title" ) );
     links.push( PaperLinks.link( "https://openalex.org/" + work.wid , "missing.openalex" , "missing.openalex_title" ) );
-    cells.push( Dom.el( "td" , { class: "missing-links" , children: [ Dom.el( "span" , { class: "paper-links" , children: links } ) ] } ) );
+    return Dom.el( "span" , { class: "paper-links" , children: links } );
+  },
+
+  actions( work ) {
     const skip = Dom.el( "button" , {
       class: "btn btn-outline-secondary btn-sm",
       text: I18n.get( work.skipped ? "missing.unskip" : "missing.skip" ),
@@ -223,10 +255,7 @@ const Missing = {
       children: [ Dom.el( "i" , { class: "bi bi-plus-lg" , attrs: { "aria-hidden": "true" } } ) , Dom.el( "span" , { class: "visually-hidden" , text: I18n.get( "missing.add_title" ) } ) ],
       on: { click: () => this.addToList( work ) },
     } );
-    cells.push( Dom.el( "td" , { class: "text-end text-nowrap" , children: [ Dom.el( "div" , { class: "d-inline-flex gap-1" , children: [ add , skip ] } ) ] } ) );
-    const tr = Dom.el( "tr" , { children: cells } );
-    if ( work.skipped ) tr.classList.add( "table-secondary" );
-    return tr;
+    return Dom.el( "div" , { class: "d-inline-flex gap-1" , children: [ add , skip ] } );
   },
 
   async skip( work , skip , tr ) {
@@ -239,23 +268,6 @@ const Missing = {
       text: I18n.get( "missing.unskip" ),
       run: async () => { await send( false ); this.refresh(); },
     } : null );
-  },
-
-  drawAuthors( authors ) {
-    const body = Dom.get( "missing-author-rows" );
-    Dom.clear( body );
-    authors.forEach( ( author , index ) => {
-      const links = [ PaperLinks.link( "https://openalex.org/" + author.openalex , "missing.openalex" , "missing.openalex_title" ) ];
-      if ( author.orcid ) links.unshift( PaperLinks.link( "https://orcid.org/" + author.orcid , "missing.orcid" , "missing.orcid_title" ) );
-      body.appendChild( Dom.el( "tr" , { children: [
-        Dom.el( "td" , { class: "text-end text-body-secondary" , text: String( index + 1 ) } ),
-        Dom.el( "td" , { class: "fw-semibold" , text: author.name || author.openalex } ),
-        Dom.el( "td" , { children: [ Dom.el( "span" , { class: "paper-links" , children: links } ) ] } ),
-        Dom.el( "td" , { class: "text-end" , text: String( author.papers ) } ),
-        Dom.el( "td" , { class: "text-end" , text: String( author.lib_cites ) } ),
-      ] } ) );
-    } );
-    Content.label( body.closest( "table" ) );
   },
 
   // "Add to list…": the work goes onto a list as a paper object, with its

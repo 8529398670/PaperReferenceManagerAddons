@@ -52,6 +52,15 @@ const ListTools = {
       if ( this.filterOn ) this.disarm();
       lists.draw();
     } );
+    // The Filter button counts the tags filtering; its Clear turns it all off.
+    this.paintFilter = DataTable.filters( Dom.get( "list-filter-button" ) ,
+      () => ( this.filterOn ? Math.max( 1 , this.filterTags.length ) : 0 ),
+      () => {
+        this.filterOn = false;
+        this.filterTags = [];
+        lists.draw();
+      } );
+    Dom.onPress( Dom.get( "list-columns-edit" ) , () => ListPanels.columns() );
     Dom.get( "list-filter-match" ).addEventListener( "change" , ( event ) => {
       this.match = event.target.value;
       lists.draw();
@@ -172,7 +181,9 @@ const ListTools = {
     Dom.get( "list-to-anchor" ).disabled = !this.anchor();
     const folded = ( options.fold_cols || [] ).filter( ( id ) => ( view.doc.columns || [] ).some( ( column ) => column.id === id ) ).length;
     Dom.text( Dom.get( "list-extra-label" ) , I18n.get( "lists.extra_columns" ).replace( "{count}" , folded ) );
-    Dom.show( Dom.get( "list-extra-label" ) , folded > 0 );
+    Dom.show( Dom.get( "list-extra-holder" ) , folded > 0 );
+    Dom.text( Dom.get( "list-filter-tags" ) , this.filterOn ? this.filterTags.join( ", " ) : "" );
+    if ( this.paintFilter ) this.paintFilter();
 
     const vocab = ( view.doc.vocab && view.doc.vocab.tags ) || [];
     const counts = this.counts();

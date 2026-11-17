@@ -422,4 +422,14 @@ def sort_papers(rows: list[Paper], sort: str, descending: bool, scores: dict[str
         return sorted(present, key=lambda p: p.record["year"], reverse=descending) + absent
     if sort == "title":
         return sorted(rows, key=lambda p: p.title_f, reverse=descending)
+    if sort in ("journal", "authors"):
+        # Blank last either way, like year.
+        def text(p: Paper) -> str:
+            if sort == "journal":
+                return (p.record.get("journal") or "").strip().lower()
+            names = p.record.get("authors") or []
+            return str(names[0]).strip().lower() if names else ""
+        present = [p for p in rows if text(p)]
+        absent = [p for p in rows if not text(p)]
+        return sorted(present, key=text, reverse=descending) + absent
     return rows

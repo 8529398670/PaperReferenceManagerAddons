@@ -475,14 +475,14 @@ td .row-actions { flex-wrap: nowrap; }
    .offcanvas-lg are written; undoing it from 576px up would have to restate
    every Bootstrap table rule and utility it overrides. */
 @media (max-width: 575.98px) {
-  .table-responsive > .table:not(.log-table) { display: block; }
-  .table-responsive > .table:not(.log-table) thead,
-  .table-responsive > .table:not(.log-table) tbody { display: block; }
-  .table-responsive > .table:not(.log-table) thead tr { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; margin-bottom: 0.5rem; }
-  .table-responsive > .table:not(.log-table) thead th { display: none; padding: 0; border: 0; }
-  .table-responsive > .table:not(.log-table) thead th[data-sort]:not([hidden]) { display: block; }
-  .table-responsive > .table:not(.log-table) thead th[data-sort] button { min-height: 44px; }
-  .table-responsive > .table:not(.log-table) tbody tr {
+  .table-responsive > .table:not(.log-table):not(.data-table) { display: block; }
+  .table-responsive > .table:not(.log-table):not(.data-table) thead,
+  .table-responsive > .table:not(.log-table):not(.data-table) tbody { display: block; }
+  .table-responsive > .table:not(.log-table):not(.data-table) thead tr { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; margin-bottom: 0.5rem; }
+  .table-responsive > .table:not(.log-table):not(.data-table) thead th { display: none; padding: 0; border: 0; }
+  .table-responsive > .table:not(.log-table):not(.data-table) thead th[data-sort]:not([hidden]) { display: block; }
+  .table-responsive > .table:not(.log-table):not(.data-table) thead th[data-sort] button { min-height: 44px; }
+  .table-responsive > .table:not(.log-table):not(.data-table) tbody tr {
     display: block;
     margin-bottom: 0.75rem;
     padding: 0.5rem 0.75rem;
@@ -490,7 +490,7 @@ td .row-actions { flex-wrap: nowrap; }
     border-radius: var(--bs-border-radius);
     background: var(--app-nested);
   }
-  .table-responsive > .table:not(.log-table) tbody td {
+  .table-responsive > .table:not(.log-table):not(.data-table) tbody td {
     display: block;
     position: relative;
     padding: 0.25rem 0 0.25rem 6.5rem;
@@ -498,8 +498,8 @@ td .row-actions { flex-wrap: nowrap; }
     white-space: normal !important;
     overflow-wrap: anywhere;
   }
-  .table-responsive > .table:not(.log-table) tbody td:empty { display: none; }
-  .table-responsive > .table:not(.log-table) tbody td[data-label]::before {
+  .table-responsive > .table:not(.log-table):not(.data-table) tbody td:empty { display: none; }
+  .table-responsive > .table:not(.log-table):not(.data-table) tbody td[data-label]::before {
     content: attr(data-label);
     position: absolute;
     left: 0;
@@ -509,9 +509,9 @@ td .row-actions { flex-wrap: nowrap; }
     font-size: 0.8rem;
   }
   /* Nothing to name: the empty-table line, and a row's buttons. */
-  .table-responsive > .table:not(.log-table) tbody td:not([data-label]),
-  .table-responsive > .table:not(.log-table) tbody td:has(> .row-actions) { padding-left: 0; }
-  .table-responsive > .table:not(.log-table) tbody td:has(> .row-actions)::before { display: none; }
+  .table-responsive > .table:not(.log-table):not(.data-table) tbody td:not([data-label]),
+  .table-responsive > .table:not(.log-table):not(.data-table) tbody td:has(> .row-actions) { padding-left: 0; }
+  .table-responsive > .table:not(.log-table):not(.data-table) tbody td:has(> .row-actions)::before { display: none; }
   td .row-actions { flex-wrap: wrap; }
 }
 
@@ -780,6 +780,8 @@ th[aria-sort="descending"] .th-sort::after { content: " \2193"; }
 .board-cell-paper { left: var(--board-side); min-width: 0; }
 .board-cell-end { display: flex; justify-content: end; }
 .board-row-num { width: 3.25rem; text-align: center; font-variant-numeric: tabular-nums; }
+/* The jump box in the board toolbar's input group: a few digits, not the rest of the row. */
+.input-group > .board-row-num { flex: 0 0 5.5rem; width: 5.5rem; }
 .board-row-grip { cursor: grab; color: var(--bs-secondary-color); padding: 0.25rem 0.1rem; touch-action: none; }
 .board-row-anchor { padding: 0.1rem 0.15rem; color: var(--bs-secondary-color); opacity: 0; }
 .board-row:hover .board-row-anchor, .board-row-anchor:focus-visible, .board-row-anchor.is-on { opacity: 1; }
@@ -897,6 +899,7 @@ th[aria-sort="descending"] .th-sort::after { content: " \2193"; }
 
 /* A view-only list keeps its reading tools and loses its editing ones. */
 .is-locked #list-editing, .is-locked #list-order, .is-locked label[for="list-auto-move"],
+.is-locked #list-options-holder, .is-locked #list-columns-edit,
 .is-locked #list-add-where, .is-locked label[for="list-add-where"],
 .is-locked #list-shelf-add, .is-locked #list-shelf-drop, .is-locked #list-shelf-tag,
 .is-locked .list-shelf .form-check { display: none !important; }
@@ -965,9 +968,65 @@ a.paper-title-link:hover, a.paper-title-link:focus-visible { color: var(--app-li
 /* The Status screen's stage cards are buttons. */
 .status-stage { color: inherit; background: var(--bs-body-bg); }
 .status-stage:hover { border-color: var(--bs-primary); }
-.missing-table .paper-title { font-weight: 500; }
 /* A wide table scrolls in its box rather than squeezing titles to a word a line. */
-@media (min-width: 576px) { .missing-table td.missing-title { min-width: 18rem; } }
-/* With the room of a full-width screen, a row's links sit on one line
-   instead of stacking and making every row four lines tall. */
-@media (min-width: 1200px) { .missing-table td.missing-links .paper-links { flex-wrap: nowrap; white-space: nowrap; } }
+
+/* DataTable (static/js/data_table.js): the spreadsheet-style table on
+   Library, Missing and Status. Its own scroll area, so the header stays in
+   view while the rows move under it; on a phone it scrolls sideways like a
+   sheet does, and from md the area is a screen tall and scrolls both ways.
+   Column widths are the reader's (a <colgroup>), so the layout is fixed. */
+.data-table-scroll { position: relative; overflow: auto; border-top: 1px solid var(--app-border); }
+@media (min-width: 768px) {
+  .data-table-scroll { max-height: calc(100dvh - var(--app-navbar-height) - 19rem); min-height: 16rem; }
+}
+.data-table-scroll:focus-visible { outline: 2px solid var(--app-accent); outline-offset: -2px; }
+.data-table { width: 100%; table-layout: fixed; }
+.data-table > :not(caption) > * > * { padding: 0.4rem 0.6rem; }
+.data-table td { overflow-wrap: anywhere; }
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--bs-body-color);
+  box-shadow: inset 0 -1px 0 var(--app-border);
+  border-right: 1px solid var(--app-border);
+  vertical-align: middle;
+  user-select: none;
+}
+.data-table thead th:last-child { border-right: 0; }
+.data-table-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  white-space: nowrap;
+}
+.data-table-sort > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.data-table th.text-end .data-table-sort { flex-direction: row-reverse; }
+.data-table-mark { display: inline-flex; align-items: baseline; color: var(--bs-secondary-color); font-size: 0.7rem; opacity: 0.55; }
+.data-table-sort:hover .data-table-mark, .data-table-sort:focus-visible .data-table-mark { opacity: 1; }
+.data-table th.is-sorted .data-table-mark { color: var(--app-accent); opacity: 1; }
+.data-table th.is-sorted { color: var(--app-accent); }
+.data-table-grip { position: absolute; top: 0; right: -3px; bottom: 0; width: 7px; cursor: col-resize; z-index: 1; touch-action: none; }
+.data-table-grip:hover, .data-table-dragging .data-table-grip:hover { background: color-mix(in srgb, var(--app-accent) 35%, transparent); }
+.data-table-dragging { cursor: col-resize; user-select: none; }
+.data-table .paper-title { font-weight: 500; }
+.data-table .paper-links { gap: 0.2rem 0.6rem; }
+.data-table-menu { min-width: 16rem; max-height: 70vh; overflow-y: auto; }
+.data-table-menu .data-table-menu-item { padding-top: 0.15rem; padding-bottom: 0.15rem; }
+.data-table-menu .data-table-move { min-width: 32px; min-height: 32px; padding: 0.15rem 0.35rem; color: var(--bs-secondary-color); }
+.data-table-menu .data-table-move:disabled { visibility: hidden; }
+.filter-menu { width: min(24rem, calc(100vw - 2rem)); }

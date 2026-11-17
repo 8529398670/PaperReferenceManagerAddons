@@ -2050,7 +2050,7 @@ A stage's papers in some states, a page at a time: the ones still to do, or the 
 | `stage` | query | string | no | one of `openalex`, `methods`, `code`, `datasets`, `modalities`; default `openalex` | The stage. |
 | `state` | query | string | no | one of `unfinished`, `failed`, `not_found`, `errors`, `pending`, `done`; default `unfinished` | "unfinished" (default): pending, running and failed. "errors": failed and not found. |
 | `q` | query | string | no |  | Only papers whose title, DOI or error contains this. |
-| `sort` | query | string | no | one of `added`, `title`, `year`, `attempts`, `last_failed`; default `added` | Default added (newest first). |
+| `sort` | query | string | no | one of `added`, `title`, `year`, `journal`, `state`, `error`, `attempts`, `first_failed`, `last_failed`; default `added` | Default added (newest first). |
 | `dir` | query | string | no | one of `asc`, `desc`; default `desc` | Default desc. |
 | `limit` | query | integer | no | 1 to 1000; default `100` | Rows to return. Default 100. |
 | `offset` | query | integer | no | at least 0 | Rows to skip: the next value of the previous page. |
@@ -2323,7 +2323,7 @@ Search the papers in the Zotero library, a page at a time. mode "text" (default)
 |---|---|---|---|---|---|
 | `q` | query | string | no |  | The search. Empty lists every paper. Read up to 500 characters. |
 | `mode` | query | string | no | one of `text`, `title`; default `text` | "text" (default): boolean full-text search. "title": a half-remembered title, typos and all, or a DOI. |
-| `sort` | query | string | no | one of `relevance`, `added`, `year`, `title`; default `relevance` | Default relevance. |
+| `sort` | query | string | no | one of `relevance`, `added`, `year`, `title`, `journal`, `authors`; default `relevance` | Default relevance. authors orders by the first author. |
 | `dir` | query | string | no | one of `asc`, `desc`; default `desc` | Default desc. |
 | `has` | query | string | no |  | Only papers with: "code" (code links found), "data" (dataset links or names), "no_text" (no PDF text), "no_openalex" (OpenAlex has no record, or the lookup failed). Several, comma-separated, must all hold. |
 | `limit` | query | integer | no | 1 to 1000; default `50` | Papers to return. Default 50. |

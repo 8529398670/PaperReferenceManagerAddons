@@ -21,20 +21,32 @@ const StatusView = {
     Dom.show( Dom.get( "status-panel" ) , true );
     Dom.get( "status-state" ).addEventListener( "change" , ( event ) => {
       this.state = event.target.value;
+      this.paintFilter();
       this.loadTable();
     } );
     Dom.typed( Dom.get( "status-search" ) , () => this.loadTable() , 250 );
     Dom.onPress( Dom.get( "status-more" ) , () => this.loadTable( true ) );
     Dom.onPress( Dom.get( "status-retry-all" ) , () => this.retryAll() );
-    Dom.all( "[data-status-sort]" ).forEach( ( head ) => head.addEventListener( "click" , () => {
-      const col = head.getAttribute( "data-status-sort" );
-      if ( this.sort === col ) this.dir = this.dir === "desc" ? "asc" : "desc";
-      else {
-        this.sort = col;
-        this.dir = col === "title" ? "asc" : "desc";
-      }
-      this.loadTable();
-    } ) );
+    this.table = new DataTable( {
+      name: "status",
+      holder: Dom.get( "status-table" ),
+      menu: Dom.get( "status-columns" ),
+      columns: this.columns(),
+      sort: [ { col: this.sort , desc: this.dir === "desc" } ],
+      onSort: ( sort ) => {
+        this.sort = sort[ 0 ].col;
+        this.dir = sort[ 0 ].desc ? "desc" : "asc";
+        this.loadTable();
+      },
+      onEnd: () => ( Dom.get( "status-more" ).hidden ? null : this.loadTable( true ) ),
+    } );
+    this.paintFilter = DataTable.filters( Dom.get( "status-filter" ) ,
+      () => ( this.state !== "errors" ? 1 : 0 ),
+      () => {
+        Dom.get( "status-state" ).value = "errors";
+        this.state = "errors";
+        this.loadTable();
+      } );
     // The counts every few seconds at most; the table only when its own
     // counts moved, and far less often (see Content.throttle).
     const counts = Content.throttle( () => this.loadCounts() , 5000 );
@@ -157,55 +169,53 @@ const StatusView = {
       return;
     }
     if ( ticket !== this.ticket ) return;
-    const body = Dom.get( "status-rows" );
-    if ( !more ) Dom.clear( body );
-    answer.papers.forEach( ( row ) => body.appendChild( this.row( row ) ) );
-    Content.label( body.closest( "table" ) );
+    this.table.rows( answer.papers , Boolean( more ) );
     this.offset = answer.next == null ? offset + answer.papers.length : answer.next;
     Dom.show( Dom.get( "status-more" ) , answer.next != null );
     Dom.show( Dom.get( "status-empty" ) , answer.total === 0 );
-    Dom.text( Dom.get( "status-total" ) , I18n.get( "missing.showing" ).replace( "{shown}" , this.offset.toLocaleString() ).replace( "{total}" , answer.total.toLocaleString() ) );
+    Dom.text( Dom.get( "status-total" ) , I18n.get( "table.showing" ).replace( "{shown}" , this.offset.toLocaleString() ).replace( "{total}" , answer.total.toLocaleString() ) );
     const retryable = [ "errors" , "failed" , "not_found" ].includes( this.state ) && answer.total > 0;
     Dom.show( Dom.get( "status-retry-all" ) , retryable );
-    Dom.all( "[data-status-sort]" ).forEach( ( head ) => {
-      const col = head.getAttribute( "data-status-sort" );
-      const th = head.closest( "th" );
-      th.setAttribute( "aria-sort" , col === this.sort ? ( this.dir === "desc" ? "descending" : "ascending" ) : "none" );
-    } );
   },
 
   when( seconds ) {
     return Dom.when( seconds ? new Date( seconds * 1000 ).toISOString() : "" , "" );
   },
 
-  row( row ) {
+  // The table's columns; the server sorts (see the papers route's sort).
+  columns() {
+    return [
+      { id: "title" , label: "status.col_paper" , sort: true , firstDesc: false , flex: true , lock: true , width: 16 , cell: ( row ) => Content.titleLink( row ) },
+      { id: "year" , label: "table.col_year" , sort: true , align: "end" , width: 5 , cell: ( row ) => row.year || "" },
+      { id: "journal" , label: "table.col_journal" , sort: true , firstDesc: false , width: 12 , hide: true , cellClass: "small text-body-secondary" , cell: ( row ) => row.journal || "" },
+      { id: "added" , label: "table.col_added" , sort: true , width: 8 , hide: true , cellClass: "small text-nowrap" , cell: ( row ) => Dom.when( row.added || "" , "" ) },
+      { id: "links" , label: "table.col_links" , width: 8 , cell: ( row ) => this.links( row ) },
+      { id: "state" , label: "status.col_state" , sort: true , firstDesc: false , width: 8 , cell: ( row ) => PaperView.stateBadge( row.state ) },
+      { id: "error" , label: "status.col_error" , sort: true , firstDesc: false , width: 14 , cellClass: "small" , cell: ( row ) => row.error || "" },
+      { id: "first_failed" , label: "status.col_first" , sort: true , width: 8 , cellClass: "small text-nowrap" , cell: ( row ) => this.when( row.first_failed ) },
+      { id: "last_failed" , label: "status.col_last" , sort: true , width: 8 , cellClass: "small text-nowrap" , cell: ( row ) => this.when( row.last_failed ) },
+      { id: "attempts" , label: "status.col_attempts" , sort: true , align: "end" , width: 5 , cell: ( row ) => String( row.attempts || 0 ) },
+      { id: "actions" , label: "table.col_actions" , align: "end" , width: 6 , cell: ( row ) => this.retryButton( row ) },
+    ];
+  },
+
+  links( row ) {
     const links = [];
     if ( row.doi ) links.push( PaperLinks.link( "https://doi.org/" + row.doi , "links.doi" , "links.doi_title" ) );
     if ( row.doi ) links.push( PaperLinks.link( "https://api.openalex.org/works/https://doi.org/" + row.doi , "missing.openalex" , "missing.openalex_title" ) );
-    const actions = Dom.el( "td" , { class: "text-end" } );
-    if ( row.state === "failed" || row.state === "not_found" ) {
-      actions.appendChild( Dom.el( "button" , {
-        class: "btn btn-outline-secondary btn-sm",
-        text: I18n.get( "content.retry" ),
-        on: { click: async () => {
-          await Api.post( "/api/papers/retry" , { key: row.key , stage: this.stage } );
-          await this.load();
-        } },
-      } ) );
-    }
-    return Dom.el( "tr" , { children: [
-      Dom.el( "td" , { children: [
-        Content.titleLink( row ),
-        Dom.el( "div" , { class: "paper-meta" , text: [ row.year || "" , row.journal || "" ].filter( Boolean ).join( " · " ) } ),
-        Dom.el( "span" , { class: "paper-links small" , children: links } ),
-      ] } ),
-      Dom.el( "td" , { children: [ PaperView.stateBadge( row.state ) ] } ),
-      Dom.el( "td" , { class: "small" , text: row.error || "" } ),
-      Dom.el( "td" , { class: "small text-nowrap" , children: [ this.when( row.first_failed ) ] } ),
-      Dom.el( "td" , { class: "small text-nowrap" , children: [ this.when( row.last_failed ) ] } ),
-      Dom.el( "td" , { class: "text-end" , text: String( row.attempts || 0 ) } ),
-      actions,
-    ] } );
+    return Dom.el( "span" , { class: "paper-links small" , children: links } );
+  },
+
+  retryButton( row ) {
+    if ( row.state !== "failed" && row.state !== "not_found" ) return null;
+    return Dom.el( "button" , {
+      class: "btn btn-outline-secondary btn-sm",
+      text: I18n.get( "content.retry" ),
+      on: { click: async () => {
+        await Api.post( "/api/papers/retry" , { key: row.key , stage: this.stage } );
+        await this.load();
+      } },
+    } );
   },
 
   async retryAll() {
