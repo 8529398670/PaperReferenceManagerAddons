@@ -29,6 +29,9 @@ from app.core.request_log import RequestLog
 from app.core.security import LoadActor
 from app.core.static_files import StaticServer
 from app.boards.service import BoardService
+from app.content.enrich import Enricher
+from app.content.figures import Figures
+from app.content.screens import Screens
 from app.content.service import ContentService
 from app.library.service import LibraryService
 from app.routes import build_routes
@@ -84,9 +87,23 @@ def build_app(
         cfg.library.content_dir, cfg.library.index_path, library.catalogue, store,
         cfg.config_file.parent / "modalities.yaml", lambda: settings.get().library,
     )
-    content.publish = library.publish
     library.after_sync = lambda: setattr(content, "dirty", True)
     boards.content = content
+    # The scanned PDFs' text, from the worker's OCR, searched like Zotero's.
+    library.catalogue.text_fallback = content.ocr_text
+    # The Figures screen (picks, matches, thumbnails) and the Code / Datasets
+    # screens with the GitHub / OSF / archive enrichment behind them.
+    figures = Figures(content, store, cfg.config_file.parent / "method-images.txt")
+    content.on_figures = figures.forget
+    enricher = Enricher(cfg.library.content_dir / "_enrich", lambda: (settings.get().enrich.github_token, settings.get().enrich.osf_token))
+    screens = Screens(content, figures, enricher, store)
+    screens.publish = library.publish
+
+    def publish(name: str, data: dict) -> None:
+        library.publish(name, data)
+        screens.heard(name, data)
+
+    content.publish = publish
 
     @asynccontextmanager
     async def lifespan(app: Starlette) -> AsyncIterator[None]:
@@ -99,6 +116,7 @@ def build_app(
         watcher = asyncio.create_task(config_watch(settings))
         library.start(settings)
         content.start()
+        screens.start()
         boards.start()
         registry.start()
         try:
@@ -109,6 +127,7 @@ def build_app(
             watcher.cancel()
             await library.stop()
             await content.stop()
+            await screens.stop()
             boards.stop()
             await registry.stop()
             log_hub.close()
@@ -149,6 +168,8 @@ def build_app(
     app.state.library = library
     app.state.boards = boards
     app.state.content = content
+    app.state.figures = figures
+    app.state.screens = screens
     app.state.language = lang
     # Reported to MCP clients as serverInfo.version.
     app.state.version = version

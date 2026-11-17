@@ -19,7 +19,6 @@ const Missing = {
 
   init() {
     Dom.show( Dom.get( "missing-panel" ) , true );
-    ViewHead.watch( Dom.get( "missing-panel" ) );
     Dom.all( "[data-missing-tab]" ).forEach( ( tab ) => {
       tab.addEventListener( "click" , ( event ) => {
         event.preventDefault();

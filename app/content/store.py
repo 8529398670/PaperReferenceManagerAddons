@@ -29,7 +29,9 @@ import time
 from pathlib import Path
 from typing import Any, Iterable
 
-SCHEMA_VERSION = 1
+# 2 added the heavy stages' columns (input, lease, owner, changed_at) and the
+# workers table; a version-1 file is upgraded in place, never dropped.
+SCHEMA_VERSION = 2
 
 # The stages, in the order a paper goes through them. OPENALEX is the
 # network's lane (slow, remote); the rest read the paper's own text and run
@@ -39,9 +41,22 @@ METHODS = "methods"
 CODE = "code"
 DATASETS = "datasets"
 MODALITIES = "modalities"
-STAGES = (OPENALEX, METHODS, CODE, DATASETS, MODALITIES)
+# The heavy stages need ML packages the server does not have, so only the
+# optional worker process (`python -m app worker`, app/worker/) runs them. If
+# it never runs they stay pending, shown as "not available", and nothing else
+# waits on them.
+FIGURES = "figures"
+OCR = "ocr"
+STAGES = (OPENALEX, METHODS, CODE, DATASETS, MODALITIES, FIGURES, OCR)
 LOCAL = (METHODS, CODE, DATASETS, MODALITIES)
+HEAVY = (FIGURES, OCR)
 LANES = {"net": (OPENALEX,), "local": LOCAL}
+
+# How long a worker's claim on a heavy task lasts without being renewed; a
+# worker that died is noticed this long after, and its task is due again.
+LEASE_SECONDS = 15 * 60.0
+# A worker that has not checked in for this long is shown as gone.
+WORKER_STALE_SECONDS = 90.0
 
 # States. "not_found" is an answer (OpenAlex has no such work), so it is done
 # as far as the queue goes, and only Retry asks again.
@@ -78,7 +93,7 @@ class ContentStore:
         self._db.execute("PRAGMA journal_mode = WAL")
         self._db.execute("PRAGMA synchronous = NORMAL")
         version = self._db.execute("PRAGMA user_version").fetchone()[0]
-        if version not in (0, SCHEMA_VERSION):
+        if version not in (0, 1, SCHEMA_VERSION):
             self._db.execute("DROP TABLE IF EXISTS tasks")
         self._db.execute(
             "CREATE TABLE IF NOT EXISTS tasks ("
@@ -87,10 +102,28 @@ class ContentStore:
             " error TEXT NOT NULL DEFAULT '', first_failed REAL, last_failed REAL, next_at REAL NOT NULL DEFAULT 0,"
             " done_at REAL, summary TEXT NOT NULL DEFAULT '{}', PRIMARY KEY (key, stage))"
         )
+        # Version 1 had none of these; adding them keeps every task (and so
+        # every OpenAlex answer already fetched).
+        columns = {row[1] for row in self._db.execute("PRAGMA table_info(tasks)")}
+        for name, kind in (("input", "TEXT NOT NULL DEFAULT ''"), ("owner", "TEXT NOT NULL DEFAULT ''"),
+                           ("lease_until", "REAL NOT NULL DEFAULT 0"), ("changed_at", "REAL NOT NULL DEFAULT 0")):
+            if name not in columns:
+                self._db.execute(f"ALTER TABLE tasks ADD COLUMN {name} {kind}")
         self._db.execute("CREATE INDEX IF NOT EXISTS tasks_due ON tasks (stage, state, priority DESC, added DESC)")
+        self._db.execute("CREATE INDEX IF NOT EXISTS tasks_changed ON tasks (changed_at)")
+        # The workers that run the heavy stages check in here (a heartbeat), so
+        # the server can say whether one is running and what it is doing.
+        self._db.execute(
+            "CREATE TABLE IF NOT EXISTS workers (id TEXT PRIMARY KEY, host TEXT NOT NULL DEFAULT '', pid INTEGER NOT NULL DEFAULT 0,"
+            " started REAL NOT NULL DEFAULT 0, beat REAL NOT NULL DEFAULT 0, doing TEXT NOT NULL DEFAULT '',"
+            " stages TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '')"
+        )
         self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-        # A run the process died in is simply due again.
-        self._db.execute("UPDATE tasks SET state = ? WHERE state = ?", (PENDING, RUNNING))
+        # A run the process died in is simply due again. A heavy task belongs to
+        # a worker, which may well be running on, so it is only due again once
+        # its lease has run out (see claim).
+        marks = ",".join("?" * len(HEAVY))
+        self._db.execute(f"UPDATE tasks SET state = ? WHERE state = ? AND stage NOT IN ({marks})", (PENDING, RUNNING, *HEAVY))
 
     def close(self) -> None:
         with self._lock:
@@ -148,21 +181,26 @@ class ContentStore:
             found = self._db.execute("SELECT key, stage, state, sig FROM tasks").fetchall()
         return {(key, stage): (state, sig) for key, stage, state, sig in found}
 
-    def want(self, items: Iterable[tuple[str, str, str, str, float]]) -> int:
-        """(key, stage, sig, added, priority): each task whose signature is not
-        sig becomes pending with it. A task already on sig is left alone,
-        whatever its state. -> how many changed."""
+    def want(self, items: Iterable[tuple[Any, ...]]) -> int:
+        """(key, stage, sig, added, priority[, input]): each task whose
+        signature is not sig becomes pending with it. A task already on sig is
+        left alone, whatever its state. input is what a worker needs to run
+        it (a heavy stage's PDF path), as JSON; it is kept current even when
+        the signature has not moved. -> how many changed."""
         changed = 0
+        now = time.time()
         with self._lock:
-            self._db.execute("BEGIN")
+            self._db.execute("BEGIN IMMEDIATE")
             try:
-                for key, stage, sig, added, priority in items:
+                for item in items:
+                    key, stage, sig, added, priority = item[:5]
+                    given = json.dumps(item[5], separators=(",", ":")) if len(item) > 5 else ""
                     cursor = self._db.execute(
-                        "INSERT INTO tasks (key, stage, state, sig, added, priority) VALUES (?, ?, ?, ?, ?, ?) "
+                        "INSERT INTO tasks (key, stage, state, sig, added, priority, input, changed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
                         "ON CONFLICT (key, stage) DO UPDATE SET state = excluded.state, sig = excluded.sig, "
-                        "added = excluded.added, attempts = 0, error = '', next_at = 0, "
-                        "priority = max(tasks.priority, excluded.priority) WHERE tasks.sig != excluded.sig",
-                        (key, stage, PENDING, sig, added, priority),
+                        "added = excluded.added, attempts = 0, error = '', next_at = 0, input = excluded.input, "
+                        "changed_at = excluded.changed_at, priority = max(tasks.priority, excluded.priority) WHERE tasks.sig != excluded.sig",
+                        (key, stage, PENDING, sig, added, priority, given, now),
                     )
                     changed += cursor.rowcount
             except BaseException:
@@ -215,30 +253,38 @@ class ContentStore:
             row = self._db.execute("SELECT sig, attempts, first_failed FROM tasks WHERE key = ? AND stage = ?", (key, stage)).fetchone()
             if row is None or row[0] != sig:
                 if row is not None:
-                    self._db.execute("UPDATE tasks SET state = ? WHERE key = ? AND stage = ? AND state = ?", (PENDING, key, stage, RUNNING))
+                    self._db.execute(
+                        "UPDATE tasks SET state = ?, owner = '', lease_until = 0 WHERE key = ? AND stage = ? AND state = ?",
+                        (PENDING, key, stage, RUNNING),
+                    )
                 return
             if state == FAILED:
                 attempts = row[1] + 1
                 self._db.execute(
-                    "UPDATE tasks SET state = ?, attempts = ?, error = ?, first_failed = ?, last_failed = ?, next_at = ? "
-                    "WHERE key = ? AND stage = ?",
-                    (FAILED, attempts, error[:500], row[2] or now, now, now + backoff(attempts), key, stage),
+                    "UPDATE tasks SET state = ?, attempts = ?, error = ?, first_failed = ?, last_failed = ?, next_at = ?, "
+                    "owner = '', lease_until = 0, changed_at = ? WHERE key = ? AND stage = ?",
+                    (FAILED, attempts, error[:500], row[2] or now, now, now + backoff(attempts), now, key, stage),
                 )
             else:
                 self._db.execute(
-                    "UPDATE tasks SET state = ?, attempts = 0, error = ?, done_at = ?, summary = ?, priority = 0, next_at = 0 "
-                    "WHERE key = ? AND stage = ?",
-                    (state, error[:500], now, json.dumps(summary or {}, separators=(",", ":")), key, stage),
+                    "UPDATE tasks SET state = ?, attempts = 0, error = ?, done_at = ?, summary = ?, priority = 0, next_at = 0, "
+                    "owner = '', lease_until = 0, changed_at = ? WHERE key = ? AND stage = ?",
+                    (state, error[:500], now, json.dumps(summary or {}, separators=(",", ":")), now, key, stage),
                 )
 
-    def settle(self, key: str, stage: str, sig: str, state: str, summary: dict[str, Any], added: str = "") -> None:
-        """Write a task as finished outright: what the legacy import does."""
+    def settle(self, key: str, stage: str, sig: str, state: str, summary: dict[str, Any], added: str = "",
+               given: dict[str, Any] | None = None) -> None:
+        """Write a task as finished outright: what the legacy import does.
+        given is the input a worker would need to redo it (Retry)."""
+        now = time.time()
         with self._lock:
             self._db.execute(
-                "INSERT INTO tasks (key, stage, state, sig, added, summary, done_at) VALUES (?, ?, ?, ?, ?, ?, ?) "
+                "INSERT INTO tasks (key, stage, state, sig, added, summary, done_at, changed_at, input) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT (key, stage) DO UPDATE SET state = excluded.state, sig = excluded.sig, summary = excluded.summary, "
-                "done_at = excluded.done_at, attempts = 0, error = '', next_at = 0",
-                (key, stage, state, sig, added, json.dumps(summary, separators=(",", ":")), time.time()),
+                "done_at = excluded.done_at, changed_at = excluded.changed_at, attempts = 0, error = '', next_at = 0, "
+                "input = CASE WHEN excluded.input != '' THEN excluded.input ELSE tasks.input END",
+                (key, stage, state, sig, added, json.dumps(summary, separators=(",", ":")), now, now,
+                 json.dumps(given, separators=(",", ":")) if given else ""),
             )
 
     def hurry(self, key: str) -> int:
@@ -266,6 +312,91 @@ class ContentStore:
                 (PENDING, time.time() if key else 0, *args),
             )
         return cursor.rowcount
+
+    # -- the worker's side ------------------------------------------------------------
+
+    def claim(self, stages: tuple[str, ...], owner: str, now: float | None = None, lease: float = LEASE_SECONDS) -> dict[str, Any] | None:
+        """Take the next due task of these stages for one worker, atomically
+        across processes: two workers never get the same task. A running task
+        whose lease ran out (its worker died) is due again.
+        -> {key, stage, sig, input} or None."""
+        now = time.time() if now is None else now
+        marks = ",".join("?" * len(stages))
+        with self._lock:
+            self._db.execute("BEGIN IMMEDIATE")
+            try:
+                row = self._db.execute(
+                    f"SELECT key, stage, sig, input FROM tasks WHERE stage IN ({marks}) AND "
+                    f"(state = ? OR (state = ? AND next_at <= ?) OR (state = ? AND lease_until < ?)) "
+                    f"ORDER BY priority DESC, added DESC LIMIT 1",
+                    (*stages, PENDING, FAILED, now, RUNNING, now),
+                ).fetchone()
+                if row is not None:
+                    self._db.execute(
+                        "UPDATE tasks SET state = ?, owner = ?, lease_until = ? WHERE key = ? AND stage = ?",
+                        (RUNNING, owner, now + lease, row[0], row[1]),
+                    )
+            except BaseException:
+                self._db.execute("ROLLBACK")
+                raise
+            self._db.execute("COMMIT")
+        if row is None:
+            return None
+        try:
+            given = json.loads(row[3]) if row[3] else {}
+        except ValueError:
+            given = {}
+        return {"key": row[0], "stage": row[1], "sig": row[2], "input": given}
+
+    def renew(self, key: str, stage: str, owner: str, lease: float = LEASE_SECONDS) -> None:
+        with self._lock:
+            self._db.execute(
+                "UPDATE tasks SET lease_until = ? WHERE key = ? AND stage = ? AND owner = ? AND state = ?",
+                (time.time() + lease, key, stage, owner, RUNNING),
+            )
+
+    def release(self, owner: str) -> None:
+        """A worker stopping cleanly: what it held is due again at once."""
+        with self._lock:
+            self._db.execute("UPDATE tasks SET state = ?, owner = '', lease_until = 0 WHERE owner = ? AND state = ?", (PENDING, owner, RUNNING))
+
+    def beat(self, worker: dict[str, Any]) -> None:
+        """A worker checking in: {id, host, pid, started, doing, stages, note}."""
+        with self._lock:
+            self._db.execute(
+                "INSERT INTO workers (id, host, pid, started, beat, doing, stages, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT (id) DO UPDATE SET beat = excluded.beat, doing = excluded.doing, stages = excluded.stages, note = excluded.note",
+                (worker["id"], worker.get("host", ""), worker.get("pid", 0), worker.get("started", time.time()), time.time(),
+                 worker.get("doing", ""), ",".join(worker.get("stages") or ()), worker.get("note", "")),
+            )
+
+    def gone(self, worker_id: str) -> None:
+        with self._lock:
+            self._db.execute("DELETE FROM workers WHERE id = ?", (worker_id,))
+
+    def workers(self, now: float | None = None) -> list[dict[str, Any]]:
+        """The workers that checked in lately (older entries are dropped)."""
+        now = time.time() if now is None else now
+        with self._lock:
+            self._db.execute("DELETE FROM workers WHERE beat < ?", (now - 24 * 3600,))
+            found = self._db.execute("SELECT id, host, pid, started, beat, doing, stages, note FROM workers ORDER BY started").fetchall()
+        out = []
+        for wid, host, pid, started, beat, doing, stages, note in found:
+            out.append({
+                "id": wid, "host": host, "pid": pid, "started": started, "beat": beat, "doing": doing,
+                "stages": [s for s in stages.split(",") if s], "note": note, "alive": now - beat <= WORKER_STALE_SECONDS,
+            })
+        return out
+
+    def changed_since(self, since: float, stages: tuple[str, ...]) -> list[tuple[str, str, str, float]]:
+        """(key, stage, state, changed_at) of the tasks of these stages that
+        changed after since: how the server hears what a worker finished."""
+        marks = ",".join("?" * len(stages))
+        with self._lock:
+            return self._db.execute(
+                f"SELECT key, stage, state, changed_at FROM tasks WHERE changed_at > ? AND stage IN ({marks}) ORDER BY changed_at",
+                (since, *stages),
+            ).fetchall()
 
     # -- reading -----------------------------------------------------------------
 

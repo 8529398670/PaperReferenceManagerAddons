@@ -184,6 +184,9 @@ const App = {
     PaperView.init();
     Missing.init();
     StatusView.init();
+    FiguresView.init();
+    CodeView.init();
+    DatasetsView.init();
     loading.push( Keys.init( me ) );
     Mcp.init( me );
     loading.push( Sessions.init() );

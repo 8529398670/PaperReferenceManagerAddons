@@ -134,7 +134,9 @@ const ListTools = {
       const last = rows.lastElementChild;
       if ( !last ) return;
       Dom.movedOnPurpose();
-      last.scrollIntoView( { block: "end" , behavior: "smooth" } );
+      // A jump too: a glide would build every row it passes (BoardView.lazy).
+      BoardView.build( last );
+      last.scrollIntoView( { block: "end" } );
     } );
   },
 
@@ -205,7 +207,7 @@ const ListTools = {
       const onAll = selected.length > 0 && selected.every( ( key ) => ( ( this.lists.row( key ) || {} ).tags || [] ).some( ( tag ) => tag.toLowerCase() === lower ) );
       const chip = Dom.el( "button" , {
         class: "tag-chip tag-chip-bar" + ( filtering ? " is-filter" : "" ) + ( this.armed === name ? " is-armed" : "" ) + ( onAll ? " is-on" : "" ),
-        attrs: { type: "button" , "aria-pressed": String( filtering || this.armed === name || onAll ) , title: this.chipHelp( selected.length ) },
+        attrs: { type: "button" , "data-tag": name , "aria-pressed": String( filtering || this.armed === name || onAll ) , title: this.chipHelp( selected.length ) },
         children: [
           Dom.el( "span" , { text: name } ),
           Dom.el( "span" , { class: "tag-chip-count" , text: String( counts.get( lower ) || 0 ) } ),
@@ -248,7 +250,9 @@ const ListTools = {
     }
     bar.classList.toggle( "is-folded" , !this.allTags );
     const more = Dom.get( "list-chips-more" );
-    const overflowing = this.allTags || bar.scrollHeight > bar.clientHeight + 2;
+    // Measured only while the bar shows: measuring forces the whole board's
+    // layout, which on a long list is most of a redraw.
+    const overflowing = this.allTags || ( barShown && bar.scrollHeight > bar.clientHeight + 2 );
     Dom.show( more , overflowing );
     more.setAttribute( "aria-expanded" , String( this.allTags ) );
     Dom.text( more , this.allTags ? I18n.get( "lists.fewer_tags" ) : I18n.get( "lists.all_tags" ).replace( "{count}" , chips.length - ( locked ? 0 : 1 ) ) );

@@ -1,0 +1,46 @@
+# The heavy worker's packages (`python -m app worker`: figure crops and OCR,
+# app/worker/). NOT for the Alpine image: torch, onnxruntime and OpenCV ship
+# no musllinux wheels. `scripts/run.sh worker` installs these into their own
+# venv, .venv-worker (Python 3.12), apart from the main app's .venv.
+#
+# Pinned for Python 3.12 on macOS (arm64 and Intel) and glibc Linux (x86_64,
+# aarch64). PyTorch stopped publishing Intel-Mac wheels after 2.2.2, so an
+# Intel Mac gets that torch (and its torchvision) by the markers below.
+# rapidocr-onnxruntime 1.4.4 caps Python below 3.13, so this venv stays on
+# 3.12. On Linux x86_64 the PyPI torch wheel bundles CUDA (a large download);
+# for a CPU-only box install torch first from
+# https://download.pytorch.org/whl/cpu at the same version.
+#
+# OpenCV: the worker's own code uses only Pillow and numpy, but doclayout-yolo
+# and rapidocr both require opencv-python, so that one is pinned below (its
+# 4.12+ releases demand numpy 2). opencv-python-headless is NOT added: two
+# OpenCV distributions in one venv overwrite each other's cv2.
+#
+# wordninja is published only as a source archive (pure Python, builds
+# without a compiler), so do not install this file with --only-binary=:all:.
+
+# Layout detection (the model file, doclayout_yolo_docstructbench_imgsz1024.pt,
+# is fetched separately; see app/worker/figures.py MODEL_FILENAME).
+doclayout-yolo==0.0.4
+torch==2.5.1; sys_platform != "darwin" or platform_machine != "x86_64"
+torchvision==0.20.1; sys_platform != "darwin" or platform_machine != "x86_64"
+torch==2.2.2; sys_platform == "darwin" and platform_machine == "x86_64"
+torchvision==0.17.2; sys_platform == "darwin" and platform_machine == "x86_64"
+
+# PDF rendering and the text layer.
+pypdfium2==4.30.0
+
+# OCR.
+rapidocr-onnxruntime==1.4.4
+# The model's first download, when no weights file is given (app/worker/run.py).
+huggingface-hub==0.36.2
+onnxruntime==1.20.1
+# Re-spaces OCR lines whose words ran together. Pure Python.
+wordninja==2.0.0
+
+Pillow==11.0.0
+numpy==1.26.4
+opencv-python==4.11.0.86
+
+# The worker reads config/config.yaml.
+PyYAML==6.0.2

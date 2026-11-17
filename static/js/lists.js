@@ -62,6 +62,11 @@ const Lists = {
       palette = now;
       this.draw();
     } );
+    this.compactOnScroll();
+    window.addEventListener( "hashchange" , () => {
+      // After Nav has shown the screen, so the board has its size.
+      if ( this.drawLater && Nav.current() === "lists" ) setTimeout( () => this.draw() , 0 );
+    } );
     Dom.get( "list-picker" ).addEventListener( "change" , ( event ) => this.open( event.target.value ) );
     Dom.get( "list-new" ).addEventListener( "click" , () => this.showNewForm( true ) );
     Dom.get( "list-new-cancel" ).addEventListener( "click" , () => this.showNewForm( false ) );
@@ -69,6 +74,8 @@ const Lists = {
     this.initAdd();
     ListTools.init( this );
     ListPanels.init( this );
+    TagMenu.init( this );
+    BoardColumns.init( this );
     ListManage.init( this );
     ListSheet.init( this );
     await this.loadLists();
@@ -176,58 +183,57 @@ const Lists = {
   // ---- drawing -------------------------------------------------------------
 
   // The columns drawn: every one not unticked in the Columns menu.
+  // Scrolled down the board, the cards above it (the list picker, adding a
+  // paper, the shelf) fold away and the board takes the screen, toolbar and
+  // column labels kept, like the other table screens. Back at the top they
+  // return. From md up only, where the board scrolls by itself (on a phone
+  // the whole page scrolls, so they scroll away anyway). Not while something
+  // up there is in use, and not on a list too short to scroll past them, or
+  // folding would take away the scroll that folded it.
+  compactOnScroll() {
+    const panel = Dom.get( "lists-panel" );
+    const board = Dom.get( "list-scroll" );
+    const wide = window.matchMedia( "(min-width: 768px)" );
+    const tops = () => [ panel.querySelector( ":scope > .card" ) , Dom.get( "list-view-only" ) , Dom.get( "list-editing" ) , Dom.get( "list-shelf" ) ];
+    let frame = 0;
+    const check = () => {
+      frame = 0;
+      const compact = panel.classList.contains( "is-compact" );
+      let want = compact;
+      if ( !wide.matches ) want = false;
+      else if ( board.scrollTop <= 4 ) want = false;
+      else if ( !compact && board.scrollTop > 48 ) {
+        const busy = tops().some( ( element ) => element && element.contains( document.activeElement ) )
+          || !Dom.get( "list-add-panel" ).hidden || !Dom.get( "list-new-form" ).hidden;
+        const room = tops().reduce( ( sum , element ) => sum + ( element && !element.hidden ? element.offsetHeight : 0 ) , 0 );
+        want = !busy && board.scrollHeight - board.clientHeight > room + 200;
+      }
+      if ( want !== compact ) panel.classList.toggle( "is-compact" , want );
+    };
+    board.addEventListener( "scroll" , () => {
+      if ( !frame ) frame = window.requestAnimationFrame( check );
+    } , { passive: true } );
+    wide.addEventListener( "change" , check );
+    // Another list starts at its top, with everything showing.
+    Dom.get( "list-picker" ).addEventListener( "change" , () => panel.classList.remove( "is-compact" ) );
+  },
+
   columns() {
     const doc = this.view.doc;
     const folded = new Set( ( doc.options && doc.options.fold_cols ) || [] );
     return ( doc.columns || [] ).filter( ( column ) => !folded.has( column.id ) );
   },
 
-  widths() {
-    try {
-      return JSON.parse( this.local( "list-col-widths" ) || "{}" ) || {};
-    } catch ( error ) {
-      return {};
-    }
-  },
-
-  // One grid for the header and every row, so the columns line up. Widths are
-  // per browser; a column nobody resized gets the default.
-  layout( columns ) {
-    const widths = this.widths();
-    // The Paper column fills what is left until a width is dragged; then it
-    // keeps its own, so dragging an edge moves only that edge (see resize).
-    // Once pinned, the last column takes whatever the board has left over
-    // (at least its own width), so there is never blank space at the right.
-    const tracks = [ widths.paper ? widths.paper + "px" : "minmax(18rem, 1fr)" ]
-      .concat( columns.map( ( column ) => ( widths[ column.id ] ? widths[ column.id ] + "px" : "var(--board-col)" ) ) );
-    if ( widths.paper ) tracks[ tracks.length - 1 ] = "minmax(" + tracks[ tracks.length - 1 ] + ", 1fr)";
-    const template = [ "var(--board-side)" ].concat( tracks , [ "2.25rem" ] ).join( " " );
-    // On the list body, so the shelf's rows line up with the list's.
-    const scroll = Dom.get( "list-body" );
-    scroll.style.setProperty( "--board-grid" , template );
-    // The least width all of it needs; past it the board scrolls sideways.
-    const fixed = columns.map( ( column ) => ( widths[ column.id ] ? widths[ column.id ] + "px" : "var(--board-col)" ) );
-    const gaps = ( columns.length + 3 ) * 0.75;
-    scroll.style.setProperty( "--board-min" , "calc(var(--board-side) + " + ( widths.paper ? widths.paper + "px" : "18rem" ) + " + 2.25rem + " + gaps + "rem" + fixed.map( ( width ) => " + " + width ).join( "" ) + ")" );
-  },
-
-  resize( id , width , done ) {
-    const widths = this.widths();
-    // The first drag pins the Paper column at the width it has now, so it no
-    // longer gives or takes what the dragged column gains or loses.
-    if ( width && id !== "paper" && !widths.paper ) {
-      const cell = Dom.get( "list-head" ).querySelector( ".board-cell-paper" );
-      if ( cell ) widths.paper = Math.round( cell.getBoundingClientRect().width );
-    }
-    if ( width === 0 ) delete widths[ id ];
-    else if ( width ) widths[ id ] = width;
-    this.local( "list-col-widths" , JSON.stringify( widths ) );
-    this.layout( this.columns() );
-  },
-
   draw() {
     const view = this.view;
     if ( !view ) return;
+    // Not while another screen shows: the board is drawn when it is next
+    // opened (the hashchange in init), so the Library is not kept waiting.
+    if ( Nav.current() !== "lists" ) {
+      this.drawLater = true;
+      return;
+    }
+    this.drawLater = false;
     const started = performance.now();
     const doc = view.doc;
     const count = ( doc.items || [] ).length;
@@ -238,9 +244,9 @@ const Lists = {
     const colSig = columns.map( ( column ) => column.id + "=" + column.label ).join( "|" );
     if ( colSig !== this.lastColSig ) {
       this.lastColSig = colSig;
-      BoardView.head( Dom.get( "list-head" ) , columns , this.widths() , ( id , width , done ) => this.resize( id , width , done ) );
+      BoardColumns.head( Dom.get( "list-head" ) , columns );
     }
-    this.layout( columns );
+    BoardColumns.layout( columns );
 
     const visible = ( doc.items || [] ).filter( ( item ) => ListTools.matches( item , view.papers[ item.key ] ) ).map( ( item ) => item.key );
     const handlers = this.handlers();
@@ -256,6 +262,7 @@ const Lists = {
       doc: doc , papers: view.papers || {} , handlers: handlers , locked: view.locked , columns: columns ,
       items: this.items , visible: visible , positions: this.positions , cites: this.cites , anchor: anchor ,
       sections: doc.sections || [] , sectionCounts: this.sectionCounts , target: ( doc.options && doc.options.section_target ) || "" ,
+      lazy: true , scroller: Dom.get( "list-scroll" ) ,
     } );
     ListTools.paintSelection();
     this.drawShelf( columns , handlers );

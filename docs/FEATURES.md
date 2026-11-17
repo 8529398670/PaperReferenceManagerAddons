@@ -65,15 +65,17 @@ The idea that changes everything: **no reindex, no pipeline to run**.
 - [x] **P4** Per-paper queue (`<app dir>/papers/content.db`): a new paper, a changed PDF or text (path, mtime, size), or an edited modality vocabulary each queue just the stages that read it; opening a paper puts it first; failures back off and never block others.
 - [x] **P4** Light stages in the server, two lanes (network, local text): OpenAlex, methods split, code links, dataset links and named datasets, modality tags. Badges on Library and list rows fill in live; Library filter chips: Code, Data, No PDF text, OpenAlex missing.
 - [x] **P4** Status screen: a card per stage with counts and a bar, live; per stage the papers still to do or failed (why, first / last failed, tries), search, sort, Retry one or all.
-- [ ] **P5** Optional worker (`python -m app worker`): YOLO figure crops + montage, OCR for scanned PDFs.
-- [ ] **P5** GitHub / OSF enrichment, repair of OCR-mangled repo links, dataset descriptions.
+- [x] **P5** Optional worker (`python -m app worker`, started by `scripts/run.sh worker` in its own `.venv-worker` from `requirements-pipeline.txt`): doclayout-yolo figure crops at 400 DPI with their captions, numbered as the old app did, and a montage; RapidOCR for a PDF whose text is missing or unusable, which then feeds search and the text stages. It claims tasks from the same queue with a lease and checks in every 20 s; the Status screen shows it. With no worker, figures and OCR read "not available" and nothing else waits. `manage import-legacy --figures --from <old output>` links the old crops, montages and picks in.
+- [x] **P5** GitHub / OSF enrichment (`enrich.github_token`, `enrich.osf_token`; without a token that host is not asked): each unique repo's metadata and README, OSF nodes and their wiki, method tags confirmed (README) or inferred (the linking papers' modality tags), OCR-mangled GitHub links repaired against the owner's repos (exact / prefix / fuzzy, with the original kept), archive records described (Zenodo, Figshare, OpenNeuro, OSF, else the page title). The old caches are converted, not refetched.
 - [ ] **P7** LLM summaries + rollup.
 
 ## F. Code and Datasets screens
-- [ ] **P5** Membership columns (Review / List / Tier / Figs), host filters, xlsx/CSV export, by-dataset view.
+- [x] **P5** Code screen: one row per paper with code; repositories with what GitHub / OSF say, methods ✓ / ·, repaired links; Lists, Tier and Figs columns; host and membership filters, text search; sortable; .xlsx (papers + links) and CSV of exactly what is shown.
+- [x] **P5** Datasets screen: by dataset (what it is, papers using it with the roll call, on lists, in tiers, years) and by paper (records linked, ˟ for accessions recovered from a bare ds######, named collections, code count); filters for linked / named-only, code, membership, archive; .xlsx and CSV.
+- [ ] **P6** The Review column (and the "in the review" filter) on Code and Datasets.
 
 ## G. Figures
-- [ ] **P5** All figures / method-matched: pick and skip, chips, keyboard stepping, export. Old picks imported.
+- [x] **P5** Figures screen: All figures / Method figures (captions matched against `config/method-images.txt`, threshold 85, three weak hits); pick in pick order, skip (Space), arrow keys between papers; chips (All, Overview, Picked, Picked in the other view, Skipped), modality and keyword filters; sort by added, published, best match, most figures, title; picks as JSON / CSV; Clear (undoable). Papers load as the grid scrolls and images only near the screen (thumbnails made on first view). Old picks imported.
 
 ## H. Review
 - [ ] **P6** Three-criteria screen, about 50 fields with evidence quotes, plausibility gates, dataset consensus, overrides, excluded/borderline papers, export. Run per paper, not as a rebuild.

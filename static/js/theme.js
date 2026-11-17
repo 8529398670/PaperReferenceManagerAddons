@@ -72,6 +72,10 @@ const Theme = {
   // language.yaml (theme.preset_<id>) until a list is saved; a saved list keeps
   // its own names.
   //
+  // rowOdd and rowEven are a table's alternating rows. Left out, they are the
+  // card and the card tinted with the second color (derived); the brand
+  // themes pick them from their palettes.
+  //
   // Every one has colors for both modes: the ones it starts in, and the other
   // mode's under its name, which the Light/Dark switch swaps in (setMode).
   // Default comes first and starts light: it is what a new browser shows.
@@ -88,8 +92,10 @@ const Theme = {
       dark: { accent: "#3bc9db" , second: "#ff922b" , background: "#0b1a1f" , surface: "#12262d" } },
     { id: "forest" , mode: "light" , accent: "#28843b" , second: "#8a6a12" , background: "#f1f6ef" , surface: "#ffffff" ,
       dark: { accent: "#69db7c" , second: "#e0b84c" , background: "#0f1a12" , surface: "#17251a" } },
+    // Sepia's rows are paper and parchment.
     { id: "sepia" , mode: "light" , accent: "#9c5a1c" , second: "#2f6f6a" , background: "#f6f0e4" , surface: "#fbf7ef" ,
-      dark: { accent: "#e0a15e" , second: "#6cc4bb" , background: "#1c1712" , surface: "#262019" } },
+      rowOdd: "#fbf7ef" , rowEven: "#f1e6d0" ,
+      dark: { accent: "#e0a15e" , second: "#6cc4bb" , background: "#1c1712" , surface: "#262019" , rowOdd: "#262019" , rowEven: "#30281e" } },
     { id: "grape" , mode: "light" , accent: "#7048c8" , second: "#c0267e" , background: "#f5f2fc" , surface: "#ffffff" ,
       dark: { accent: "#b197fc" , second: "#f783ac" , background: "#15111f" , surface: "#1e182c" } },
     { id: "cerise" , mode: "dark" , accent: "#f06595" , second: "#ffa8d0" , background: "#1f0d16" , surface: "#2a1220" ,
@@ -97,15 +103,21 @@ const Theme = {
     { id: "pink" , mode: "light" , accent: "#c2255c" , second: "#6b3fc0" , background: "#fdf0f5" , surface: "#ffffff" ,
       dark: { accent: "#f783ac" , second: "#b197fc" , background: "#1f1018" , surface: "#2a1621" } },
     // Wright State University: Green on Off White; switched to dark, Gold on Black with Dark Green panels.
+    // Rows: white and Faded Gold; dark, Dark Green and Dark Green lit with Leaf.
     { id: "wsu" , mode: "light" , accent: ThemePalettes.wsu.green , second: ThemePalettes.wsu.gold , background: ThemePalettes.wsu.off_white , surface: "#ffffff" ,
-      dark: { accent: ThemePalettes.wsu.gold , second: ThemePalettes.wsu.yellow , background: ThemePalettes.wsu.black , surface: ThemePalettes.wsu.dark_green } },
+      rowOdd: "#ffffff" , rowEven: ThemePalettes.wsu.faded_gold ,
+      dark: { accent: ThemePalettes.wsu.gold , second: ThemePalettes.wsu.yellow , background: ThemePalettes.wsu.black , surface: ThemePalettes.wsu.dark_green ,
+        rowOdd: ThemePalettes.wsu.dark_green , rowEven: "#175831" } },
     // The Ohio State University: Scarlet on Gray Light 90 with Gray Dark 40 for
     // where you are; switched to dark, Scarlet on Gray Dark 80 with Gray Dark 60 panels.
     // Text is the gray shades; dark links and outline buttons are gray tints,
     // never a scarlet tint (no scarlet reads on a dark card).
+    // Rows: White and Gray Light 80; dark, Gray Dark 60 and a step toward Gray Dark 80.
     { id: "osu" , since: 1 , mode: "light" , accent: ThemePalettes.osu.scarlet , second: ThemePalettes.osu.gray_dark_40 , background: ThemePalettes.osu.gray_light_90 , surface: ThemePalettes.osu.white ,
+      rowOdd: ThemePalettes.osu.white , rowEven: ThemePalettes.osu.gray_light_80 ,
       overrides: { text: ThemePalettes.osu.gray_dark_80 } ,
       dark: { accent: ThemePalettes.osu.scarlet , second: ThemePalettes.osu.gray , background: ThemePalettes.osu.gray_dark_80 , surface: ThemePalettes.osu.gray_dark_60 ,
+        rowOdd: ThemePalettes.osu.gray_dark_60 , rowEven: "#323635" ,
         overrides: { text: ThemePalettes.osu.gray_light_60 , link: ThemePalettes.osu.gray_light_40 , navLink: ThemePalettes.osu.gray_light_40 ,
           accentText: ThemePalettes.osu.gray_light_40 } } },
     { id: "midnight" , mode: "dark" , accent: "#8c7cff" , second: "#ffb86b" , background: "#0e1020" , surface: "#171a30" ,
@@ -151,7 +163,7 @@ const Theme = {
 
   // How much of the second color goes into each layer, in percent, so a nested
   // card stands off its card and the card off the page.
-  tints: { page: 3.5 , surface: 1.75 , nested: 8.75 , chrome: 10 , info: 14 , infoBorder: 45 },
+  tints: { page: 3.5 , surface: 1.75 , nested: 8.75 , chrome: 10 , info: 14 , infoBorder: 45 , row: 10 },
 
   // Field of colors() -> custom property in style.css, which hands them on to
   // Bootstrap. Every one of them can be overridden.
@@ -172,6 +184,8 @@ const Theme = {
     info: "--app-info",
     infoBorder: "--app-info-border",
     border: "--app-border",
+    rowOdd: "--app-row-odd",
+    rowEven: "--app-row-even",
   },
 
   // Pairs that must stay readable: [ front , back ] fields of colors(). check()
@@ -187,6 +201,8 @@ const Theme = {
     heading: [ "secondText" , "nested" ],
     active_nav: [ "secondFg" , "second" ],
     sidebar_link: [ "navLink" , "chrome" ],
+    row_odd: [ "text" , "rowOdd" ],
+    row_even: [ "text" , "rowEven" ],
   },
 
   // The themes on offer, and the one in use (its id).
@@ -217,7 +233,7 @@ const Theme = {
 
   // The fields that belong to one mode. The name and the button style are the
   // theme's whatever the mode.
-  modeFields: [ "accent" , "second" , "background" , "surface" , "overrides" ],
+  modeFields: [ "accent" , "second" , "background" , "surface" , "rowOdd" , "rowEven" , "overrides" ],
 
   // Switches a theme to light or dark, in place. Its colors for the mode it
   // leaves are kept under that mode's name, and any it has for the mode it
@@ -420,6 +436,10 @@ const Theme = {
       // From the card, not the page: most borders sit on a card, and a card can be
       // a long way from its page (WSU's dark green panels on black).
       border: this.mix( mode.text , card , 20 ),
+      // A table's rows, alternating: the card, then the card tinted with the
+      // second color, unless the theme picks its own.
+      rowOdd: theme.rowOdd || this.builtInRow( theme , "rowOdd" ) || card,
+      rowEven: theme.rowEven || this.builtInRow( theme , "rowEven" ) || this.mix( second , card , this.tints.row ),
     };
     // The other buttons. A fill stays close to its color but is moved until
     // black or white reads on it; an outline's label is read on the card.
@@ -441,6 +461,15 @@ const Theme = {
       result[ name + "Text" ] = this.asText( fill , card );
     } );
     return result;
+  },
+
+  // A built-in theme's row color for this theme's mode, for a saved copy of it
+  // (same id) that has none of its own: lists saved before themes had rows
+  // still get WSU's Faded Gold. "" when there is none.
+  builtInRow( theme , field ) {
+    const built = this.builtIn.find( ( item ) => item.id === theme.id );
+    const colors = built && ( built.mode === theme.mode ? built : built[ theme.mode ] );
+    return ( colors && colors[ field ] ) || "";
   },
 
   // "danger" -> "btnDanger", the field of colors() for that button's fill.

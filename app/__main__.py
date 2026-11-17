@@ -3,6 +3,7 @@
     python -m app                    run the web server
     python -m app manage <cmd>       account administration
     python -m app config <cmd>       create, check, or read config.yaml
+    python -m app worker             the optional figures / OCR worker
     python -m app health             exit 0 if the local server answers
     python -m app version            build information
 
@@ -72,6 +73,15 @@ def main(arguments: list[str]) -> None:
             config_command.run(rest)
         except Exception as error:  # noqa: BLE001
             fail(error)
+    elif command == "worker":
+        # Runs in its own venv (.venv-worker) with the ML packages and none of
+        # the web stack; see app/worker/run.py.
+        from app.worker import run as worker
+
+        try:
+            worker.main(rest)
+        except KeyboardInterrupt:
+            sys.exit(130)
     elif command == "health":
         from app.core import healthcheck
 

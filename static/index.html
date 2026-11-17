@@ -34,8 +34,13 @@
         <i class="bi bi-list" aria-hidden="true"></i>
       </button>
       <!-- The app's name is the way home, from any screen. -->
-      <a href="/" class="navbar-brand fw-semibold me-auto" data-i18n="app.title"></a>
-      <span class="navbar-text small d-none d-md-inline" data-i18n="app.tagline"></span>
+      <a href="/" class="navbar-brand fw-semibold d-none d-md-inline-block" data-i18n="app.title"></a>
+      <!-- The screen showing and its one-line summary (a count), set by
+           Nav.render and Nav.summary. What each screen is for is on Info. -->
+      <div id="nav-screen" class="navbar-text d-flex align-items-baseline gap-2 me-auto min-w-0 py-0" hidden>
+        <span id="nav-screen-title" class="nav-screen-title text-truncate"></span>
+        <span id="nav-screen-summary" class="small text-body-secondary text-nowrap"></span>
+      </div>
       <div id="app-nav" class="d-flex align-items-center gap-2" hidden>
         <!-- The app's own top-level links go here. Your account is in the
              sidebar, not up here. -->
@@ -62,12 +67,16 @@
           <a class="nav-link" href="#library" data-nav="library"><i class="bi bi-book" aria-hidden="true"></i><span data-i18n="nav.library"></span></a>
           <a class="nav-link" href="#lists" data-nav="lists"><i class="bi bi-list-ol" aria-hidden="true"></i><span data-i18n="nav.lists"></span></a>
           <a class="nav-link" href="#missing" data-nav="missing"><i class="bi bi-search-heart" aria-hidden="true"></i><span data-i18n="nav.missing"></span></a>
+          <a class="nav-link" href="#figures" data-nav="figures"><i class="bi bi-images" aria-hidden="true"></i><span data-i18n="nav.figures"></span></a>
+          <a class="nav-link" href="#code" data-nav="code"><i class="bi bi-code-slash" aria-hidden="true"></i><span data-i18n="nav.code"></span></a>
+          <a class="nav-link" href="#datasets" data-nav="datasets"><i class="bi bi-database" aria-hidden="true"></i><span data-i18n="nav.datasets"></span></a>
           <a class="nav-link" href="#status" data-nav="status"><i class="bi bi-activity" aria-hidden="true"></i><span data-i18n="nav.status"></span></a>
           <hr class="sidebar-rule" />
           <!-- Account: its second line names who is signed in (App.labelAccount). -->
           <a class="nav-link" href="#account" data-nav="account"><i class="bi bi-person-circle" aria-hidden="true"></i><span class="nav-link-text"><span data-i18n="nav.account"></span><span id="sidebar-user" class="nav-link-sub"></span></span></a>
           <a class="nav-link" href="#appearance" data-nav="appearance"><i class="bi bi-palette" aria-hidden="true"></i><span data-i18n="nav.appearance"></span></a>
           <a class="nav-link" href="#shortcuts" data-nav="shortcuts"><i class="bi bi-keyboard" aria-hidden="true"></i><span data-i18n="nav.shortcuts"></span></a>
+          <a class="nav-link" href="#info" data-nav="info"><i class="bi bi-question-circle" aria-hidden="true"></i><span data-i18n="nav.info"></span></a>
           <a class="nav-link" href="#about" data-nav="about"><i class="bi bi-info-circle" aria-hidden="true"></i><span data-i18n="nav.about"></span></a>
 
           <div id="sidebar-admin" class="sidebar-group" hidden>
@@ -148,16 +157,8 @@
       <section id="signed-in" hidden>
         <!-- Every paper in Zotero, searched live. static/js/library.js -->
         <section class="view view-fill" data-view="library" id="library-panel" hidden>
-          <!-- Folds away once the table is scrolled into (view_head.js). -->
-          <header class="view-head">
-            <div class="view-head-inner">
-              <div class="d-flex flex-wrap align-items-baseline gap-2">
-                <h2 class="view-title" data-i18n="library.heading"></h2>
-                <span id="library-count" class="text-body-secondary small"></span>
-              </div>
-              <p id="library-status" class="view-description" role="status"></p>
-            </div>
-          </header>
+          <h2 class="view-title visually-hidden" data-i18n="library.heading"></h2>
+          <p id="library-problem" class="alert alert-warning py-2 mb-0" role="status" hidden></p>
 
           <section class="card card-fill">
             <div class="card-body py-2">
@@ -220,7 +221,7 @@
         </section>
 
         <!-- One paper: #paper/<key>. static/js/paper.js -->
-        <section class="view" data-view="paper" id="paper-panel" hidden>
+        <section class="view" data-view="paper" id="paper-panel" data-nav-title="paper.heading" hidden>
           <div id="paper-nav" class="d-flex flex-wrap align-items-center gap-2 mb-2" hidden>
             <button id="paper-prev" type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-left" aria-hidden="true"></i> <span data-i18n="paper.prev"></span></button>
             <button id="paper-next" type="button" class="btn btn-outline-secondary btn-sm"><span data-i18n="paper.next"></span> <i class="bi bi-chevron-right" aria-hidden="true"></i></button>
@@ -278,6 +279,14 @@
               </div>
             </section>
 
+            <section class="card" id="paper-figures-card" hidden>
+              <div class="card-body">
+                <h3 class="card-title h5" data-i18n="paper.figures_heading"></h3>
+                <p class="small text-body-secondary" data-i18n="paper.figures_help"></p>
+                <div id="paper-figures" class="row row-cols-2 row-cols-md-3 row-cols-xl-4 row-cols-xxl-6 g-2"></div>
+              </div>
+            </section>
+
             <div class="row g-3 align-items-start">
               <div class="col-12 col-xxl-8">
                 <section class="card">
@@ -310,13 +319,7 @@
 
         <!-- The papers you do not have. static/js/missing.js -->
         <section class="view view-fill" data-view="missing" id="missing-panel" hidden>
-          <!-- Folds away once the table is scrolled into (view_head.js). -->
-          <header class="view-head">
-            <div class="view-head-inner">
-              <h2 class="view-title" data-i18n="missing.heading"></h2>
-              <p class="view-description" data-i18n="missing.description"></p>
-            </div>
-          </header>
+          <h2 class="view-title visually-hidden" data-i18n="missing.heading"></h2>
           <div id="missing-paper" class="alert alert-info py-2 mb-0 d-flex flex-wrap align-items-center gap-2" role="status" hidden>
             <span data-i18n="missing.paper_filter"></span>
             <a id="missing-paper-link" class="fw-semibold" href="#library"></a>
@@ -394,8 +397,7 @@
 
         <!-- The content queue and its failures. static/js/status.js -->
         <section class="view view-fill" data-view="status" id="status-panel" hidden>
-          <h2 class="view-title" data-i18n="status.heading"></h2>
-          <p class="view-description" data-i18n="status.description"></p>
+          <h2 class="view-title visually-hidden" data-i18n="status.heading"></h2>
           <div class="row g-3">
             <div class="col-12 col-xxl-3">
               <section class="card h-100">
@@ -403,11 +405,13 @@
                   <p id="status-library" class="mb-1"></p>
                   <p id="status-pool" class="mb-1"></p>
                   <p id="status-openalex-note" class="alert alert-warning py-2 mb-0 mt-2" hidden></p>
+                  <h3 class="h6 mt-3 mb-1" data-i18n="status.worker_heading"></h3>
+                  <ul id="status-workers" class="list-unstyled small mb-0"></ul>
                 </div>
               </section>
             </div>
             <div class="col-12 col-xxl-9">
-              <div id="status-cards" class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 row-cols-xl-5 g-3"></div>
+              <div id="status-cards" class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-3"></div>
             </div>
           </div>
           <section class="card card-fill">
@@ -457,11 +461,183 @@
           </section>
         </section>
 
+        <!-- Every figure crop, or the method figures, to pick from. static/js/figures.js -->
+        <section class="view view-fill" data-view="figures" id="figures-panel" hidden>
+          <h2 class="view-title visually-hidden" data-i18n="figures.heading"></h2>
+          <section class="card card-fill">
+            <div class="card-header pb-0 border-bottom-0">
+              <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                <li class="nav-item"><a class="nav-link active" href="#figures" data-figures-view="all" aria-current="true" data-i18n="figures.view_all"></a></li>
+                <li class="nav-item"><a class="nav-link" href="#figures" data-figures-view="method" data-i18n="figures.view_method"></a></li>
+              </ul>
+            </div>
+            <div class="card-body py-2 border-top">
+              <div class="row g-2 align-items-center" role="search">
+                <div class="col-12 col-md-6 col-xl-4">
+                  <label for="figures-search" class="visually-hidden" data-i18n="figures.search_label"></label>
+                  <input id="figures-search" class="form-control" type="search" autocomplete="off" data-i18n-attr="placeholder:figures.search_placeholder" />
+                </div>
+                <div class="col-auto dropdown">
+                  <button id="figures-filter" type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    <i class="bi bi-funnel" aria-hidden="true"></i> <span data-i18n="table.filter"></span> <span class="badge text-bg-light ms-1" hidden></span>
+                  </button>
+                  <div class="dropdown-menu p-3 filter-menu">
+                    <label for="figures-mod" class="form-label" data-i18n="figures.mod_label"></label>
+                    <select id="figures-mod" class="form-select mb-3"></select>
+                    <div id="figures-term-group">
+                      <label for="figures-term" class="form-label" data-i18n="figures.term_label"></label>
+                      <select id="figures-term" class="form-select mb-3"></select>
+                    </div>
+                    <label for="figures-sort" class="form-label" data-i18n="figures.sort_label"></label>
+                    <div class="input-group mb-3">
+                      <select id="figures-sort" class="form-select">
+                        <option value="added" data-i18n="figures.sort_added"></option>
+                        <option value="published" data-i18n="figures.sort_published"></option>
+                        <option value="match" data-i18n="figures.sort_match"></option>
+                        <option value="count" data-i18n="figures.sort_count"></option>
+                        <option value="title" data-i18n="figures.sort_title"></option>
+                      </select>
+                      <button id="figures-dir" type="button" class="btn btn-outline-secondary" data-i18n-attr="title:figures.dir_desc,aria-label:figures.dir_desc"><i class="bi bi-sort-down" aria-hidden="true"></i></button>
+                    </div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-filter-clear data-i18n="table.clear_filters"></button>
+                  </div>
+                </div>
+                <div class="col-auto dropdown">
+                  <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-download" aria-hidden="true"></i> <span data-i18n="figures.export"></span>
+                  </button>
+                  <ul class="dropdown-menu">
+                    <li><a id="figures-export-json" class="dropdown-item" href="#" download data-i18n="figures.export_json"></a></li>
+                    <li><a id="figures-export-csv" class="dropdown-item" href="#" download data-i18n="figures.export_csv"></a></li>
+                    <li><hr class="dropdown-divider" /></li>
+                    <li><button id="figures-clear" type="button" class="dropdown-item text-danger" data-i18n="figures.clear"></button></li>
+                  </ul>
+                </div>
+                <div class="col-auto ms-auto small text-body-secondary" id="figures-count"></div>
+              </div>
+              <div id="figures-chips" class="d-flex flex-wrap gap-1 mt-2" role="group" data-i18n-attr="aria-label:figures.chips_label"></div>
+              <p id="figures-note" class="alert alert-info py-2 mt-2 mb-0" role="status" hidden></p>
+              <p class="small text-body-secondary mt-2 mb-0 d-none d-lg-block" data-i18n="figures.keys_help"></p>
+            </div>
+            <div id="figures-grid" class="figures-grid border-top" tabindex="-1"></div>
+          </section>
+        </section>
+
+        <!-- Every paper that ships code. static/js/code.js -->
+        <section class="view view-fill" data-view="code" id="code-panel" hidden>
+          <h2 class="view-title visually-hidden" data-i18n="code.heading"></h2>
+          <p id="code-note" class="alert alert-warning py-2 mb-0" role="status" hidden></p>
+          <section class="card card-fill">
+            <div class="card-body py-2">
+              <div class="row g-2 align-items-center" role="search">
+                <div class="col-12 col-md-6 col-xl-4">
+                  <label for="code-search" class="visually-hidden" data-i18n="code.search_label"></label>
+                  <input id="code-search" class="form-control" type="search" autocomplete="off" data-i18n-attr="placeholder:code.search_placeholder" />
+                </div>
+                <div class="col-auto dropdown">
+                  <button id="code-filter" type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    <i class="bi bi-funnel" aria-hidden="true"></i> <span data-i18n="table.filter"></span> <span class="badge text-bg-light ms-1" hidden></span>
+                  </button>
+                  <div class="dropdown-menu p-3 filter-menu">
+                    <fieldset class="mb-3">
+                      <legend class="form-label fs-6" data-i18n="code.hosts_label"></legend>
+                      <div id="code-hosts"></div>
+                    </fieldset>
+                    <fieldset class="mb-3">
+                      <legend class="form-label fs-6" data-i18n="code.member_label"></legend>
+                      <div class="form-check"><input type="checkbox" class="form-check-input" id="code-on-list" data-code-member="list" /><label class="form-check-label" for="code-on-list" data-i18n="code.member_list"></label></div>
+                      <div class="form-check"><input type="checkbox" class="form-check-input" id="code-in-tier" data-code-member="tier" /><label class="form-check-label" for="code-in-tier" data-i18n="code.member_tier"></label></div>
+                      <div class="form-check"><input type="checkbox" class="form-check-input" id="code-has-figs" data-code-member="figs" /><label class="form-check-label" for="code-has-figs" data-i18n="code.member_figs"></label></div>
+                    </fieldset>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-filter-clear data-i18n="table.clear_filters"></button>
+                  </div>
+                </div>
+                <div class="col-auto dropdown">
+                  <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    <i class="bi bi-layout-three-columns" aria-hidden="true"></i> <span data-i18n="table.columns"></span>
+                  </button>
+                  <ul id="code-columns" class="dropdown-menu data-table-menu"></ul>
+                </div>
+                <div class="col-auto dropdown">
+                  <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-download" aria-hidden="true"></i> <span data-i18n="code.export"></span>
+                  </button>
+                  <ul class="dropdown-menu">
+                    <li><button id="code-export-xlsx" type="button" class="dropdown-item" data-i18n="code.export_xlsx"></button></li>
+                    <li><button id="code-export-csv" type="button" class="dropdown-item" data-i18n="code.export_csv"></button></li>
+                  </ul>
+                </div>
+                <div class="col-auto ms-auto small text-body-secondary" id="code-count"></div>
+              </div>
+            </div>
+            <div id="code-table" class="table-fill"></div>
+          </section>
+        </section>
+
+        <!-- What public data the library stands on. static/js/datasets.js -->
+        <section class="view view-fill" data-view="datasets" id="datasets-panel" hidden>
+          <h2 class="view-title visually-hidden" data-i18n="datasets.heading"></h2>
+          <section class="card card-fill">
+            <div class="card-header pb-0 border-bottom-0">
+              <ul class="nav nav-tabs card-header-tabs">
+                <li class="nav-item"><a class="nav-link active" href="#datasets" data-datasets-view="datasets" aria-current="true" data-i18n="datasets.view_datasets"></a></li>
+                <li class="nav-item"><a class="nav-link" href="#datasets" data-datasets-view="papers" data-i18n="datasets.view_papers"></a></li>
+              </ul>
+            </div>
+            <div class="card-body py-2 border-top">
+              <div class="row g-2 align-items-center" role="search">
+                <div class="col-12 col-md-6 col-xl-4">
+                  <label for="datasets-search" class="visually-hidden" data-i18n="datasets.search_label"></label>
+                  <input id="datasets-search" class="form-control" type="search" autocomplete="off" data-i18n-attr="placeholder:datasets.search_placeholder" />
+                </div>
+                <div class="col-auto dropdown">
+                  <button id="datasets-filter" type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    <i class="bi bi-funnel" aria-hidden="true"></i> <span data-i18n="table.filter"></span> <span class="badge text-bg-light ms-1" hidden></span>
+                  </button>
+                  <div class="dropdown-menu p-3 filter-menu">
+                    <fieldset class="mb-3">
+                      <legend class="form-label fs-6" data-i18n="datasets.kind_label"></legend>
+                      <div class="form-check"><input type="checkbox" class="form-check-input" id="datasets-linked" data-datasets-kind="linked" /><label class="form-check-label" for="datasets-linked" data-i18n="datasets.kind_linked"></label></div>
+                      <div class="form-check"><input type="checkbox" class="form-check-input" id="datasets-named" data-datasets-kind="named" /><label class="form-check-label" for="datasets-named" data-i18n="datasets.kind_named"></label></div>
+                    </fieldset>
+                    <fieldset class="mb-3">
+                      <legend class="form-label fs-6" data-i18n="code.member_label"></legend>
+                      <div class="form-check"><input type="checkbox" class="form-check-input" id="datasets-code" data-datasets-member="code" /><label class="form-check-label" for="datasets-code" data-i18n="datasets.code_label"></label></div>
+                      <div class="form-check"><input type="checkbox" class="form-check-input" id="datasets-on-list" data-datasets-member="list" /><label class="form-check-label" for="datasets-on-list" data-i18n="code.member_list"></label></div>
+                      <div class="form-check"><input type="checkbox" class="form-check-input" id="datasets-in-tier" data-datasets-member="tier" /><label class="form-check-label" for="datasets-in-tier" data-i18n="code.member_tier"></label></div>
+                    </fieldset>
+                    <label for="datasets-archive" class="form-label" data-i18n="datasets.archive_label"></label>
+                    <select id="datasets-archive" class="form-select mb-3"></select>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-filter-clear data-i18n="table.clear_filters"></button>
+                  </div>
+                </div>
+                <div class="col-auto dropdown">
+                  <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    <i class="bi bi-layout-three-columns" aria-hidden="true"></i> <span data-i18n="table.columns"></span>
+                  </button>
+                  <ul id="datasets-columns" class="dropdown-menu data-table-menu"></ul>
+                </div>
+                <div class="col-auto dropdown">
+                  <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-download" aria-hidden="true"></i> <span data-i18n="datasets.export"></span>
+                  </button>
+                  <ul class="dropdown-menu">
+                    <li><button id="datasets-export-xlsx" type="button" class="dropdown-item" data-i18n="datasets.export_xlsx"></button></li>
+                    <li><button id="datasets-export-csv" type="button" class="dropdown-item" data-i18n="datasets.export_csv"></button></li>
+                  </ul>
+                </div>
+                <div class="col-auto ms-auto small text-body-secondary" id="datasets-count"></div>
+              </div>
+            </div>
+            <div id="datasets-table" class="table-fill"></div>
+          </section>
+        </section>
+
         <!-- Curated, ordered, tagged lists of papers. static/js/lists.js (state, sending, adding),
              board_view.js (the rows), list_tools.js (tag bar, selection, filter, order, jump),
              list_panels.js (the list menu's dialogs: columns, colours, history, CSV, references, shelf). -->
         <section class="view view-fill" data-view="lists" id="lists-panel" hidden>
-          <h2 class="view-title" data-i18n="lists.heading"></h2>
+          <h2 class="view-title visually-hidden" data-i18n="lists.heading"></h2>
 
           <section class="card">
             <div class="card-body">
@@ -664,7 +840,7 @@
         <!-- Everything about you: who you are, how you sign in, and what can
              act as you. A feature's card stays hidden until its own JS shows it. -->
         <section class="view" data-view="account" id="account-panel">
-          <h2 class="view-title" data-i18n="account.heading"></h2>
+          <h2 class="view-title visually-hidden" data-i18n="account.heading"></h2>
 
 
           <section class="card">
@@ -939,7 +1115,7 @@
         <!-- Your themes, and for admins the defaults everyone starts from.
              Drawn by themes_editor.js; see theme.js for where they are kept. -->
         <section class="view" data-view="appearance" id="appearance">
-          <h2 class="view-title" data-i18n="theme.heading"></h2>
+          <h2 class="view-title visually-hidden" data-i18n="theme.heading"></h2>
           <!-- Where tag colours come from (themes_editor.js, TagColors in paper_links.js). -->
           <section class="card" id="tag-colors-card">
             <div class="card-body">
@@ -980,7 +1156,7 @@
 
         <!-- Each person's own keys, saved to their account. See shortcuts.js. -->
         <section class="view" data-view="shortcuts" id="shortcuts">
-          <h2 class="view-title" data-i18n="shortcuts.heading"></h2>
+          <h2 class="view-title visually-hidden" data-i18n="shortcuts.heading"></h2>
           <section class="card">
             <div class="card-body">
               <p class="text-body-secondary" data-i18n="shortcuts.description"></p>
@@ -1003,11 +1179,111 @@
           </section>
         </section>
 
+        <!-- What each screen is for: the descriptions that used to sit under
+             each screen's heading. A screen this person does not have is left
+             out (Nav.init). -->
+        <section class="view" data-view="info" id="info-panel">
+          <h2 class="view-title visually-hidden" data-i18n="info.heading"></h2>
+          <section class="card">
+            <div class="card-body">
+              <p class="text-body-secondary mb-0" data-i18n="app.tagline"></p>
+              <p class="text-body-secondary mb-0" data-i18n="info.intro"></p>
+            </div>
+            <div class="list-group list-group-flush border-top info-list">
+              <a class="list-group-item list-group-item-action d-flex gap-3 py-3" href="#library" data-info="library">
+                <i class="bi bi-book fs-5 info-icon" aria-hidden="true"></i>
+                <div class="min-w-0">
+                  <h3 class="h6 mb-1" data-i18n="nav.library"></h3>
+                  <p class="mb-0 text-body-secondary" data-i18n="library.description"></p>
+                  <p id="library-status" class="mb-0 mt-1 small" role="status"></p>
+                </div>
+              </a>
+              <a class="list-group-item list-group-item-action d-flex gap-3 py-3" href="#lists" data-info="lists">
+                <i class="bi bi-list-ol fs-5 info-icon" aria-hidden="true"></i>
+                <div class="min-w-0">
+                  <h3 class="h6 mb-1" data-i18n="nav.lists"></h3>
+                  <p class="mb-0 text-body-secondary" data-i18n="lists.description"></p>
+                </div>
+              </a>
+              <a class="list-group-item list-group-item-action d-flex gap-3 py-3" href="#missing" data-info="missing">
+                <i class="bi bi-search-heart fs-5 info-icon" aria-hidden="true"></i>
+                <div class="min-w-0">
+                  <h3 class="h6 mb-1" data-i18n="nav.missing"></h3>
+                  <p class="mb-0 text-body-secondary" data-i18n="missing.description"></p>
+                </div>
+              </a>
+              <a class="list-group-item list-group-item-action d-flex gap-3 py-3" href="#status" data-info="status">
+                <i class="bi bi-activity fs-5 info-icon" aria-hidden="true"></i>
+                <div class="min-w-0">
+                  <h3 class="h6 mb-1" data-i18n="nav.status"></h3>
+                  <p class="mb-0 text-body-secondary" data-i18n="status.description"></p>
+                </div>
+              </a>
+              <a class="list-group-item list-group-item-action d-flex gap-3 py-3" href="#account" data-info="account">
+                <i class="bi bi-person-circle fs-5 info-icon" aria-hidden="true"></i>
+                <div class="min-w-0">
+                  <h3 class="h6 mb-1" data-i18n="nav.account"></h3>
+                  <p class="mb-0 text-body-secondary" data-i18n="account.description"></p>
+                </div>
+              </a>
+              <a class="list-group-item list-group-item-action d-flex gap-3 py-3" href="#appearance" data-info="appearance">
+                <i class="bi bi-palette fs-5 info-icon" aria-hidden="true"></i>
+                <div class="min-w-0">
+                  <h3 class="h6 mb-1" data-i18n="nav.appearance"></h3>
+                  <p class="mb-0 text-body-secondary" data-i18n="theme.description"></p>
+                </div>
+              </a>
+              <a class="list-group-item list-group-item-action d-flex gap-3 py-3" href="#shortcuts" data-info="shortcuts">
+                <i class="bi bi-keyboard fs-5 info-icon" aria-hidden="true"></i>
+                <div class="min-w-0">
+                  <h3 class="h6 mb-1" data-i18n="nav.shortcuts"></h3>
+                  <p class="mb-0 text-body-secondary" data-i18n="shortcuts.description"></p>
+                </div>
+              </a>
+              <a class="list-group-item list-group-item-action d-flex gap-3 py-3" href="#users" data-info="users">
+                <i class="bi bi-people fs-5 info-icon" aria-hidden="true"></i>
+                <div class="min-w-0">
+                  <h3 class="h6 mb-1" data-i18n="nav.users"></h3>
+                  <p class="mb-0 text-body-secondary" data-i18n="admin.description"></p>
+                </div>
+              </a>
+              <a class="list-group-item list-group-item-action d-flex gap-3 py-3" href="#all-keys" data-info="all-keys">
+                <i class="bi bi-shield-lock fs-5 info-icon" aria-hidden="true"></i>
+                <div class="min-w-0">
+                  <h3 class="h6 mb-1" data-i18n="nav.all_keys"></h3>
+                  <p class="mb-0 text-body-secondary" data-i18n="admin_keys.description"></p>
+                </div>
+              </a>
+              <a class="list-group-item list-group-item-action d-flex gap-3 py-3" href="#logs" data-info="logs">
+                <i class="bi bi-journal-text fs-5 info-icon" aria-hidden="true"></i>
+                <div class="min-w-0">
+                  <h3 class="h6 mb-1" data-i18n="nav.logs"></h3>
+                  <p class="mb-0 text-body-secondary" data-i18n="logs.description"></p>
+                </div>
+              </a>
+              <a class="list-group-item list-group-item-action d-flex gap-3 py-3" href="#jobs" data-info="jobs">
+                <i class="bi bi-clock-history fs-5 info-icon" aria-hidden="true"></i>
+                <div class="min-w-0">
+                  <h3 class="h6 mb-1" data-i18n="nav.jobs"></h3>
+                  <p class="mb-0 text-body-secondary" data-i18n="jobs.description"></p>
+                </div>
+              </a>
+              <a class="list-group-item list-group-item-action d-flex gap-3 py-3" href="#settings" data-info="settings">
+                <i class="bi bi-sliders fs-5 info-icon" aria-hidden="true"></i>
+                <div class="min-w-0">
+                  <h3 class="h6 mb-1" data-i18n="nav.settings"></h3>
+                  <p class="mb-0 text-body-secondary" data-i18n="settings.description"></p>
+                </div>
+              </a>
+            </div>
+          </section>
+        </section>
+
         <!-- What this app is and where it comes from: app.description, the
              version, app.repo and the API reference. Shown only when
              app.show_about is on. See about.js. -->
         <section class="view" data-view="about" id="about-panel" hidden>
-          <h2 class="view-title" data-i18n="about.heading"></h2>
+          <h2 class="view-title visually-hidden" data-i18n="about.heading"></h2>
           <section class="card">
             <div class="card-body">
               <p id="about-description" class="card-text" hidden></p>
@@ -1026,8 +1302,7 @@
         </section>
 
         <section class="view" data-view="users" id="admin-panel" hidden>
-          <h2 class="view-title" data-i18n="admin.heading"></h2>
-          <p class="view-description" data-i18n="admin.description"></p>
+          <h2 class="view-title visually-hidden" data-i18n="admin.heading"></h2>
 
           <section class="card">
             <div class="card-body">
@@ -1128,8 +1403,7 @@
         <!-- Every key in the app, whoever owns it: the admin answer to "what
              has standing access", and where a lost laptop's key gets killed. -->
         <section class="view" data-view="all-keys" id="admin-keys-panel" hidden>
-          <h2 class="view-title" data-i18n="admin_keys.heading"></h2>
-          <p class="view-description" data-i18n="admin_keys.description"></p>
+          <h2 class="view-title visually-hidden" data-i18n="admin_keys.heading"></h2>
 
           <!-- A key that acts as someone else. keys.js fills the picker with
                only the accounts the server would allow. -->
@@ -1211,8 +1485,7 @@
         <!-- The activity log, owner only; see logs.js. data-no-track keeps
              reading the log from writing to it (track.js). -->
         <section class="view" data-view="logs" id="logs-panel" data-no-track hidden>
-          <h2 class="view-title" data-i18n="logs.heading"></h2>
-          <p class="view-description" data-i18n="logs.description"></p>
+          <h2 class="view-title visually-hidden" data-i18n="logs.heading"></h2>
 
           <section class="card">
             <div class="card-body">
@@ -1296,8 +1569,7 @@
 
         <!-- Background jobs, owner only; see jobs.js. -->
         <section class="view" data-view="jobs" id="jobs-panel" hidden>
-          <h2 class="view-title" data-i18n="jobs.heading"></h2>
-          <p class="view-description" data-i18n="jobs.description"></p>
+          <h2 class="view-title visually-hidden" data-i18n="jobs.heading"></h2>
           <section class="card">
             <div class="card-body">
               <div class="table-responsive">
@@ -1321,8 +1593,7 @@
 
         <!-- Owner only: config.yaml, one field per setting. See js/settings.js. -->
         <section class="view" data-view="settings" id="settings-panel" hidden>
-          <h2 class="view-title" data-i18n="settings.heading"></h2>
-          <p class="view-description" data-i18n="settings.description"></p>
+          <h2 class="view-title visually-hidden" data-i18n="settings.heading"></h2>
           <section class="card">
             <div class="card-body">
               <p class="small text-body-secondary mb-1"><code id="settings-file"></code></p>
@@ -1463,16 +1734,20 @@
   <script src="/js/paper_links.js"></script>
   <script src="/js/content.js"></script>
   <script src="/js/data_table.js"></script>
-  <script src="/js/view_head.js"></script>
   <script src="/js/paper.js"></script>
   <script src="/js/missing.js"></script>
   <script src="/js/status.js"></script>
+  <script src="/js/figures.js"></script>
+  <script src="/js/code.js"></script>
+  <script src="/js/datasets.js"></script>
   <script src="/js/library.js"></script>
   <script src="/js/board_view.js"></script>
+  <script src="/js/board_columns.js"></script>
   <script src="/js/lists.js"></script>
   <script src="/js/list_tools.js"></script>
   <script src="/js/list_csv.js"></script>
   <script src="/js/list_panels.js"></script>
+  <script src="/js/tag_menu.js"></script>
   <script src="/js/list_manage.js"></script>
   <script src="/js/list_sheet.js"></script>
   <script src="/js/keys.js"></script>

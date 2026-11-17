@@ -205,6 +205,12 @@ SIGN_IN_PATHS = frozenset({
 BUDGET_GENERAL = "general"
 BUDGET_SIGN_IN = "sign-in"
 BUDGET_NONE = "none"
+# The Figures screen's images (prma): a screenful is fifty of them and a
+# scroll hundreds, so they get their own budget, MEDIA_FACTOR times the
+# general one, apart from the API calls. Each still needs a signed-in caller.
+BUDGET_MEDIA = "media"
+MEDIA_FACTOR = 25
+MEDIA_PATHS = frozenset({"/api/figures/image"})
 
 
 def normalise_path(path: str) -> str:
@@ -233,6 +239,8 @@ def budget_for(method: str, path: str) -> str:
         return BUDGET_SIGN_IN
     if static_asset(method, normalised):
         return BUDGET_NONE
+    if method == "GET" and normalised in MEDIA_PATHS:
+        return BUDGET_MEDIA
     return BUDGET_GENERAL
 
 
@@ -343,7 +351,7 @@ class RateLimit:
             await self.app(scope, receive, send)
             return
         cfg = self.settings.get()
-        limits = {BUDGET_SIGN_IN: cfg.rate_limit_signin_max}
+        limits = {BUDGET_SIGN_IN: cfg.rate_limit_signin_max, BUDGET_MEDIA: cfg.rate_limit_max * MEDIA_FACTOR}
         limit = limits.get(budget, cfg.rate_limit_max)
         window = float(cfg.rate_limit_window_seconds)
         now = time.monotonic()

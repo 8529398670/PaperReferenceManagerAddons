@@ -22,6 +22,7 @@ app/build_info.py
 __pycache__/
 *.py[cod]
 .venv/
+.venv-worker/
 venv/
 env/
 *.egg-info/

@@ -29,8 +29,8 @@ MAX_BADGE_KEYS = 5000
 
 Limit = Annotated[int, QUERY, Meta(ge=1, le=PAGE_MAX, description="Rows to return. Default 100.", extra={"error": PAGE_LIMIT_MESSAGE})]
 Offset = Annotated[int, QUERY, Meta(ge=0, description="Rows to skip: the next value of the previous page.", extra={"error": PAGE_OFFSET_MESSAGE})]
-Stage = Literal["openalex", "methods", "code", "datasets", "modalities"]
-STAGE_ERROR = "stage must be one of: openalex, methods, code, datasets, modalities"
+Stage = Literal["openalex", "methods", "code", "datasets", "modalities", "figures", "ocr"]
+STAGE_ERROR = "stage must be one of: openalex, methods, code, datasets, modalities, figures, ocr"
 
 
 def get_content(request: Request) -> ContentService:
@@ -151,6 +151,10 @@ class StatusReply(Reply):
     stages: Annotated[dict[str, dict[str, int]], Meta(description="Per stage, how many papers are in each state.")]
     pool: Annotated[dict[str, int], Meta(description="The missing pool: all, refs, citing, and papers (library papers whose network is in).")]
     running: Annotated[dict[str, str], Meta(description="The paper each lane (net, local) is working on now.")]
+    workers: Annotated[list[dict[str, Any]], Meta(description=(
+        "The heavy-stage workers (`python -m app worker`) that checked in lately: id, host, pid, started, beat, "
+        "doing (the task in hand), stages, alive (checked in within 90 s)."
+    ))]
     openalex_enabled: bool
     openalex_key: Annotated[bool, Meta(description="Whether library.openalex_api_key is set.")]
     library: Annotated[dict[str, Any], Meta(description="papers, with_text, no_pdf, text_pending.")]

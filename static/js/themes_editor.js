@@ -31,6 +31,8 @@ const ThemeEditor = {
 
   // The base colors, then the worked-out ones. Labels: theme.color_<key>.
   baseFields: [ "accent" , "second" , "background" , "surface" ],
+  // A table's alternating rows: optional, like background and surface.
+  rowFields: [ "rowOdd" , "rowEven" ],
   fineFields: [ "text" , "background" , "surface" , "nested" , "chrome" , "border" , "link" , "navLink" ,
     "accentFg" , "accentText" , "secondText" , "secondFg" , "info" , "infoBorder" ],
   labelKeys: {
@@ -397,6 +399,23 @@ const ThemeEditor = {
         } ) );
       } );
 
+      // The table rows: each one the theme's own pick, or worked out (the
+      // card, and the card tinted with the second color) until it has one.
+      const rows = Dom.el( "div" , { class: colorGrid } );
+      self.rowFields.forEach( ( field ) => {
+        const chosen = theme[ field ] || "";
+        rows.appendChild( colorRow( {
+          key: "rows-" + field,
+          label: I18n.get( "theme.color_" + ( field === "rowOdd" ? "row_odd" : "row_even" ) ),
+          value: chosen || derived[ field ],
+          auto: !chosen,
+          warn: flagged.has( field ),
+          preview: ( value ) => previewWith( ( copy ) => { copy[ field ] = value; } ),
+          save: ( value ) => ( value === derived[ field ] && !chosen ? null : actions.set( theme , field , value ) ),
+          reset: chosen ? () => actions.set( theme , field , null ) : null,
+        } ) );
+      } );
+
       const fine = Dom.el( "div" , { class: colorGrid } );
       self.fineFields.forEach( ( field ) => {
         const overridden = Boolean( theme.overrides && theme.overrides[ field ] );
@@ -460,6 +479,9 @@ const ThemeEditor = {
       const main = [
         Dom.el( "h4" , { class: "h6 mt-0" , text: I18n.get( "theme.base_heading" ) } ),
         base,
+        Dom.el( "h4" , { class: "h6 mt-4 mb-1" , text: I18n.get( "theme.rows_heading" ) } ),
+        Dom.el( "p" , { class: "small text-body-secondary" , text: I18n.get( "theme.rows_help" ) } ),
+        rows,
         Dom.el( "h4" , { class: "h6 mt-4 mb-1" , text: I18n.get( "theme.buttons_heading" ) } ),
         Dom.el( "p" , { class: "small text-body-secondary" , text: I18n.get( "theme.buttons_help" ) } ),
         choices,
@@ -562,9 +584,14 @@ const ThemeEditor = {
         text: variant === "primary" ? I18n.get( "theme.preview_button" ) : I18n.get( "theme.variant_" + variant ),
         attrs: { type: "button" , tabindex: "-1" },
       } ) ) } );
+    // Four table rows, alternating as a table on the page does.
+    const table = Dom.el( "div" , { class: "theme-preview-rows" , children: [ 1 , 2 , 3 , 4 ].map( ( n ) =>
+      paint( Dom.el( "div" , { text: I18n.get( "theme.preview_row" ).replace( "{n}" , String( n ) ) } ) ,
+        { background: n % 2 ? c.rowOdd : c.rowEven , borderBottom: "1px solid " + c.border } ) ) } );
     const card = paint( Dom.el( "div" , { class: "theme-preview-card" , children: [
       span( I18n.get( "theme.preview_card" ) ),
       nested,
+      table,
       info,
       buttons( false ),
       buttons( true ),

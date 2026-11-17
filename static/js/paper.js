@@ -13,7 +13,10 @@ const PaperView = {
   context: null,
   ticket: 0,
   timer: null,
-  stages: [ "openalex" , "methods" , "code" , "datasets" , "modalities" ],
+  stages: [ "openalex" , "methods" , "code" , "datasets" , "modalities" , "figures" , "ocr" ],
+  // Run by the optional worker, not the server: with none running, waiting
+  // reads "not available".
+  heavy: [ "figures" , "ocr" ],
 
   init() {
     Dom.show( Dom.get( "paper-panel" ) , true );
@@ -87,7 +90,8 @@ const PaperView = {
     Dom.swap( Dom.get( "paper-links" ) , links , Content.strip( paper.key , this.badgeOf( content ) ) );
     this.drawTags( paper , answer.lists );
     this.drawNav();
-    this.drawStages( content.stages );
+    this.drawStages( content.stages , content.worker );
+    this.drawFigures( paper , content );
     this.drawAbstract( paper , content );
     this.drawNetwork( paper , content );
     this.drawLinks( content );
@@ -109,6 +113,7 @@ const PaperView = {
       code: states.code === "done" ? content.code.length : 0,
       data: states.datasets === "done" ? content.data.length + content.names.length : 0,
       methods: Boolean( methods.methods_chars ),
+      figures: states.figures === "done" ? ( ( content.stages.figures || {} ).summary || {} ).n || 0 : 0,
       refs: ( content.network || {} ).refs , citers: ( content.network || {} ).citers,
     };
   },
@@ -156,13 +161,18 @@ const PaperView = {
     if ( next ) window.location.hash = "#paper/" + encodeURIComponent( next );
   },
 
-  drawStages( stages ) {
+  drawStages( stages , worker ) {
     const body = Dom.get( "paper-stages" );
     Dom.clear( body );
     this.stages.forEach( ( stage ) => {
       const task = stages[ stage ] || { state: "none" };
-      const state = Dom.el( "td" , { children: [ this.stateBadge( task.state ) ] } );
-      const detail = Dom.el( "td" , { class: "small text-body-secondary" , text: this.detail( stage , task ) } );
+      // OCR is only ever queued for a scanned PDF; otherwise it has no row.
+      if ( stage === "ocr" && task.state === "none" ) return;
+      const waiting = this.heavy.includes( stage ) && !worker && ( task.state === "pending" || task.state === "running" );
+      const state = Dom.el( "td" , { children: [ waiting
+        ? Content.chip( I18n.get( "content.not_available" ) , "text-bg-light border" , "pause-circle" , I18n.get( "content.not_available_title" ) )
+        : this.stateBadge( task.state ) ] } );
+      const detail = Dom.el( "td" , { class: "small text-body-secondary" , text: waiting ? I18n.get( "paper.no_worker" ) : this.detail( stage , task ) } );
       const action = Dom.el( "td" , { class: "text-end" } );
       if ( task.state === "failed" || task.state === "not_found" || ( stage === "openalex" && task.state === "done" && ( task.summary || {} ).cut ) ) {
         action.appendChild( Dom.el( "button" , {
@@ -194,6 +204,11 @@ const PaperView = {
       if ( summary.via_title ) text += " " + I18n.get( "paper.openalex_via_title" );
       return text;
     }
+    if ( stage === "figures" ) {
+      const text = I18n.get( "paper.figures_summary" ).replace( "{n}" , summary.n || 0 ).replace( "{boxes}" , summary.boxes || summary.n || 0 );
+      return summary.legacy ? text + " " + I18n.get( "paper.figures_legacy" ) : text;
+    }
+    if ( stage === "ocr" ) return I18n.get( "paper.ocr_summary" ).replace( "{chars}" , ( summary.chars || 0 ).toLocaleString() );
     if ( stage === "methods" ) {
       if ( !summary.has_text ) return I18n.get( "paper.no_text" );
       return summary.methods_chars ? I18n.get( "paper.methods_summary" ).replace( "{sections}" , summary.sections || 0 ) : I18n.get( "paper.no_methods" );
@@ -239,6 +254,30 @@ const PaperView = {
       attrs: { href: "#missing/" + encodeURIComponent( paper.key ) },
       children: [ Dom.el( "i" , { class: "bi bi-diagram-3" , attrs: { "aria-hidden": "true" } } ) , Dom.el( "span" , { text: " " + I18n.get( "paper.network_missing" ) } ) ],
     } ) );
+  },
+
+  // The paper's figure crops, small; each opens the full crop.
+  drawFigures( paper , content ) {
+    const holder = Dom.get( "paper-figures" );
+    Dom.clear( holder );
+    const task = content.stages.figures || {};
+    const shown = ( content.figures || [] ).filter( ( figure ) => !figure.dup );
+    Dom.show( Dom.get( "paper-figures-card" ) , task.state === "done" );
+    if ( task.state !== "done" ) return;
+    if ( !shown.length ) {
+      holder.appendChild( Dom.el( "p" , { class: "col-12 text-body-secondary mb-0" , text: I18n.get( "paper.figures_none" ) } ) );
+      return;
+    }
+    shown.forEach( ( figure ) => {
+      const src = "/api/figures/image?key=" + encodeURIComponent( paper.key ) + "&n=" + figure.n;
+      const img = Dom.el( "img" , { class: "figures-img" , attrs: { src: src , loading: "lazy" , alt: ( figure.caption || "" ).slice( 0 , 160 ) } } );
+      if ( figure.w && figure.h ) img.style.aspectRatio = figure.w + " / " + figure.h;
+      holder.appendChild( Dom.el( "div" , { class: "col" , children: [ Dom.el( "div" , { class: "card h-100" , children: [ Dom.el( "div" , { class: "card-body p-2" , children: [
+        Dom.el( "a" , { attrs: { href: src + "&size=full" , target: "_blank" , rel: "noopener" , title: I18n.get( "paper.figures_open" ) } , children: [ img ] } ),
+        Dom.el( "div" , { class: "small text-body-secondary mt-1" , text: I18n.get( "figures.figure_label" ).replace( "{n}" , figure.n ).replace( "{page}" , figure.page || "?" ) } ),
+        Dom.el( "p" , { class: "figures-caption small mb-0" , text: figure.caption || "" } ),
+      ] } ) ] } ) ] } ) );
+    } );
   },
 
   drawLinks( content ) {

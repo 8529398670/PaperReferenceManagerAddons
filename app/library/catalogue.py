@@ -151,6 +151,9 @@ class Catalogue:
         # Hears "changed" (the list of papers moved on) and "progress" (the
         # text pass), from the sync thread. main points it at the SSE hub.
         self.on_event: Callable[[str, dict[str, Any]], None] | None = None
+        # A paper's text when Zotero extracted none (a scanned PDF): the
+        # worker's OCR, from app/content. key -> text, "" for none.
+        self.text_fallback: Callable[[str], str] | None = None
 
     # -- reading ---------------------------------------------------------------
 
@@ -266,6 +269,8 @@ class Catalogue:
         for done, (item, paper) in enumerate(pending, start=1):
             text_sig = item.text_signature()
             body = q.fold(item.read_fulltext())
+            if not body and self.text_fallback is not None:
+                body = q.fold(self.text_fallback(paper.key))
             self.index.put_text(paper.doc_id, text_sig, body)
             paper.text_sig = text_sig
             has_text = bool(body)
@@ -283,6 +288,21 @@ class Catalogue:
             self._emit("changed", {"rev": self.rev})
         self.status.last_sync = time.time()
         return result
+
+    def put_text(self, key: str, text: str) -> None:
+        """Search a paper by this text from now on (its OCR arrived), keeping
+        its text signature, so the text pass does not redo it."""
+        paper = self._papers.get(key)
+        if paper is None or not text.strip():
+            return
+        self.index.put_text(paper.doc_id, paper.text_sig, q.fold(text))
+        if not paper.has_text:
+            paper.has_text = True
+            paper.record["_has_text"] = True
+            self.index.put_meta(paper.key, paper.meta_sig, paper.record)
+            self.status.with_text = sum(1 for p in self._papers.values() if p.has_text)
+        self.rev += 1
+        self._emit("changed", {"rev": self.rev})
 
     def _emit(self, name: str, data: dict[str, Any]) -> None:
         if self.on_event is not None:

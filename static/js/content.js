@@ -131,6 +131,7 @@ const Content = {
     if ( badge.methods ) out.push( this.chip( I18n.get( "content.methods" ) , "text-bg-light border" , "check2" , "" ) );
     if ( badge.code ) out.push( this.chip( I18n.get( "content.code" ).replace( "{n}" , badge.code ) , "bg-success-subtle text-success-emphasis border" , "code-slash" , "" ) );
     if ( badge.data ) out.push( this.chip( I18n.get( "content.data" ).replace( "{n}" , badge.data ) , "bg-info-subtle text-info-emphasis border" , "database" , "" ) );
+    if ( badge.figures ) out.push( this.chip( I18n.get( "content.figures" ).replace( "{n}" , badge.figures ) , "text-bg-light border" , "images" , "" ) );
     ( badge.mods || [] ).forEach( ( mod ) => out.push( this.chip( mod , "bg-secondary-subtle text-secondary-emphasis border" , "" , I18n.get( "content.modality_title" ) ) ) );
     return out;
   },

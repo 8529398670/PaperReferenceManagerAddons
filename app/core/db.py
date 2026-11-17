@@ -60,6 +60,10 @@ BUCKET_BOARD_VERSIONS = "board_versions"
 # Missing-pool works hidden from the Missing screen, by OpenAlex id. See
 # app/content/service.py.
 BUCKET_SKIPS = "skips"
+# The Figures screen's picks and skipped papers, one record per view ("all",
+# "method"): {"selected": [figure ids, in pick order], "skipped": [paper keys]}.
+# See app/content/figures.py.
+BUCKET_FIGURE_PICKS = "figure_picks"
 
 BUCKETS = (
     BUCKET_USERS,
@@ -77,6 +81,7 @@ BUCKETS = (
     BUCKET_BOARDS,
     BUCKET_BOARD_VERSIONS,
     BUCKET_SKIPS,
+    BUCKET_FIGURE_PICKS,
 )
 
 # How long a writer waits for another writer before giving up. Without it a

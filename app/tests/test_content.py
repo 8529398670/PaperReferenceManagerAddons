@@ -127,11 +127,15 @@ class ContentTest(unittest.TestCase):
     # -- the queue -----------------------------------------------------------------
 
     def test_reconcile_queues_each_stage_once(self) -> None:
-        self.assertEqual(self.content.reconcile(), 3 * 5)
+        # Five light stages each, and figures for the two with a PDF (the
+        # heavy stages are only ever queued, never run by the server).
+        self.assertEqual(self.content.reconcile(), 3 * 5 + 2)
         self.assertEqual(self.content.reconcile(), 0)
         counts = self.content.files.counts()
         self.assertEqual(counts["openalex"]["pending"], 3)
         self.assertEqual(counts["methods"]["pending"], 3)
+        self.assertEqual(counts["figures"]["pending"], 2)
+        self.assertEqual(counts["ocr"]["pending"], 0)
 
     def test_local_stages_fill_and_badge(self) -> None:
         self.content.reconcile()

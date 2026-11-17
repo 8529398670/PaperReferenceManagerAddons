@@ -86,16 +86,22 @@ const BoardView = {
         ctx.shelf ? ( ctx.matched && ctx.matched[ key ] ) || "" : "" , sectionSig ] );
       let entry = cache.rows.get( key );
       if ( !entry || entry.sig !== sig ) {
-        const li = ctx.shelf ? this.shelfRow( item , ctx , paper ) : this.row( item , ctx , paper , cite );
+        // A row already on screen is redrawn at once (no blank flash); one
+        // never drawn yet, or the first few, wait for the screen (see lazy).
+        const now = !ctx.lazy || ( entry && !entry.li._fill ) || index < this.EAGER;
+        if ( entry ) this.forget( container , entry.li );
+        const li = ctx.shelf ? this.shelfRow( item , ctx , paper ) : this.row( item , ctx , paper , cite , !now );
+        if ( !now ) this.lazy( container , ctx ).observe( li );
         entry = { li: li , sig: sig };
         cache.rows.set( key , entry );
         rebuilt += 1;
       }
       if ( !ctx.shelf ) {
-        const number = entry.li.querySelector( ".board-row-num" );
-        const position = String( ctx.positions.get( key ) );
+        entry.li._position = ctx.positions.get( key );
+        const number = entry.li._fill ? null : entry.li.querySelector( ".board-row-num" );
+        const position = String( entry.li._position );
         if ( number && number.value !== position && document.activeElement !== number ) number.value = position;
-        number._position = ctx.positions.get( key );
+        if ( number ) number._position = entry.li._position;
       } else {
         const box = entry.li.querySelector( ".board-row-check" );
         if ( box ) box.checked = ctx.checked.has( key );
@@ -105,7 +111,10 @@ const BoardView = {
     // Tiers after the last row (empty ones at the end).
     if ( sections ) heads.forEach( ( group ) => group.forEach( head ) );
     for ( const key of Array.from( cache.rows.keys() ) ) {
-      if ( !seen.has( key ) && !ctx.items.has( key ) ) cache.rows.delete( key );
+      if ( !seen.has( key ) && !ctx.items.has( key ) ) {
+        this.forget( container , cache.rows.get( key ).li );
+        cache.rows.delete( key );
+      }
     }
     this.place( container , wanted );
     this.restoreFocus( container , focus );
@@ -132,8 +141,78 @@ const BoardView = {
   // Forgets every kept row, so the next render rebuilds them all (the columns
   // or the language changed).
   reset( container ) {
+    const watcher = this.watchers.get( container );
+    if ( watcher ) watcher.observer.disconnect();
+    this.watchers.delete( container );
     this.caches.delete( container );
     container.replaceChildren();
+  },
+
+  // ---- lazy rows: built when they come near the screen -----------------------
+  //
+  // A row is ~70 elements (number box, grip, links, cite, tag box, cells), so a
+  // 750-row list drawn whole was ~50,000 elements and a second of building
+  // before anything showed. A row the reader has not come near is an empty
+  // <li> (same key, same place, same estimated height via
+  // contain-intrinsic-size) until an IntersectionObserver sees it within a
+  // couple of screens of the visible part of the board, and then it is built
+  // once and kept. Selection, order and dragging work on the <li>, so they do
+  // not care whether it is built yet.
+  EAGER: 12,
+  // container -> { observer , root }
+  watchers: new WeakMap(),
+
+  // Matches the CSS (.board-fill > .board-scroll scrolls from md up).
+  selfScrolled: window.matchMedia( "(min-width: 768px)" ),
+  lazyContainers: new Set(),
+
+  lazy( container , ctx ) {
+    // From md up the rows scroll inside the board; on a phone the page does.
+    const root = ctx.scroller && this.selfScrolled.matches ? ctx.scroller : null;
+    let watcher = this.watchers.get( container );
+    if ( watcher && watcher.root === root ) return watcher.observer;
+    if ( !this.lazyContainers.size ) {
+      this.selfScrolled.addEventListener( "change" , () => {
+        this.lazyContainers.forEach( ( each ) => {
+          const known = this.watchers.get( each );
+          if ( known && each.isConnected ) this.lazy( each , { scroller: known.scroller } );
+        } );
+      } );
+    }
+    this.lazyContainers.add( container );
+    const observer = new IntersectionObserver( ( entries ) => {
+      entries.forEach( ( entry ) => {
+        if ( !entry.isIntersecting ) return;
+        observer.unobserve( entry.target );
+        this.build( entry.target );
+      } );
+    } , { root: root , rootMargin: "1500px 0px" } );
+    if ( watcher ) {
+      // The board went from page-scrolled to self-scrolled (or back): move
+      // the rows still waiting over to the new watcher.
+      watcher.observer.disconnect();
+      Array.from( container.children ).forEach( ( li ) => { if ( li._fill ) observer.observe( li ); } );
+    }
+    this.watchers.set( container , { observer: observer , root: root , scroller: ctx.scroller } );
+    return observer;
+  },
+
+  // A waiting row being replaced or dropped: stop watching it.
+  forget( container , li ) {
+    const watcher = this.watchers.get( container );
+    if ( watcher && li._fill ) watcher.observer.unobserve( li );
+  },
+
+  build( li ) {
+    const fill = li._fill;
+    if ( !fill ) return;
+    li._fill = null;
+    fill();
+  },
+
+  // Builds every row still waiting (before something reads them all: print).
+  buildAll( container ) {
+    Array.from( container.children ).forEach( ( li ) => this.build( li ) );
   },
 
   find( container , key ) {
@@ -189,54 +268,23 @@ const BoardView = {
     } catch ( error ) { /* no caret */ }
   },
 
-  // ---- the header --------------------------------------------------------------
-
-  // The column labels over the rows, each with an edge to drag for its width.
-  head( element , columns , widths , onResize ) {
-    const cells = [
-      Dom.el( "div" , { class: "board-head-cell board-cell-side" , text: "#" } ),
-    ];
-    const paperHandle = Dom.el( "span" , { class: "board-resize" , attrs: { title: I18n.get( "lists.resize_help" ) } } );
-    this.resizable( paperHandle , "paper" , widths , onResize );
-    cells.push( Dom.el( "div" , { class: "board-head-cell board-cell-paper" , children: [ Dom.el( "span" , { text: I18n.get( "lists.paper_column" ) } ) , paperHandle ] } ) );
-    columns.forEach( ( column ) => {
-      const handle = Dom.el( "span" , { class: "board-resize" , attrs: { title: I18n.get( "lists.resize_help" ) } } );
-      this.resizable( handle , column.id , widths , onResize );
-      cells.push( Dom.el( "div" , { class: "board-head-cell" , children: [ Dom.el( "span" , { text: column.label } ) , handle ] } ) );
-    } );
-    cells.push( Dom.el( "div" , { class: "board-head-cell" } ) );
-    element.replaceChildren( ...cells );
-  },
-
-  resizable( handle , id , widths , onResize ) {
-    handle.addEventListener( "pointerdown" , ( event ) => {
-      event.preventDefault();
-      const cell = handle.parentElement;
-      const startX = event.clientX;
-      const startWidth = cell.getBoundingClientRect().width;
-      handle.setPointerCapture( event.pointerId );
-      const moving = ( move ) => onResize( id , Math.max( 96 , Math.round( startWidth + move.clientX - startX ) ) , false );
-      const done = () => {
-        handle.removeEventListener( "pointermove" , moving );
-        onResize( id , null , true );
-      };
-      handle.addEventListener( "pointermove" , moving );
-      handle.addEventListener( "pointerup" , done , { once: true } );
-      handle.addEventListener( "pointercancel" , done , { once: true } );
-    } );
-    handle.addEventListener( "dblclick" , () => onResize( id , 0 , true ) );
-  },
-
   // ---- a row on the list ----------------------------------------------------------
 
   label( key , title ) {
     return I18n.get( key ).replace( "{title}" , () => title || "" );
   },
 
-  row( item , ctx , paper , cite ) {
+  // later: leave it an empty <li> that build() fills when it nears the screen.
+  row( item , ctx , paper , cite , later ) {
+    const li = Dom.el( "li" , { class: "board-row" , attrs: { "data-key": item.key } } );
+    li._fill = () => this.fillRow( li , item , ctx , paper , cite );
+    if ( !later ) this.build( li );
+    return li;
+  },
+
+  fillRow( li , item , ctx , paper , cite ) {
     const handlers = ctx.handlers;
     const locked = ctx.locked;
-    const li = Dom.el( "li" , { class: "board-row" , attrs: { "data-key": item.key } } );
 
     const number = Dom.el( "input" , {
       class: "form-control form-control-sm board-row-num",
@@ -303,7 +351,10 @@ const BoardView = {
     } );
     remove.hidden = locked;
     li.append( side , main , ...cells , Dom.el( "div" , { class: "board-cell-end" , children: [ remove ] } ) );
-    return li;
+    if ( li._position !== undefined ) {
+      number.value = String( li._position );
+      number._position = li._position;
+    }
   },
 
   paperBlock( item , ctx , paper , cite ) {
@@ -348,7 +399,7 @@ const BoardView = {
     const locked = ctx.locked;
     const vocab = ( ctx.doc.vocab && ctx.doc.vocab.tags ) || [];
     const chips = ( item.tags || [] ).map( ( name ) => {
-      const chip = Dom.el( "span" , { class: "tag-chip" , children: [ Dom.el( "span" , { text: name } ) ] } );
+      const chip = Dom.el( "span" , { class: "tag-chip" , attrs: { "data-tag": name } , children: [ Dom.el( "span" , { text: name } ) ] } );
       TagColors.paint( chip , name , vocab );
       if ( !locked ) {
         chip.appendChild( Dom.el( "button" , {
@@ -638,6 +689,7 @@ const BoardView = {
   flash( container , key ) {
     const row = this.find( container , key );
     if ( !row ) return false;
+    this.build( row );
     Dom.movedOnPurpose();
     row.scrollIntoView( { block: "center" , behavior: "smooth" } );
     row.classList.remove( "is-flashing" );

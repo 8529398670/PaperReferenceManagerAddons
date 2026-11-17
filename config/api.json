@@ -5557,6 +5557,65 @@
         ]
       }
     },
+    "/api/code": {
+      "get": {
+        "description": "One row per paper whose text links a code host, with each repository as GitHub or OSF describe it, the methods its README confirms or its citing papers suggest, and where the paper is curated.",
+        "operationId": "get_api_code",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "enrich": {
+                      "additionalProperties": {
+                        "type": "boolean"
+                      },
+                      "description": "github, osf: whether a token is set (without one that host is not asked).",
+                      "type": "object"
+                    },
+                    "papers": {
+                      "description": "One per paper that links code: key, title, year, doi, journal, added, cites (OpenAlex), mods, lists (slug, name, position), tiers (slug, name, tier, color), figs (figures picked), and code: url, host, where, repo, info (GitHub or OSF: status, description, stars, language, methods), inferred (methods of the papers linking it), repaired (url, tier, confidence, original) for a link the PDF text mangled.",
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "enrich",
+                    "papers"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Every paper that ships code",
+        "tags": [
+          "Code and datasets"
+        ]
+      }
+    },
     "/api/content/papers": {
       "get": {
         "description": "A stage's papers in some states, a page at a time: the ones still to do, or the failures with why, when they first and last failed, and how many tries -- the Status and Errors screens.",
@@ -5573,7 +5632,9 @@
                 "methods",
                 "code",
                 "datasets",
-                "modalities"
+                "modalities",
+                "figures",
+                "ocr"
               ],
               "type": "string"
             }
@@ -5763,6 +5824,13 @@
                       },
                       "description": "Per stage, how many papers are in each state.",
                       "type": "object"
+                    },
+                    "workers": {
+                      "description": "The heavy-stage workers (`python -m app worker`) that checked in lately: id, host, pid, started, beat, doing (the task in hand), stages, alive (checked in within 90 s).",
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
                     }
                   },
                   "required": [
@@ -5771,7 +5839,8 @@
                     "openalex_key",
                     "pool",
                     "running",
-                    "stages"
+                    "stages",
+                    "workers"
                   ],
                   "type": "object"
                 }
@@ -5800,6 +5869,57 @@
         "summary": "How far the content queue has got",
         "tags": [
           "Content"
+        ]
+      }
+    },
+    "/api/datasets": {
+      "get": {
+        "description": "One row per paper that links a data archive record or names a public collection (HCP, NSD, ...), each record with what its archive says it is. The Datasets screen also groups these by dataset.",
+        "operationId": "get_api_datasets",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "papers": {
+                      "description": "One per paper that links data or names a public collection: key, title, year, doi, added, cites, mods, lists, tiers, figs, code_n, data (url, host, where, accession when recovered from a bare ds number, target, info: status, title, description), names (name, url, description).",
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "papers"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "What public data the library stands on",
+        "tags": [
+          "Code and datasets"
         ]
       }
     },
@@ -5884,6 +6004,869 @@
         "summary": "Which of these papers are in the library",
         "tags": [
           "Library"
+        ]
+      }
+    },
+    "/api/export/xlsx": {
+      "post": {
+        "description": "Turns the tables a screen is showing into one .xlsx: a sheet each, the header frozen and bold, links clickable. The screens send exactly the rows they show, in their order.",
+        "operationId": "post_api_export_xlsx",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "filename": {
+                    "default": "export",
+                    "description": "The download's name, without .xlsx.",
+                    "type": "string"
+                  },
+                  "sheets": {
+                    "description": "The sheets, in order. At most 8.",
+                    "items": {
+                      "properties": {
+                        "columns": {
+                          "description": "The header row.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "name": {
+                          "description": "The sheet's tab name (31 characters at most; cut to fit).",
+                          "type": "string"
+                        },
+                        "rows": {
+                          "description": "The rows: text, numbers, or null. A cell that is an http(s) URL becomes a link.",
+                          "items": {
+                            "type": "array"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "columns",
+                        "name",
+                        "rows"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "sheets"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "A table as an Excel workbook",
+        "tags": [
+          "Code and datasets"
+        ],
+        "x-mcp-http": "A file to download, made from the rows sent."
+      }
+    },
+    "/api/figures": {
+      "get": {
+        "description": "The papers whose figures have been cropped, with their figures, a page of papers at a time: every figure, or the method figures (captions matching config/method-images.txt). Each figure says whether it is picked in this view and in the other; chips, modality and keyword filters narrow the papers.",
+        "operationId": "get_api_figures",
+        "parameters": [
+          {
+            "description": "\"all\" (default): every figure. \"method\": the figures whose caption reads as a model design.",
+            "in": "query",
+            "name": "view",
+            "schema": {
+              "default": "all",
+              "enum": [
+                "all",
+                "method"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "added (default: when it reached Zotero), published, match (best caption match), count (most figures), title.",
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "default": "added",
+              "enum": [
+                "added",
+                "published",
+                "match",
+                "count",
+                "title"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Default desc.",
+            "in": "query",
+            "name": "dir",
+            "schema": {
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "all (default: every paper not skipped), lead (a structural term opens a caption), selected (a figure is picked), skipped, other (a figure is picked in the other view).",
+            "in": "query",
+            "name": "chip",
+            "schema": {
+              "default": "all",
+              "enum": [
+                "all",
+                "lead",
+                "selected",
+                "skipped",
+                "other"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only papers tagged with this modality.",
+            "in": "query",
+            "name": "mod",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only papers with a caption matching this keyword (method view).",
+            "in": "query",
+            "name": "term",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only papers whose title, DOI or a caption contains this.",
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Papers to return. Default 40.",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 40,
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Papers to skip: the next value of the previous page.",
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "counts": {
+                      "additionalProperties": {
+                        "type": "integer"
+                      },
+                      "description": "Papers under each chip: all, lead, selected, skipped, other.",
+                      "type": "object"
+                    },
+                    "figures": {
+                      "description": "How many figures the matching papers show.",
+                      "type": "integer"
+                    },
+                    "mods": {
+                      "description": "The modalities of the papers shown, with counts.",
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "next": {
+                      "description": "Offset of the next page, or null on the last one.",
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "papers": {
+                      "description": "key, title, year, doi, added, date, skipped, mods, terms, lead, best, and figures: n, id (<key>#figure-N), page, caption, w, h, dup, picked, picked_other, match (score, terms, strong, lead, spans).",
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "picks": {
+                      "description": "Figures picked in this view.",
+                      "type": "integer"
+                    },
+                    "skips": {
+                      "description": "Papers skipped in this view.",
+                      "type": "integer"
+                    },
+                    "terms": {
+                      "description": "The caption keywords matched, with counts (method view).",
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "workers": {
+                      "description": "Whether a figures worker is running now.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "counts",
+                    "figures",
+                    "mods",
+                    "next",
+                    "papers",
+                    "picks",
+                    "skips",
+                    "terms",
+                    "total",
+                    "workers"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Papers and their figures",
+        "tags": [
+          "Figures"
+        ]
+      }
+    },
+    "/api/figures/export": {
+      "get": {
+        "description": "Every picked figure of a view, in pick order, with its paper, DOI and caption: a JSON or CSV file to download.",
+        "operationId": "get_api_figures_export",
+        "parameters": [
+          {
+            "description": "\"all\" (default): every figure. \"method\": the figures whose caption reads as a model design.",
+            "in": "query",
+            "name": "view",
+            "schema": {
+              "default": "all",
+              "enum": [
+                "all",
+                "method"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "json (default) or csv.",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "default": "json",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "A view's picks as a file",
+        "tags": [
+          "Figures"
+        ],
+        "x-mcp-http": "A file to download; figure_picks gives the ids as data."
+      }
+    },
+    "/api/figures/image": {
+      "get": {
+        "description": "A figure crop: a small copy for the grid (WebP), or the full crop (PNG). n=0 is the paper's montage.",
+        "operationId": "get_api_figures_image",
+        "parameters": [
+          {
+            "description": "The paper's key.",
+            "in": "query",
+            "name": "key",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The figure's number; 0 is the paper's montage.",
+            "in": "query",
+            "name": "n",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "thumb (default, 640 px wide) or full (the 400 DPI crop).",
+            "in": "query",
+            "name": "size",
+            "schema": {
+              "default": "thumb",
+              "enum": [
+                "thumb",
+                "full"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/webp": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "One figure's image",
+        "tags": [
+          "Figures"
+        ],
+        "x-mcp-http": "An image, for a browser to show."
+      }
+    },
+    "/api/figures/pick": {
+      "post": {
+        "description": "Pick figures in one view (a new pick goes last), or take picks back.",
+        "operationId": "post_api_figures_pick",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "ids": {
+                    "description": "Figure ids, \"<paper key>#figure-N\". At most 1000.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "pick": {
+                    "default": true,
+                    "description": "true picks them (default), false unpicks them.",
+                    "type": "boolean"
+                  },
+                  "view": {
+                    "description": "\"all\" or \"method\": each view has its own picks.",
+                    "enum": [
+                      "all",
+                      "method"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "ids",
+                  "view"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "selected": {
+                      "description": "The picked figures' ids, in pick order.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "skipped": {
+                      "description": "The skipped papers' keys.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "selected",
+                    "skipped"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Pick or unpick figures",
+        "tags": [
+          "Figures"
+        ]
+      }
+    },
+    "/api/figures/replace": {
+      "post": {
+        "description": "Set a view's picks and skipped papers outright: Clear sends both empty, and its undo sends the old ones back.",
+        "operationId": "post_api_figures_replace",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "selected": {
+                    "description": "The picks to keep, in order.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "skipped": {
+                    "description": "The skipped papers to keep.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "view": {
+                    "description": "\"all\" or \"method\": each view has its own picks.",
+                    "enum": [
+                      "all",
+                      "method"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "view"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "selected": {
+                      "description": "The picked figures' ids, in pick order.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "skipped": {
+                      "description": "The skipped papers' keys.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "selected",
+                    "skipped"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Replace a view's picks",
+        "tags": [
+          "Figures"
+        ]
+      }
+    },
+    "/api/figures/skip": {
+      "post": {
+        "description": "Hide papers you are done with from one view, or bring them back.",
+        "operationId": "post_api_figures_skip",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "keys": {
+                    "description": "Paper keys. At most 1000.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "skip": {
+                    "default": true,
+                    "description": "true skips them (default), false brings them back.",
+                    "type": "boolean"
+                  },
+                  "view": {
+                    "description": "\"all\" or \"method\": each view has its own picks.",
+                    "enum": [
+                      "all",
+                      "method"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "keys",
+                  "view"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "selected": {
+                      "description": "The picked figures' ids, in pick order.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "skipped": {
+                      "description": "The skipped papers' keys.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "selected",
+                    "skipped"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Skip or unskip papers",
+        "tags": [
+          "Figures"
+        ]
+      }
+    },
+    "/api/figures/state": {
+      "get": {
+        "description": "Every picked figure (in pick order) and every skipped paper of one view.",
+        "operationId": "get_api_figures_state",
+        "parameters": [
+          {
+            "description": "\"all\" (default): every figure. \"method\": the figures whose caption reads as a model design.",
+            "in": "query",
+            "name": "view",
+            "schema": {
+              "default": "all",
+              "enum": [
+                "all",
+                "method"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "selected": {
+                      "description": "The picked figures' ids, in pick order.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "skipped": {
+                      "description": "The skipped papers' keys.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "selected",
+                    "skipped"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "A view's picks and skipped papers",
+        "tags": [
+          "Figures"
         ]
       }
     },
@@ -11034,7 +12017,13 @@
       "name": "Monitoring"
     },
     {
+      "name": "Code and datasets"
+    },
+    {
       "name": "Content"
+    },
+    {
+      "name": "Figures"
     },
     {
       "name": "Library"

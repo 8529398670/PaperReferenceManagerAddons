@@ -39,7 +39,7 @@ _COLOR = re.compile(r"#[0-9a-f]{6}")
 # The fields of Theme.colors() in theme.js that an override may replace.
 OVERRIDE_FIELDS = frozenset({
     "text", "accent", "accentFg", "accentText", "second", "secondFg", "secondText", "link", "navLink",
-    "background", "surface", "nested", "chrome", "info", "infoBorder", "border",
+    "background", "surface", "nested", "chrome", "info", "infoBorder", "border", "rowOdd", "rowEven",
 }) | frozenset(
     # Theme.variants: each button variant's fill, label and outline.
     f"btn{variant}{part}"
@@ -78,7 +78,8 @@ def _colors(source: dict[str, Any], where: str) -> dict[str, Any]:
         "accent": _color(source.get("accent"), f"{where}: accent"),
         "second": _color(source.get("second"), f"{where}: second"),
     }
-    for optional in ("background", "surface"):
+    # The page, the card, and a table's two alternating rows.
+    for optional in ("background", "surface", "rowOdd", "rowEven"):
         value = _color(source.get(optional), f"{where}: {optional}", optional=True)
         if value:
             tidy[optional] = value

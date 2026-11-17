@@ -14,7 +14,7 @@
 
 app:
   title: "Paper Reference Manager"
-  # Shown in the top bar on wide screens; "" hides it.
+  # Shown at the top of the Info screen; "" hides it.
   tagline: ""
 
 # The sidebar, one entry per signed-in screen. menu labels the header's
@@ -34,9 +34,13 @@ nav:
   lists: "Lists"
   missing: "Missing"
   status: "Status"
+  figures: "Figures"
+  code: "Code"
+  datasets: "Datasets"
   account: "Account"
   appearance: "Appearance"
   shortcuts: "Shortcuts"
+  info: "Info"
   about: "About"
   admin_heading: "Admin"
   users: "Users"
@@ -48,8 +52,10 @@ nav:
 # The Library screen (static/js/library.js): every paper in Zotero, read live.
 library:
   heading: "Library"
-  # {count} papers in Zotero.
+  # {count} papers in Zotero. In the top bar, beside the screen's name.
   count: "{count} papers"
+  # On Info, above the live line (loading, indexing, ready).
+  description: "Every paper in your Zotero library, searched live: titles, authors, abstracts and full text."
   search_label: "Search the library"
   search_placeholder: "Search titles, authors, abstracts and full text"
   search_help: "Words must all appear. OR between alternatives, -word or NOT word to exclude, \"quotes\" for a phrase. A pasted DOI finds its paper."
@@ -66,6 +72,7 @@ library:
   loading: "Reading your Zotero library..."
   # {done} of {total} papers' full text is searchable; shown while indexing.
   indexing: "Making full text searchable: {pending} papers to go."
+  # This line and the two above it are on Info; zotero_missing also shows on Library.
   ready: "Full text searchable for {with_text} of {papers} papers. New papers saved in Zotero appear here within seconds."
   no_text: "No text yet"
   no_text_title: "Zotero has not extracted this PDF's text yet, so only its title and abstract are searchable."
@@ -86,6 +93,8 @@ content:
   stage_code: "Code links"
   stage_datasets: "Datasets"
   stage_modalities: "Modalities"
+  stage_figures: "Figures"
+  stage_ocr: "OCR"
   state_done: "Done"
   state_pending: "Pending"
   state_running: "Working"
@@ -105,6 +114,10 @@ content:
   # {n} links found.
   code: "Code {n}"
   data: "Datasets {n}"
+  figures: "Figures {n}"
+  # A heavy stage (figures, OCR) waiting for the worker, with none running.
+  not_available: "Not available"
+  not_available_title: "No worker is running: scripts/run.sh worker crops figures and reads scanned PDFs."
   modality_title: "A modality this paper uses"
   retry: "Retry"
   # {error} why it failed, {attempts} how many tries so far.
@@ -174,6 +187,18 @@ paper:
   section_other: "Other"
   section_figures: "Figures"
   section_tables: "Tables"
+  # {n} figures shown, {boxes} boxes YOLO found in all (repeats left out).
+  figures_summary: "{n} figures ({boxes} boxes found)."
+  figures_legacy: "From the old app."
+  # {chars} characters of text.
+  ocr_summary: "{chars} characters read from the page images."
+  ocr_not_needed: "Not needed: Zotero has this PDF's text."
+  no_pdf: "No PDF."
+  no_worker: "Waiting for the worker (scripts/run.sh worker); none is running."
+  figures_heading: "Figures"
+  figures_help: "Each figure as cropped from the PDF, with its caption. The Figures screen picks them."
+  figures_none: "No figures were found in this PDF."
+  figures_open: "Open full size"
 
 # The papers you do not have (static/js/missing.js).
 missing:
@@ -257,6 +282,151 @@ status:
   # {n} stages queued.
   retried: "{n} queued again."
   empty: "None."
+  worker_heading: "Worker"
+  worker_none: "No worker is running. Figures and OCR of scanned PDFs wait for one: scripts/run.sh worker. Nothing else waits on it."
+  # {host} the machine, {pid} its process, {doing} what it is on.
+  worker_line: "Worker on {host} (pid {pid}): {doing}"
+  worker_idle: "idle"
+  # {ago} when it last checked in.
+  worker_gone: "A worker on {host} stopped checking in {ago}."
+  worker_note: "Note: {note}"
+
+# The Figures screen (static/js/figures.js): every figure crop, or only the
+# method (model-design) figures, to pick from.
+figures:
+  heading: "Figures"
+  description: "Every figure cropped from your PDFs, or just the ones whose caption reads as a model design. Click a figure to pick it; skip a paper you are done with."
+  view_all: "All figures"
+  view_method: "Method figures"
+  search_label: "Search titles, DOIs and captions"
+  search_placeholder: "Title, DOI or caption"
+  chip_all: "All"
+  chip_lead: "Overview"
+  chip_lead_title: "A structural term opens the caption: usually the model's overview figure."
+  chip_selected: "Picked"
+  chip_skipped: "Skipped"
+  chip_other: "Picked in the other view"
+  chips_label: "Show"
+  mod_label: "Modality"
+  term_label: "Caption keyword"
+  any: "Any"
+  # {n} more keywords.
+  more_terms: "+{n} more"
+  sort_label: "Sort"
+  sort_added: "Date added"
+  sort_published: "Published"
+  sort_match: "Best match"
+  sort_count: "Most figures"
+  sort_title: "Title"
+  dir_desc: "Descending"
+  dir_asc: "Ascending"
+  export: "Export"
+  export_json: "Picks as JSON"
+  export_csv: "Picks as CSV"
+  clear: "Clear picks"
+  clear_confirm: "Clear every pick and skip of this view? Undo brings them back."
+  cleared: "Picks cleared."
+  # {papers} papers, {figures} figures, {picks} picked.
+  count: "{papers} papers, {figures} figures · {picks} picked"
+  empty: "No figures here."
+  no_figures: "No figures have been cropped yet. The worker crops them (scripts/run.sh worker), and the old app's are brought in with manage import-legacy --figures."
+  no_worker: "No worker is running, so papers added since are not cropped yet."
+  skip: "Skip"
+  unskip: "Bring back"
+  skip_title: "Skip this paper (Space)"
+  # {n} its pick number, in pick order.
+  picked: "Pick {n}"
+  picked_other: "Picked in the other view"
+  pick_title: "Click to pick this figure; again to take it back"
+  open_full: "Open the full crop"
+  # {n} figure number, {page} page.
+  figure_label: "Figure {n} · p. {page}"
+  keys_help: "↑ ↓ step between papers, Space skips the current one."
+  load_more: "Load more"
+
+# The Code screen (static/js/code.js): every paper that ships code.
+code:
+  heading: "Code"
+  description: "Every paper whose text links code, with what GitHub and OSF say about each repository and where the paper is curated."
+  search_label: "Search titles, DOIs, tags and repository links"
+  search_placeholder: "Title, DOI, tag or repository"
+  hosts_label: "Code host"
+  member_label: "Curated"
+  member_list: "On a list"
+  member_tier: "In a tier"
+  member_figs: "Has figure picks"
+  col_paper: "Paper"
+  col_added: "Added"
+  col_cites: "Cites"
+  col_links: "Repositories"
+  col_methods: "Methods"
+  col_list: "Lists"
+  col_tier: "Tier"
+  col_figs: "Figs"
+  col_review: "Review"
+  # {n} papers shown of {total}.
+  count: "{n} of {total} papers"
+  empty: "No paper here ships code."
+  export_xlsx: "Excel (.xlsx)"
+  export_csv: "CSV"
+  export: "Export"
+  sheet_papers: "Papers"
+  sheet_links: "Links"
+  # GitHub / OSF details of a repository.
+  stars: "★ {n}"
+  archived: "archived"
+  not_found: "not found on GitHub"
+  forbidden: "private"
+  pending: "not looked up yet"
+  # {original} the link as printed, {tier} exact / prefix / fuzzy, {confidence} 0-100.
+  repaired: "Repaired from {original} ({tier}, {confidence}%)"
+  confirmed_title: "Confirmed in the repository's README"
+  inferred_title: "Inferred from the papers that link it"
+  no_token: "No GitHub token is set (enrich.github_token in config.yaml), so repositories are not looked up."
+  no_osf_token: "No OSF token is set (enrich.osf_token), so OSF projects are not looked up."
+  review_later: "The Review column arrives with the review screen."
+
+# The Datasets screen (static/js/datasets.js): what public data the library
+# stands on.
+datasets:
+  heading: "Datasets"
+  description: "The public data your papers link or name: by dataset, with what each archive says it is, or paper by paper."
+  view_datasets: "By dataset"
+  view_papers: "By paper"
+  search_label: "Search datasets and papers"
+  search_placeholder: "Dataset, title or DOI"
+  kind_label: "Evidence"
+  kind_linked: "Has a link"
+  kind_named: "Named but unlinked"
+  code_label: "Ships code"
+  archive_label: "Archive"
+  col_dataset: "Dataset"
+  col_description: "What it is"
+  col_papers: "Papers"
+  col_lists: "On lists"
+  col_tiers: "In tiers"
+  col_years: "Years"
+  col_paper: "Paper"
+  col_data: "Data"
+  col_code: "Code"
+  col_added: "Added"
+  col_list: "Lists"
+  col_tier: "Tier"
+  col_figs: "Figs"
+  named: "named"
+  recovered: "˟"
+  recovered_title: "Recovered from a bare accession (ds######) in the text, not a printed link"
+  # {n} papers.
+  roll_call: "{n} papers"
+  count: "{n} of {total}"
+  empty: "Nothing here."
+  export: "Export"
+  export_xlsx: "Excel (.xlsx)"
+  export_csv: "CSV"
+  sheet_papers: "Papers"
+  sheet_pairs: "Paper and dataset"
+  sheet_datasets: "Datasets"
+  code_link_title: "Its code, on the Code screen"
 
 # The links every paper carries (static/js/paper_links.js).
 links:
@@ -269,6 +439,7 @@ links:
 
 # The Lists screen (static/js/lists.js, board_view.js).
 lists:
+  description: "Curated, ordered, tagged lists of papers. Share them, export them, and keep them in step with a Google Sheet."
   heading: "Lists"
   picker_label: "List"
   new: "New list"
@@ -566,6 +737,19 @@ lists:
   colour_pick: "Colour {tag} {colour}"
   colour_custom: "Pick any colour for {tag}"
   colour_auto: "Automatic"
+  tag_menu_uses: "on {count} papers"
+  tag_menu_uses_one: "on 1 paper"
+  tag_menu_rename: "Rename…"
+  tag_menu_untag: "Remove from this paper"
+  tag_menu_colour: "Colour"
+  tag_menu_delete: "Delete tag"
+  tag_menu_delete_confirm: "Delete the tag “{tag}” from the list and from all {count} papers that have it? Undo puts it back."
+  tag_menu_delete_confirm_unused: "Delete the tag “{tag}” from the list? No paper has it."
+  tag_menu_rename_title: "Rename tag “{tag}”"
+  tag_menu_new_name: "New name"
+  tag_menu_rename_save: "Rename"
+  tag_menu_cancel: "Cancel"
+  tag_menu_merge_confirm: "There is already a tag “{to}”. Renaming “{from}” to it merges the two. Go ahead?"
 
   cite_title: "Citation style"
   cite_help: "The style this list's citations use. Add styles by dropping .csl files from zotero.org/styles into config/citation-styles/."
@@ -697,6 +881,12 @@ ui:
 # The Shortcuts screen, and the list ? opens (static/js/shortcuts.js). Empty
 # heading to leave both out; the keys still work. An action's label set to ""
 # leaves it off the lists but keeps it working.
+# The Info screen: what each screen is for. Each entry is the screen's
+# name (nav.*) and its description (<screen>.description).
+info:
+  heading: "Info"
+  intro: "What each screen is for. Pick one to go there."
+
 shortcuts:
   heading: "Keyboard shortcuts"
   description: "Change any key to suit you. Your choices are saved to your account, so they work on every device you sign in on."
@@ -779,6 +969,8 @@ undo:
   list_tag_new: "new tag"
   list_tag_order: "tag order change"
   list_colour: "tag colour change"
+  list_tag_rename: "tag rename"
+  list_tag_delete: "tag deleted"
   list_order: "new order"
   list_options: "list setting change"
   list_columns: "column change"
@@ -832,6 +1024,13 @@ theme:
   mode_light: "Light"
   mode_dark: "Dark"
   base_heading: "Colors"
+  rows_heading: "Table rows"
+  rows_help: "Rows in every table alternate between these two. Until you pick, they are the theme's own: its brand colors, or the card and the card tinted with the second color."
+  color_row_odd: "Odd rows"
+  color_row_even: "Even rows"
+  preview_row: "Table row {n}"
+  check_row_odd: "Text on odd table rows"
+  check_row_even: "Text on even table rows"
   fine_heading: "Fine-tune"
   fine_help: "Worked out from the colors above so text stays readable. Change any of them; Reset puts the readable color back."
   reset: "Reset"
@@ -973,6 +1172,7 @@ login_links:
 # sections below.
 account:
   heading: "Account"
+  description: "Your name, signing in on other devices, two-factor sign-in, API keys, agents, and where you're signed in."
   profile_heading: "Your name"
   logout_description: "Sign out of this browser. Other devices stay signed in."
   display_name_label: "Display name"

@@ -18,6 +18,12 @@ Two lanes work the queue, one task at a time each: "net" asks OpenAlex
 waits out a backoff and never holds up the papers behind it, and opening a
 paper moves its unfinished tasks to the front.
 
+Two more stages are heavy (figure crops, OCR of a scanned PDF): they need ML
+packages the server does not have, so the optional worker process runs them
+(app/worker/, `python -m app worker`), taking tasks from the same queue. The
+server only queues them and listens for what the worker finishes (watch()).
+With no worker they stay pending and nothing else waits on them.
+
 Every finished stage is published as a "paper" event on the library's
 stream, so an open screen fills in place.
 """
@@ -42,6 +48,11 @@ IDLE_SECONDS = {"net": 3.0, "local": 1.0}
 # A pause between OpenAlex tasks: a polite pace even with nothing to wait for.
 NET_PAUSE_SECONDS = 0.2
 QUEUE_EVENT_SECONDS = 1.0
+# How often the server looks for what a worker finished.
+WATCH_SECONDS = 2.0
+OCR_FILE = "ocr.txt"
+FIGURES_FILE = "figures.json"
+FIGURES_DIR = "figures"
 MAX_TEXT_BYTES = 2 * 1024 * 1024
 MODALITIES_FILE = "modalities.yaml"
 
@@ -72,6 +83,24 @@ def pdf_signature(record: dict[str, Any]) -> str:
         except OSError:
             parts.append(f"{name}|-")
     return ";".join(parts)
+
+
+def first_pdf(record: dict[str, Any]) -> str:
+    """The PDF the heavy stages read: the first one Zotero has."""
+    for name in record.get("pdfs") or []:
+        if name:
+            return name
+    return ""
+
+
+def text_usable(body: str) -> bool:
+    """Whether Zotero's text of a PDF is worth reading, or the PDF needs OCR
+    (a scan with no text layer, or garbage where the text should be)."""
+    try:
+        from app.worker.ocr import needs_ocr
+    except ImportError:
+        return bool(body.strip())
+    return not needs_ocr(body)
 
 
 def _short(text: str) -> str:
@@ -112,6 +141,14 @@ class ContentService:
         self._tasks: list[asyncio.Task[None]] = []
         self._backfill_after = 0.0
         self.on_meta: Callable[[list[str]], None] | None = None
+        # Papers whose Zotero text is unusable (methods summary usable=False):
+        # they are the ones OCR is queued for. Loaded on the first reconcile.
+        self._unusable: set[str] | None = None
+        # The last change to a heavy task the server has passed on (watch()).
+        self._heard = time.time()
+        self._workers_seen: tuple[Any, ...] = ()
+        # Told when a paper's figures changed (the Figures screen's cache).
+        self.on_figures: Callable[[str], None] | None = None
 
     @staticmethod
     def _mtime(path: Path) -> float:
@@ -135,6 +172,10 @@ class ContentService:
         if not paper.text_sig:
             return out
         text = paper.text_sig + "#" + pdf_signature(record)
+        state, ocr_sig = rows.get((paper.key, st.OCR), ("", ""))
+        if state == st.DONE:
+            # The worker's OCR is in: the text stages read it now.
+            text += "#ocr:" + _short(ocr_sig)
         abstract = record.get("abstract") or ""
         out[st.METHODS] = text
         out[st.CODE] = text + "#" + _short(abstract)
@@ -144,6 +185,28 @@ class ContentService:
         abstract_part = _short(abstract) if abstract else "oa:" + ("1" if oa_state == st.DONE else "0")
         out[st.MODALITIES] = self.vocab.signature + "#" + text + "#" + abstract_part
         return out
+
+    def heavy(self, paper: Paper) -> list[tuple[str, str, dict[str, Any]]]:
+        """(stage, sig, input) of the heavy stages a paper needs: figures for
+        any paper with a PDF; OCR only once the text pass found its text
+        missing or unusable."""
+        pdf = first_pdf(paper.record)
+        if not pdf:
+            return []
+        sig = "pdf:" + pdf_signature({"pdfs": [pdf]})
+        out = [(st.FIGURES, sig, {"pdf": pdf})]
+        unusable = self._unusable or set()
+        if paper.text_sig and (not paper.has_text or paper.key in unusable):
+            out.append((st.OCR, sig, {"pdf": pdf}))
+        return out
+
+    def _load_unusable(self) -> set[str]:
+        if self._unusable is None:
+            self._unusable = {
+                key for key, stages in self.files.summaries().items()
+                if stages.get(st.METHODS, ("", {}, ""))[1].get("usable") is False
+            }
+        return self._unusable
 
     def reconcile(self) -> int:
         """Queue what changed since the last look. Cheap: a stat per PDF and a
@@ -157,7 +220,8 @@ class ContentService:
         if not self.catalogue.status.ready or not papers:
             return 0
         rows = self.files.rows()
-        wants = []
+        self._load_unusable()
+        wants: list[tuple[Any, ...]] = []
         for paper in papers:
             sigs = self.signatures(paper, rows)
             if sigs is None:
@@ -166,6 +230,9 @@ class ContentService:
             for stage, sig in sigs.items():
                 if rows.get((paper.key, stage), ("", None))[1] != sig:
                     wants.append((paper.key, stage, sig, added, 0.0))
+            for stage, sig, given in self.heavy(paper):
+                if rows.get((paper.key, stage), ("", None))[1] != sig:
+                    wants.append((paper.key, stage, sig, added, 0.0, given))
         changed = self.files.want(wants) if wants else 0
         here = {paper.key for paper in papers}
         gone = {key for key, _ in rows if key not in here}
@@ -194,6 +261,7 @@ class ContentService:
     def start(self) -> None:
         for lane in ("net", "local"):
             self._tasks.append(asyncio.create_task(self._lane(lane)))
+        self._tasks.append(asyncio.create_task(self._watch()))
 
     async def stop(self) -> None:
         for task in self._tasks:
@@ -208,6 +276,45 @@ class ContentService:
                 print(f"[content] {lane} lane: {error!r}", flush=True)
                 worked = False
             await asyncio.sleep(NET_PAUSE_SECONDS if worked and lane == "net" else 0 if worked else IDLE_SECONDS[lane])
+
+    async def _watch(self) -> None:
+        while True:
+            await asyncio.sleep(WATCH_SECONDS)
+            try:
+                await asyncio.to_thread(self.watch)
+            except Exception as error:  # noqa: BLE001 -- keep listening
+                print(f"[content] watch: {error!r}", flush=True)
+
+    def watch(self) -> int:
+        """Pass on what a worker finished since the last look: a "paper"
+        event per task, OCR text into the search index (and the text stages
+        queued again to read it), and the Figures screen told."""
+        rows = self.files.changed_since(self._heard, st.HEAVY)
+        for key, stage, state, at in rows:
+            self._heard = max(self._heard, at)
+            if state == st.DONE and stage == st.OCR:
+                text = self.ocr_text(key)
+                if text:
+                    self.catalogue.put_text(key, text)
+                self.dirty = True
+            if stage == st.FIGURES and self.on_figures is not None:
+                self.on_figures(key)
+            self.publish("paper", {"key": key, "stage": stage, "state": state})
+        # A worker starting, stopping or taking the next task: the Status
+        # screen's worker line follows it (it listens for "queue").
+        workers = tuple((w["id"], w["alive"], w["doing"]) for w in self.files.workers())
+        if workers != self._workers_seen:
+            self._workers_seen = workers
+            self._queue_event(force=True)
+        elif rows:
+            self._queue_event()
+        return len(rows)
+
+    def ocr_text(self, key: str) -> str:
+        try:
+            return (self.files.dir(key) / OCR_FILE).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return ""
 
     def step(self, lane: str) -> bool:
         """Run the next task of a lane. -> whether there was one."""
@@ -258,6 +365,12 @@ class ContentService:
         self.running["local"] = key
         try:
             body = read_text(record.get("fulltext_files") or [])
+            usable = text_usable(body)
+            if not usable:
+                # A scanned PDF: the worker's OCR, once it has run.
+                ocr = self.ocr_text(key)
+                if ocr.strip():
+                    body = ocr
             parts = sections.split(body) if body else []
             methods = sections.methods_text(parts) if parts else ""
             if not methods:
@@ -277,7 +390,15 @@ class ContentService:
                 try:
                     if stage == st.METHODS:
                         self.files.write(key, "sections.json", {"sections": parts})
-                        summary = {"sections": len(parts), "methods_chars": len(methods), "has_text": bool(body.strip())}
+                        summary = {
+                            "sections": len(parts), "methods_chars": len(methods), "has_text": bool(body.strip()), "usable": usable,
+                        }
+                        unusable = self._load_unusable()
+                        if usable:
+                            unusable.discard(key)
+                        elif key not in unusable:
+                            unusable.add(key)
+                            self.dirty = True
                     elif stage in (st.CODE, st.DATASETS):
                         if found is None:
                             found = links.scan_paper(record.get("title") or "", record.get("abstract") or "", body)
@@ -419,7 +540,17 @@ class ContentService:
             "network": network,
             "openalex_abstract": links.abstract_from_inverted(work.get("abstract_inverted_index")) if work else "",
             "openalex_url": work.get("id") or "",
+            "figures": self.figures_of(key) if (tasks.get(st.FIGURES) or {}).get("state") == st.DONE else [],
+            "worker": any(w["alive"] for w in self.files.workers()),
         }
+
+    def figures_of(self, key: str) -> list[dict[str, Any]]:
+        """A paper's figure crops: {n, page, caption, dup, w, h} each."""
+        manifest = self.files.read(key, FIGURES_FILE) or {}
+        return [
+            {k: figure.get(k) for k in ("n", "page", "caption", "dup", "w", "h")}
+            for figure in manifest.get("figures") or [] if isinstance(figure, dict) and figure.get("n")
+        ]
 
     def meta(self, keys: list[str], want_links: bool) -> dict[str, dict[str, Any]]:
         """What the list ops ask (ctx.meta): modality tags, Code/Datasets."""
@@ -464,6 +595,7 @@ class ContentService:
             "stages": self.files.counts(),
             "pool": self.pool.totals(),
             "running": dict(self.running),
+            "workers": self.files.workers(),
             "openalex_enabled": library.openalex_enabled,
             "openalex_key": bool(library.openalex_api_key),
         }
@@ -513,6 +645,9 @@ def badge(stages: dict[str, tuple[str, dict[str, Any], str]]) -> dict[str, Any]:
     state, summary, _ = stages.get(st.MODALITIES, ("", {}, ""))
     if state == st.DONE:
         out["mods"] = summary.get("used") or []
+    state, summary, _ = stages.get(st.FIGURES, ("", {}, ""))
+    if state == st.DONE:
+        out["figures"] = summary.get("n", 0)
     state, summary, _ = stages.get(st.OPENALEX, ("", {}, ""))
     if state == st.DONE:
         out["citers"] = summary.get("citers", 0)

@@ -8,6 +8,14 @@
       "route": "GET /api/api.json"
     },
     {
+      "reason": "A file to download; figure_picks gives the ids as data.",
+      "route": "GET /api/figures/export"
+    },
+    {
+      "reason": "An image, for a browser to show.",
+      "route": "GET /api/figures/image"
+    },
+    {
       "reason": "Settings for drawing the page's links, not something an agent acts on.",
       "route": "GET /api/library/links"
     },
@@ -34,6 +42,10 @@
     {
       "reason": "The file itself, for a browser to show.",
       "route": "GET /api/paper/pdf"
+    },
+    {
+      "reason": "A file to download, made from the rows sent.",
+      "route": "POST /api/export/xlsx"
     },
     {
       "reason": "An agent edits lists; which lists exist is a person's decision.",
@@ -1277,7 +1289,9 @@
               "methods",
               "code",
               "datasets",
-              "modalities"
+              "modalities",
+              "figures",
+              "ocr"
             ],
             "type": "string"
           },
@@ -1355,6 +1369,34 @@
       "name": "create_my_login_link",
       "route": "POST /api/account/login-link",
       "title": "A login link for yourself"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "A view's picks and skipped papers"
+      },
+      "description": "Every picked figure (in pick order) and every skipped paper of one view.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "view": {
+            "default": "all",
+            "description": "\"all\" (default): every figure. \"method\": the figures whose caption reads as a model design.",
+            "enum": [
+              "all",
+              "method"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "figure_picks",
+      "route": "GET /api/figures/state",
+      "title": "A view's picks and skipped papers"
     },
     {
       "adminOnly": false,
@@ -1502,6 +1544,127 @@
       "name": "library_version",
       "route": "GET /api/version",
       "title": "The library's version token"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Every paper that ships code"
+      },
+      "description": "One row per paper whose text links a code host, with each repository as GitHub or OSF describe it, the methods its README confirms or its citing papers suggest, and where the paper is curated.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "list_code",
+      "route": "GET /api/code",
+      "title": "Every paper that ships code"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "What public data the library stands on"
+      },
+      "description": "One row per paper that links a data archive record or names a public collection (HCP, NSD, ...), each record with what its archive says it is. The Datasets screen also groups these by dataset.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "list_datasets",
+      "route": "GET /api/datasets",
+      "title": "What public data the library stands on"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Papers and their figures"
+      },
+      "description": "The papers whose figures have been cropped, with their figures, a page of papers at a time: every figure, or the method figures (captions matching config/method-images.txt). Each figure says whether it is picked in this view and in the other; chips, modality and keyword filters narrow the papers.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "chip": {
+            "default": "all",
+            "description": "all (default: every paper not skipped), lead (a structural term opens a caption), selected (a figure is picked), skipped, other (a figure is picked in the other view).",
+            "enum": [
+              "all",
+              "lead",
+              "selected",
+              "skipped",
+              "other"
+            ],
+            "type": "string"
+          },
+          "dir": {
+            "default": "desc",
+            "description": "Default desc.",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "type": "string"
+          },
+          "limit": {
+            "default": 40,
+            "description": "Papers to return. Default 40.",
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "mod": {
+            "description": "Only papers tagged with this modality.",
+            "type": "string"
+          },
+          "offset": {
+            "description": "Papers to skip: the next value of the previous page.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "q": {
+            "description": "Only papers whose title, DOI or a caption contains this.",
+            "type": "string"
+          },
+          "sort": {
+            "default": "added",
+            "description": "added (default: when it reached Zotero), published, match (best caption match), count (most figures), title.",
+            "enum": [
+              "added",
+              "published",
+              "match",
+              "count",
+              "title"
+            ],
+            "type": "string"
+          },
+          "term": {
+            "description": "Only papers with a caption matching this keyword (method view).",
+            "type": "string"
+          },
+          "view": {
+            "default": "all",
+            "description": "\"all\" (default): every figure. \"method\": the figures whose caption reads as a model design.",
+            "enum": [
+              "all",
+              "method"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_figures",
+      "route": "GET /api/figures",
+      "title": "Papers and their figures"
     },
     {
       "adminOnly": false,
@@ -1894,6 +2057,49 @@
       "annotations": {
         "destructiveHint": false,
         "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Pick or unpick figures"
+      },
+      "description": "Pick figures in one view (a new pick goes last), or take picks back.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "ids": {
+            "description": "Figure ids, \"<paper key>#figure-N\". At most 1000.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "pick": {
+            "default": true,
+            "description": "true picks them (default), false unpicks them.",
+            "type": "boolean"
+          },
+          "view": {
+            "description": "\"all\" or \"method\": each view has its own picks.",
+            "enum": [
+              "all",
+              "method"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "ids",
+          "view"
+        ],
+        "type": "object"
+      },
+      "name": "pick_figures",
+      "route": "POST /api/figures/pick",
+      "title": "Pick or unpick figures"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
         "readOnlyHint": true,
         "title": "Papers added lately"
       },
@@ -2217,6 +2423,50 @@
     {
       "adminOnly": false,
       "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Replace a view's picks"
+      },
+      "description": "Set a view's picks and skipped papers outright: Clear sends both empty, and its undo sends the old ones back.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "selected": {
+            "description": "The picks to keep, in order.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "skipped": {
+            "description": "The skipped papers to keep.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "view": {
+            "description": "\"all\" or \"method\": each view has its own picks.",
+            "enum": [
+              "all",
+              "method"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "view"
+        ],
+        "type": "object"
+      },
+      "name": "set_figure_picks",
+      "route": "POST /api/figures/replace",
+      "title": "Replace a view's picks"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
         "destructiveHint": false,
         "openWorldHint": false,
         "readOnlyHint": false,
@@ -2512,6 +2762,49 @@
       "name": "set_themes",
       "route": "POST /api/account/themes",
       "title": "Replace your own themes"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Skip or unskip papers"
+      },
+      "description": "Hide papers you are done with from one view, or bring them back.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "keys": {
+            "description": "Paper keys. At most 1000.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "skip": {
+            "default": true,
+            "description": "true skips them (default), false brings them back.",
+            "type": "boolean"
+          },
+          "view": {
+            "description": "\"all\" or \"method\": each view has its own picks.",
+            "enum": [
+              "all",
+              "method"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "keys",
+          "view"
+        ],
+        "type": "object"
+      },
+      "name": "skip_figure_papers",
+      "route": "POST /api/figures/skip",
+      "title": "Skip or unskip papers"
     },
     {
       "adminOnly": false,

@@ -40,12 +40,16 @@ Every tool POST /mcp offers. Written by scripts/api_docs.sh from the registered 
 | [`content_papers`](#content_papers) | [`GET /api/content/papers`](api.md#get-apicontentpapers) | any key | The papers a stage has not finished |
 | [`content_status`](#content_status) | [`GET /api/content/status`](api.md#get-apicontentstatus) | any key | How far the content queue has got |
 | [`create_my_login_link`](#create_my_login_link) | [`POST /api/account/login-link`](api.md#post-apiaccountlogin-link) | any key | A login link for yourself |
+| [`figure_picks`](#figure_picks) | [`GET /api/figures/state`](api.md#get-apifiguresstate) | any key | A view's picks and skipped papers |
 | [`get_list`](#get_list) | [`GET /api/lists/{slug}`](api.md#get-apilistsslug) | any key | Read a list |
 | [`get_paper`](#get_paper) | [`GET /api/paper`](api.md#get-apipaper) | any key | One paper |
 | [`get_paper_content`](#get_paper_content) | [`GET /api/paper/content`](api.md#get-apipapercontent) | any key | What is known about a paper |
 | [`label_my_session`](#label_my_session) | [`POST /api/account/sessions/{session_id}/label`](api.md#post-apiaccountsessionssession_idlabel) | any key | Name one of your devices |
 | [`library_status`](#library_status) | [`GET /api/library/status`](api.md#get-apilibrarystatus) | any key | How the library is doing |
 | [`library_version`](#library_version) | [`GET /api/version`](api.md#get-apiversion) | any key | The library's version token |
+| [`list_code`](#list_code) | [`GET /api/code`](api.md#get-apicode) | any key | Every paper that ships code |
+| [`list_datasets`](#list_datasets) | [`GET /api/datasets`](api.md#get-apidatasets) | any key | What public data the library stands on |
+| [`list_figures`](#list_figures) | [`GET /api/figures`](api.md#get-apifigures) | any key | Papers and their figures |
 | [`list_history`](#list_history) | [`GET /api/lists/{slug}/history`](api.md#get-apilistsslughistory) | any key | A list's past versions |
 | [`list_lists`](#list_lists) | [`GET /api/lists`](api.md#get-apilists) | any key | List the lists |
 | [`list_my_sessions`](#list_my_sessions) | [`GET /api/account/sessions`](api.md#get-apiaccountsessions) | any key | Your signed-in devices |
@@ -58,6 +62,7 @@ Every tool POST /mcp offers. Written by scripts/api_docs.sh from the registered 
 | [`missing_authors`](#missing_authors) | [`GET /api/missing/authors`](api.md#get-apimissingauthors) | any key | Who you cite most and lack |
 | [`papers_exist`](#papers_exist) | [`POST /api/exists`](api.md#post-apiexists) | any key | Which of these papers are in the library |
 | [`parse_refs`](#parse_refs) | [`POST /api/refs/parse`](api.md#post-apirefsparse) | any key | Read a reference list |
+| [`pick_figures`](#pick_figures) | [`POST /api/figures/pick`](api.md#post-apifigurespick) | any key | Pick or unpick figures |
 | [`recent_papers`](#recent_papers) | [`GET /api/papers/recent`](api.md#get-apipapersrecent) | any key | Papers added lately |
 | [`rename_account`](#rename_account) | [`POST /api/account/rename`](api.md#post-apiaccountrename) | any key | Rename your account |
 | [`retry_content`](#retry_content) | [`POST /api/papers/retry`](api.md#post-apipapersretry) | any key | Try a failed stage again |
@@ -66,10 +71,12 @@ Every tool POST /mcp offers. Written by scripts/api_docs.sh from the registered 
 | [`revoke_my_session_bulk`](#revoke_my_session_bulk) | [`POST /api/bulk/account/sessions/revoke`](api.md#post-apibulkaccountsessionsrevoke) | any key | Sign out one of your devices, for many at once |
 | [`search_library`](#search_library) | [`GET /api/papers`](api.md#get-apipapers) | any key | Search the library |
 | [`search_missing`](#search_missing) | [`GET /api/missing`](api.md#get-apimissing) | any key | Search the papers you do not have |
+| [`set_figure_picks`](#set_figure_picks) | [`POST /api/figures/replace`](api.md#post-apifiguresreplace) | any key | Replace a view's picks |
 | [`set_shortcuts`](#set_shortcuts) | [`POST /api/account/shortcuts`](api.md#post-apiaccountshortcuts) | any key | Change your keyboard shortcuts |
 | [`set_tag_colors`](#set_tag_colors) | [`POST /api/account/tag-colors`](api.md#post-apiaccounttag-colors) | any key | Choose where your tag colours come from |
 | [`set_theme`](#set_theme) | [`POST /api/account/theme`](api.md#post-apiaccounttheme) | any key | Pick your theme |
 | [`set_themes`](#set_themes) | [`POST /api/account/themes`](api.md#post-apiaccountthemes) | any key | Replace your own themes |
+| [`skip_figure_papers`](#skip_figure_papers) | [`POST /api/figures/skip`](api.md#post-apifiguresskip) | any key | Skip or unskip papers |
 | [`skip_missing`](#skip_missing) | [`POST /api/missing/skip`](api.md#post-apimissingskip) | any key | Skip or unskip missing papers |
 | [`whoami`](#whoami) | [`GET /api/me`](api.md#get-apime) | any key | Who am I |
 
@@ -552,7 +559,7 @@ A stage's papers in some states, a page at a time: the ones still to do, or the 
 | `offset` | integer | no | at least 0 | Rows to skip: the next value of the previous page. |
 | `q` | string | no |  | Only papers whose title, DOI or error contains this. |
 | `sort` | string | no | one of `added`, `title`, `year`, `journal`, `state`, `error`, `attempts`, `first_failed`, `last_failed`; default `added` | Default added (newest first). |
-| `stage` | string | no | one of `openalex`, `methods`, `code`, `datasets`, `modalities`; default `openalex` | The stage. |
+| `stage` | string | no | one of `openalex`, `methods`, `code`, `datasets`, `modalities`, `figures`, `ocr`; default `openalex` | The stage. |
 | `state` | string | no | one of `unfinished`, `failed`, `not_found`, `errors`, `pending`, `done`; default `unfinished` | "unfinished" (default): pending, running and failed. "errors": failed and not found. |
 
 ## content_status
@@ -586,6 +593,22 @@ A link that signs your own account in on a browser or another device. An API key
 |---|---|---|---|---|
 | `expires_in_minutes` | integer or null | no | 0 to 525600 | 0 never expires. Default auth.login_token_ttl_seconds for a link that works once, auth.multi_use_login_token_ttl_seconds otherwise. |
 | `max_uses` | integer or null | no | 0 to 1000 | Sign-ins the link allows: 1-1000, or 0 for unlimited. Default 1. |
+
+## figure_picks
+
+Every picked figure (in pick order) and every skipped paper of one view.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/figures/state`](api.md#get-apifiguresstate) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `view` | string | no | one of `all`, `method`; default `all` | "all" (default): every figure. "method": the figures whose caption reads as a model design. |
 
 ## get_list
 
@@ -682,6 +705,60 @@ A token that changes whenever the library does, so a userscript can poll cheaply
 
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
+
+## list_code
+
+One row per paper whose text links a code host, with each repository as GitHub or OSF describe it, the methods its README confirms or its citing papers suggest, and where the paper is curated.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/code`](api.md#get-apicode) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+
+## list_datasets
+
+One row per paper that links a data archive record or names a public collection (HCP, NSD, ...), each record with what its archive says it is. The Datasets screen also groups these by dataset.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/datasets`](api.md#get-apidatasets) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+
+## list_figures
+
+The papers whose figures have been cropped, with their figures, a page of papers at a time: every figure, or the method figures (captions matching config/method-images.txt). Each figure says whether it is picked in this view and in the other; chips, modality and keyword filters narrow the papers.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/figures`](api.md#get-apifigures) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `chip` | string | no | one of `all`, `lead`, `selected`, `skipped`, `other`; default `all` | all (default: every paper not skipped), lead (a structural term opens a caption), selected (a figure is picked), skipped, other (a figure is picked in the other view). |
+| `dir` | string | no | one of `asc`, `desc`; default `desc` | Default desc. |
+| `limit` | integer | no | 1 to 200; default `40` | Papers to return. Default 40. |
+| `mod` | string | no |  | Only papers tagged with this modality. |
+| `offset` | integer | no | at least 0 | Papers to skip: the next value of the previous page. |
+| `q` | string | no |  | Only papers whose title, DOI or a caption contains this. |
+| `sort` | string | no | one of `added`, `published`, `match`, `count`, `title`; default `added` | added (default: when it reached Zotero), published, match (best caption match), count (most figures), title. |
+| `term` | string | no |  | Only papers with a caption matching this keyword (method view). |
+| `view` | string | no | one of `all`, `method`; default `all` | "all" (default): every figure. "method": the figures whose caption reads as a model design. |
 
 ## list_history
 
@@ -889,6 +966,24 @@ A pasted or dropped reference list, read and matched to the library: a preview o
 | `file` | string | no |  | Or a .docx or .txt file, base64. At most 10 MB. |
 | `text` | string | no |  | A pasted reference list. |
 
+## pick_figures
+
+Pick figures in one view (a new pick goes last), or take picks back.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/figures/pick`](api.md#post-apifigurespick) |
+| Read only | no |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `ids` | array of string | yes |  | Figure ids, "<paper key>#figure-N". At most 1000. |
+| `pick` | boolean | no | default `true` | true picks them (default), false unpicks them. |
+| `view` | string | yes | one of `all`, `method` | "all" or "method": each view has its own picks. |
+
 ## recent_papers
 
 Papers added in Zotero in the last days, newest first, leaving out those already on the list not_on names: "what did I save this week that isn't on this list yet?". Read from the live catalogue, so a paper saved seconds ago is there.
@@ -1035,6 +1130,24 @@ The missing pool: works your library cites, and works citing it, that are not in
 | `skipped` | string | no | one of `hide`, `show`; default `hide` | Default hide. |
 | `sort` | string | no |  | Columns, most important first: "conn:desc,year:desc". Columns: relevance (only while searching), conn, cited_by, title, year. Default conn:desc. |
 
+## set_figure_picks
+
+Set a view's picks and skipped papers outright: Clear sends both empty, and its undo sends the old ones back.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/figures/replace`](api.md#post-apifiguresreplace) |
+| Read only | no |
+| Destructive | yes |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `selected` | array of string | no |  | The picks to keep, in order. |
+| `skipped` | array of string | no |  | The skipped papers to keep. |
+| `view` | string | yes | one of `all`, `method` | "all" or "method": each view has its own picks. |
+
 ## set_shortcuts
 
 Replace your changed keyboard shortcuts: action name to binding, such as "search": "Mod+K" (Mod is Cmd on a Mac, Ctrl elsewhere). Send the whole set; an empty binding switches a key off, and {} puts every key back to its default. whoami shows the current set.
@@ -1126,6 +1239,24 @@ Replace your whole list of color themes (1 to 40) and pick the one you use. them
 | `themes[].second` | string | yes |  | Says where you are: active nav item, headings, info. |
 | `themes[].surface` | string | no |  | Cards. Left out: the mode's own. |
 
+## skip_figure_papers
+
+Hide papers you are done with from one view, or bring them back.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/figures/skip`](api.md#post-apifiguresskip) |
+| Read only | no |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `keys` | array of string | yes |  | Paper keys. At most 1000. |
+| `skip` | boolean | no | default `true` | true skips them (default), false brings them back. |
+| `view` | string | yes | one of `all`, `method` | "all" or "method": each view has its own picks. |
+
 ## skip_missing
 
 Hide works from the Missing screen (a soft hide, undone by skip false), or bring them back.
@@ -1165,6 +1296,8 @@ Routes an API key may call that have no tool, and why.
 | Route | Why |
 |---|---|
 | [`GET /api/api.json`](api.md#get-apiapijson) | The API reference itself; GET /api/mcp.json is the MCP one. |
+| [`GET /api/figures/export`](api.md#get-apifiguresexport) | A file to download; figure_picks gives the ids as data. |
+| [`GET /api/figures/image`](api.md#get-apifiguresimage) | An image, for a browser to show. |
 | [`GET /api/library/links`](api.md#get-apilibrarylinks) | Settings for drawing the page's links, not something an agent acts on. |
 | [`GET /api/library/stream`](api.md#get-apilibrarystream) | A live event stream for the page; library_version is the polling equivalent. |
 | [`GET /api/lists/deleted`](api.md#get-apilistsdeleted) | Which lists exist is a person's decision. |
@@ -1172,6 +1305,7 @@ Routes an API key may call that have no tool, and why.
 | [`GET /api/lists/{slug}/export.csv`](api.md#get-apilistsslugexportcsv) | A file to download; list_rows gives the same rows as data. |
 | [`GET /api/mcp.json`](api.md#get-apimcpjson) | The MCP reference itself; tools/list gives the same list. |
 | [`GET /api/paper/pdf`](api.md#get-apipaperpdf) | The file itself, for a browser to show. |
+| [`POST /api/export/xlsx`](api.md#post-apiexportxlsx) | A file to download, made from the rows sent. |
 | [`POST /api/lists`](api.md#post-apilists) | An agent edits lists; which lists exist is a person's decision. |
 | [`POST /api/lists/{slug}/delete`](api.md#post-apilistsslugdelete) | Which lists exist is a person's decision. |
 | [`POST /api/lists/{slug}/export.csv`](api.md#post-apilistsslugexportcsv) | A file to download; list_rows gives the same rows as data. |

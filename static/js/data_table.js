@@ -40,6 +40,8 @@ class DataTable {
     this.sort = ( options.sort || [] ).slice();
     this.tiers = options.tiers || 1;
     this.data = [];
+    this.order = [];
+    this.drawn = 0;
     this.prefs = this.load();
     this.build();
     this.drawMenu();
@@ -108,9 +110,33 @@ class DataTable {
     return this.ordered().filter( ( column ) => this.chosen( column ) && ( !column.when || column.when() ) );
   }
 
-  widthOf( column ) {
+  // The width a column is drawn at: the one dragged, else its default. The
+  // flex column, until it is dragged (or another edge is), fills what the
+  // others leave of the area, so a fresh table is as wide as its screen.
+  widthOf( column , room ) {
     const px = this.prefs.widths[ column.id ];
-    return px || Math.round( ( column.width || 8 ) * 16 );
+    if ( px ) return px;
+    const rem = parseFloat( getComputedStyle( document.documentElement ).fontSize ) || 16;
+    const own = Math.round( ( column.width || 8 ) * rem );
+    if ( !column.flex || room === undefined ) return own;
+    return Math.max( own , room );
+  }
+
+  // Every shown column's width now, by id.
+  widths() {
+    const columns = this.visible();
+    const out = {};
+    let others = 0;
+    columns.forEach( ( column ) => {
+      if ( column.flex ) return;
+      out[ column.id ] = this.widthOf( column );
+      others += out[ column.id ];
+    } );
+    const area = this.scroll ? this.scroll.clientWidth : 0;
+    columns.forEach( ( column ) => {
+      if ( column.flex ) out[ column.id ] = this.widthOf( column , area - others - 2 );
+    } );
+    return out;
   }
 
   // -- the table ---------------------------------------------------------------
@@ -128,17 +154,20 @@ class DataTable {
     this.scroll = Dom.el( "div" , { class: "table-responsive" , attrs: { tabindex: "0" } , children: [ this.table ] } );
     this.scroll.classList.add( "data-table-scroll" );
     holder.appendChild( this.scroll );
-    // A wider or narrower area changes how much the last column takes.
-    new ResizeObserver( () => { if ( this.least ) this.fit( this.least ); } ).observe( this.scroll );
-    if ( this.options.onEnd ) {
-      this.scroll.addEventListener( "scroll" , () => {
-        const left = this.scroll.scrollHeight - this.scroll.scrollTop - this.scroll.clientHeight;
-        if ( left < 240 && !this.ending ) {
-          this.ending = true;
-          Promise.resolve( this.options.onEnd() ).finally( () => { this.ending = false; } );
-        }
-      } , { passive: true } );
-    }
+    // A wider or narrower area changes what the flex column fills.
+    new ResizeObserver( () => this.size() ).observe( this.scroll );
+    // Near the end of what is drawn: draw the next rows already here, or ask
+    // the screen for more (onEnd). From md the rows scroll inside the area;
+    // on a phone the page scrolls, so both are watched.
+    const near = () => {
+      if ( this.nearing ) return;
+      this.nearing = window.requestAnimationFrame( () => {
+        this.nearing = 0;
+        this.whenNearEnd( true );
+      } );
+    };
+    this.scroll.addEventListener( "scroll" , near , { passive: true } );
+    window.addEventListener( "scroll" , near , { passive: true } );
     this.drawHead();
   }
 
@@ -146,46 +175,33 @@ class DataTable {
     const columns = this.visible();
     Dom.clear( this.colgroup );
     Dom.clear( this.headRow );
-    let least = 0;
     columns.forEach( ( column ) => {
-      const width = this.widthOf( column );
-      least += width;
-      const col = Dom.el( "col" );
-      if ( !column.flex || this.pinned() ) col.style.width = width + "px";
-      this.colgroup.appendChild( col );
+      this.colgroup.appendChild( Dom.el( "col" , { attrs: { "data-col": column.id } } ) );
       this.headRow.appendChild( this.headCell( column ) );
     } );
-    this.fit( least );
+    // After the last column, a blank one takes any room to spare, so the
+    // header and the rows' stripes run to the right edge without any real
+    // column stretching. When the columns add up to more, it is 0 wide and
+    // the area scrolls sideways.
+    this.colgroup.appendChild( Dom.el( "col" , { class: "data-table-filler" } ) );
+    this.headRow.appendChild( Dom.el( "th" , { class: "data-table-filler" , attrs: { "aria-hidden": "true" } } ) );
+    this.size();
     this.paintSort();
   }
 
-  // Until a width is dragged, the flex column takes whatever room is left, so
-  // the table fills its area. Once one is, every column keeps the width it
-  // has: dragging an edge then moves that edge and only that edge, like a
-  // spreadsheet, rather than the flex column giving or taking the difference.
-  pinned() {
-    const flex = this.columns.find( ( column ) => column.flex );
-    return !flex || Boolean( this.prefs.widths[ flex.id ] );
-  }
-
-  // The table's width. Unpinned, the area's, the flex column filling it.
-  // Pinned, its columns' -- and when they are narrower than the area, the
-  // last column takes the rest (drawn only, not kept), so there is never
-  // blank space at the right. Never narrower than its columns: past that the
-  // area scrolls sideways.
-  fit( least ) {
-    this.least = least;
+  // Puts every <col> at its width, and the table at least as wide as all of
+  // them. widths: what to draw (a drag in progress), else the kept ones.
+  size( widths ) {
+    if ( !this.colgroup ) return;
+    const w = widths || this.widths();
+    let least = 0;
+    Array.from( this.colgroup.children ).forEach( ( col ) => {
+      const id = col.getAttribute( "data-col" );
+      if ( !id ) return;
+      col.style.width = w[ id ] + "px";
+      least += w[ id ];
+    } );
     this.table.style.minWidth = least + "px";
-    if ( !this.pinned() ) {
-      this.table.style.width = "";
-      return;
-    }
-    const columns = this.visible();
-    const last = columns[ columns.length - 1 ];
-    const col = this.colgroup.lastElementChild;
-    const slack = Math.max( 0 , this.scroll.clientWidth - least );
-    if ( last && col ) col.style.width = ( this.widthOf( last ) + slack ) + "px";
-    this.table.style.width = ( least + slack ) + "px";
   }
 
   headCell( column ) {
@@ -203,47 +219,60 @@ class DataTable {
       th.appendChild( label );
     }
     const grip = Dom.el( "span" , { class: "data-table-grip" , attrs: { "aria-hidden": "true" } } );
-    grip.addEventListener( "pointerdown" , ( event ) => this.drag( event , column , th ) );
-    grip.addEventListener( "dblclick" , () => {
+    grip.addEventListener( "pointerdown" , ( event ) => this.drag( event , column , grip ) );
+    grip.addEventListener( "click" , ( event ) => event.stopPropagation() );
+    grip.addEventListener( "dblclick" , ( event ) => {
+      event.stopPropagation();
       delete this.prefs.widths[ column.id ];
       this.save();
-      this.redraw();
+      this.size();
     } );
     th.appendChild( grip );
     return th;
   }
 
-  // Dragging a header's right edge sets that column's width.
-  drag( event , column , th ) {
+  // Dragging a header's right edge: that edge follows the pointer and
+  // nothing else moves, like a spreadsheet. Every column is held at the width
+  // it is drawn at when the drag starts (the flex column too, from then on).
+  drag( event , column , grip ) {
+    if ( event.button !== 0 ) return;
     event.preventDefault();
     event.stopPropagation();
+    const widths = this.widths();
+    const start = widths[ column.id ];
     const startX = event.clientX;
-    const start = th.getBoundingClientRect().width;
-    const cells = Array.from( this.headRow.children );
-    const col = this.colgroup.children[ cells.indexOf( th ) ];
-    // Pin every column at the width it is drawn at now, the flex one too, so
-    // nothing but this edge moves (see pinned).
-    if ( !this.pinned() ) {
-      this.visible().forEach( ( each , at ) => {
-        this.prefs.widths[ each.id ] = Math.round( cells[ at ].getBoundingClientRect().width );
-        this.colgroup.children[ at ].style.width = this.prefs.widths[ each.id ] + "px";
-      } );
-    }
+    let width = start;
+    let frame = 0;
+    grip.setPointerCapture( event.pointerId );
+    grip.classList.add( "is-dragging" );
     document.body.classList.add( "data-table-dragging" );
     const move = ( moved ) => {
-      const width = Math.max( 48 , Math.round( start + moved.clientX - startX ) );
-      this.prefs.widths[ column.id ] = width;
-      col.style.width = width + "px";
-      this.fit( this.visible().reduce( ( sum , each ) => sum + this.widthOf( each ) , 0 ) );
+      width = Math.max( 48 , Math.round( start + moved.clientX - startX ) );
+      if ( frame ) return;
+      frame = window.requestAnimationFrame( () => {
+        frame = 0;
+        widths[ column.id ] = width;
+        this.size( widths );
+      } );
     };
-    const up = () => {
-      document.removeEventListener( "pointermove" , move );
-      document.removeEventListener( "pointerup" , up );
+    const done = () => {
+      grip.removeEventListener( "pointermove" , move );
+      grip.removeEventListener( "pointerup" , done );
+      grip.removeEventListener( "pointercancel" , done );
+      if ( frame ) window.cancelAnimationFrame( frame );
+      grip.classList.remove( "is-dragging" );
       document.body.classList.remove( "data-table-dragging" );
+      if ( width === start ) return;
+      widths[ column.id ] = width;
+      const flex = this.visible().find( ( each ) => each.flex );
+      this.prefs.widths[ column.id ] = width;
+      if ( flex ) this.prefs.widths[ flex.id ] = widths[ flex.id ];
+      this.size();
       this.save();
     };
-    document.addEventListener( "pointermove" , move );
-    document.addEventListener( "pointerup" , up );
+    grip.addEventListener( "pointermove" , move );
+    grip.addEventListener( "pointerup" , done );
+    grip.addEventListener( "pointercancel" , done );
   }
 
   // -- sorting -----------------------------------------------------------------
@@ -332,21 +361,65 @@ class DataTable {
 
   // -- rows --------------------------------------------------------------------
 
+  // Rows are drawn CHUNK at a time: the first ones at once, the next as the
+  // reader scrolls near the end of them (whenNearEnd). A screen of a couple
+  // of thousand rows (Code, Datasets) used to build every one on each search
+  // keystroke and each sort, tens of thousands of elements, and lay them all
+  // out; now it builds what can be seen and a little more. this.order is
+  // every row in the order shown; this.drawn how many of them are on the page.
   rows( list , append ) {
     this.data = append ? this.data.concat( list ) : list.slice();
     if ( append && this.options.onSort ) {
-      const columns = this.visible();
-      list.forEach( ( row ) => this.body.appendChild( this.row( row , columns ) ) );
+      // A page the server sent because the reader scrolled to the end: shown.
+      this.order = this.order.concat( list );
+      this.fill( this.order.length );
       return;
     }
     if ( !append ) this.scroll.scrollTop = 0;
     this.draw();
   }
 
-  draw() {
-    const columns = this.visible();
+  // keep: draw as many rows as are drawn now (columns changed, not the rows).
+  draw( keep ) {
+    const had = this.drawn || 0;
+    this.order = this.sorted( this.data );
+    this.drawn = 0;
     Dom.clear( this.body );
-    this.sorted( this.data ).forEach( ( row ) => this.body.appendChild( this.row( row , columns ) ) );
+    this.fill( keep ? Math.max( had , DataTable.CHUNK ) : DataTable.CHUNK );
+    this.whenNearEnd();
+  }
+
+  // Draws rows until upto are on the page (or every row is).
+  fill( upto ) {
+    const end = Math.min( upto , this.order.length );
+    if ( end <= this.drawn ) return;
+    const columns = this.visible();
+    const rows = document.createDocumentFragment();
+    for ( let at = this.drawn ; at < end ; at++ ) rows.appendChild( this.row( this.order[ at ] , columns ) );
+    this.body.appendChild( rows );
+    this.drawn = end;
+  }
+
+  // Within a screen or two of the last drawn row: draw the next chunk, or,
+  // with all of them drawn and the reader scrolling, ask for the next page.
+  // Also run after a draw, so a short first chunk on a tall screen is
+  // followed at once.
+  whenNearEnd( scrolled ) {
+    if ( !this.table.isConnected || !this.scroll.offsetParent ) return;
+    const box = this.scroll.getBoundingClientRect();
+    const seen = Math.min( box.bottom , window.innerHeight );
+    const left = this.table.getBoundingClientRect().bottom - seen;
+    if ( left > Math.max( 600 , window.innerHeight ) ) return;
+    if ( this.drawn < this.order.length ) {
+      this.fill( this.drawn + DataTable.CHUNK );
+      // Still short (a very tall screen): look again next frame.
+      window.requestAnimationFrame( () => this.whenNearEnd() );
+      return;
+    }
+    if ( scrolled && this.options.onEnd && !this.ending && this.data.length ) {
+      this.ending = true;
+      Promise.resolve( this.options.onEnd() ).finally( () => { this.ending = false; } );
+    }
   }
 
   row( row , columns ) {
@@ -359,6 +432,7 @@ class DataTable {
       else if ( value != null ) td.textContent = String( value );
       tr.appendChild( td );
     } );
+    tr.appendChild( Dom.el( "td" , { class: "data-table-filler" , attrs: { "aria-hidden": "true" } } ) );
     if ( this.options.rowClass ) {
       const extra = this.options.rowClass( row );
       if ( extra ) tr.className = extra;
@@ -369,7 +443,7 @@ class DataTable {
   // Columns changed (shown, hidden, moved, a when() flipped): head and rows again.
   redraw() {
     this.drawHead();
-    this.draw();
+    this.draw( true );
     this.drawMenu();
   }
 
@@ -459,3 +533,6 @@ DataTable.filters = function ( button , count , clear ) {
   paint();
   return paint;
 };
+
+// How many rows a table draws at a time (see DataTable.rows).
+DataTable.CHUNK = 100;

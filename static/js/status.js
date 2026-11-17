@@ -6,7 +6,8 @@
 // the papers of one stage in one state -- what is still to do, or the
 // failures with why, when, and how many tries -- with Retry one or all.
 const StatusView = {
-  stages: [ "openalex" , "methods" , "code" , "datasets" , "modalities" ],
+  stages: [ "openalex" , "methods" , "code" , "datasets" , "modalities" , "figures" , "ocr" ],
+  heavy: [ "figures" , "ocr" ],
   stage: "openalex",
   state: "errors",
   sort: "added",
@@ -101,6 +102,28 @@ const StatusView = {
     else if ( !answer.openalex_key ) note = I18n.get( "status.openalex_no_key" );
     Dom.text( Dom.get( "status-openalex-note" ) , note );
     Dom.show( Dom.get( "status-openalex-note" ) , Boolean( note ) );
+    this.drawWorkers( answer.workers || [] );
+  },
+
+  // Whether the figures / OCR worker is running, and what it is on.
+  drawWorkers( workers ) {
+    const holder = Dom.get( "status-workers" );
+    Dom.clear( holder );
+    const alive = workers.filter( ( worker ) => worker.alive );
+    if ( !alive.length ) holder.appendChild( Dom.el( "li" , { class: "text-body-secondary" , text: I18n.get( "status.worker_none" ) } ) );
+    workers.forEach( ( worker ) => {
+      if ( !worker.alive ) {
+        holder.appendChild( Dom.el( "li" , { class: "text-body-secondary" , text: I18n.get( "status.worker_gone" ).replace( "{host}" , () => worker.host ).replace( "{ago}" , Dom.ago( new Date( worker.beat * 1000 ).toISOString() ) ) } ) );
+        return;
+      }
+      const doing = worker.doing ? worker.doing.replace( /^(\w+) / , ( m , stage ) => Content.stageName( stage ) + ": " ) : I18n.get( "status.worker_idle" );
+      const line = Dom.el( "li" , { children: [
+        Dom.el( "span" , { class: "spinner-grow spinner-grow-sm text-success me-1" , attrs: { "aria-hidden": "true" } } ),
+        Dom.el( "span" , { text: I18n.get( "status.worker_line" ).replace( "{host}" , () => worker.host ).replace( "{pid}" , worker.pid ).replace( "{doing}" , () => doing ) } ),
+      ] } );
+      holder.appendChild( line );
+      if ( worker.note ) holder.appendChild( Dom.el( "li" , { class: "text-warning-emphasis" , text: I18n.get( "status.worker_note" ).replace( "{note}" , () => worker.note ) } ) );
+    } );
   },
 
   drawCards( answer ) {
@@ -113,7 +136,10 @@ const StatusView = {
       const percent = total ? Math.floor( ( settled / total ) * 100 ) : 0;
       const bar = Dom.el( "div" , { class: "progress-bar" } );
       bar.style.width = percent + "%";
-      const running = Object.values( answer.running || {} ).length && ( answer.running.net && stage === "openalex" || answer.running.local && stage !== "openalex" );
+      const heavy = this.heavy.includes( stage );
+      const running = heavy
+        ? ( answer.workers || [] ).some( ( worker ) => worker.alive && ( worker.doing || "" ).startsWith( stage + " " ) )
+        : Object.values( answer.running || {} ).length && ( answer.running.net && stage === "openalex" || answer.running.local && stage !== "openalex" );
       const line = ( key , n ) => Dom.el( "li" , { class: "d-flex justify-content-between" , children: [
         Dom.el( "span" , { text: I18n.get( "content.state_" + key ) } ) , Dom.el( "span" , { class: "fw-semibold" , text: ( n || 0 ).toLocaleString() } ),
       ] } );

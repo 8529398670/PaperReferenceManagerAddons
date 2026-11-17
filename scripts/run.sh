@@ -49,6 +49,42 @@ if [ "${1:-}" = "stop" ] && [ $# -eq 1 ]; then
   exit 0
 fi
 
+# The optional figures / OCR worker (app/worker/run.py), in its own venv: torch
+# and friends want a Python the ML wheels exist for (3.10-3.12) and are far too
+# big for .venv. It runs beside the server, which it never stops or waits for.
+#
+#   scripts/run.sh worker                 both heavy stages, until Ctrl-C
+#   scripts/run.sh worker --stages ocr    OCR only
+#   scripts/run.sh worker --once          what is due, then stop
+if [ "${1:-}" = "worker" ]; then
+  shift
+  WORKER_VENV=".venv-worker"
+  WORKER_PYTHON="$WORKER_VENV/bin/python"
+  WORKER_STAMP="$WORKER_VENV/.installed"
+  if [ ! -x "$WORKER_PYTHON" ]; then
+    BASE=""
+    for candidate in python3.12 python3.11 python3.10; do
+      if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c "" >/dev/null 2>&1; then BASE="$candidate"; break; fi
+    done
+    if [ -z "$BASE" ]; then
+      echo "ERROR: the worker needs Python 3.10, 3.11 or 3.12 on PATH (the ML wheels stop there)." >&2
+      exit 1
+    fi
+    echo "Creating $WORKER_VENV with $( "$BASE" --version 2>&1 )..."
+    "$BASE" -m venv --clear "$WORKER_VENV"
+  fi
+  if [ ! -f "$WORKER_STAMP" ] || [ requirements-pipeline.txt -nt "$WORKER_STAMP" ]; then
+    echo "Installing requirements-pipeline.txt into $WORKER_VENV (torch: a few minutes the first time)..."
+    if ! { "$WORKER_PYTHON" -m pip install --quiet --upgrade pip \
+           && "$WORKER_PYTHON" -m pip install --quiet -r requirements-pipeline.txt; }; then
+      echo "ERROR: installing requirements-pipeline.txt failed (above)." >&2
+      exit 1
+    fi
+    touch "$WORKER_STAMP"
+  fi
+  exec "$WORKER_PYTHON" -m app worker "$@"
+fi
+
 # This happens before anything is stopped, so a failed install leaves the
 # server that was already running untouched.
 ensure_venv

@@ -178,6 +178,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--replace", action="store_true", help="replace lists already here (their old version is kept)")
     p.add_argument("--openalex", action="store_true",
                    help="seed each paper's OpenAlex stage, the missing pool, methods text and enrichment caches from the old caches, instead of the lists")
+    p.add_argument("--figures", action="store_true",
+                   help="link the old figure crops and montages in as each paper's figures, and bring over the figure picks, instead of the lists")
 
     p = commands.add_parser("logs", help="the activity log: days, or one day's entries")
     p.add_argument("--day", default="", help="a UTC date, YYYY-MM-DD; without it, list the days")
@@ -262,6 +264,9 @@ def command_import_legacy(store: db.Store, cfg: config.Config, args: argparse.Na
     if args.openalex:
         import_legacy_openalex(store, cfg, Path(args.source).expanduser())
         return
+    if args.figures:
+        import_legacy_figures(store, cfg, Path(args.source).expanduser())
+        return
     try:
         done = legacy.import_lists(store, Path(args.source).expanduser(), replace=args.replace)
     except legacy.LegacyError as error:
@@ -317,6 +322,26 @@ def import_legacy_openalex(store: db.Store, cfg: config.Config, source: Path) ->
     print(f"OpenAlex: {result.done} papers seeded, {result.not_found} marked not found, {result.already} already here, "
           f"{result.absent} not in the old cache (fetched as the queue gets to them).")
     print(f"Methods text: {result.methods} papers. Enrichment caches: " + (", ".join(f"{k} {v} files" for k, v in result.enrichment.items()) or "none") + ".")
+
+
+def import_legacy_figures(store: db.Store, cfg: config.Config, source: Path) -> None:
+    from app.content import legacy as content_legacy
+    from app.content.figures import Figures
+
+    content = open_content(store, cfg)
+    try:
+        print(f"Linking the old figures from {source} for {len(content.catalogue.all())} papers. Safe to stop and run again.")
+        result = content_legacy.seed_figures(content, source)
+        picks = content_legacy.import_figure_picks(Figures(content, store, cfg.config_file.parent / "method-images.txt"), source)
+        content.reconcile()
+    except FileNotFoundError as error:
+        raise ManageError(str(error)) from None
+    finally:
+        content.close()
+        content._library.close()
+    print(f"Figures: {result.done} papers seeded ({result.figures} crops linked), {result.already} already here, "
+          f"{result.absent} with none in the old output (the worker crops them), {result.no_pdf} with no PDF.")
+    print("Picks brought over: " + (", ".join(f"{view} {n}" for view, n in picks.items()) or "none") + ".")
 
 
 def require_user(store: db.Store, user_id: int) -> users.User:

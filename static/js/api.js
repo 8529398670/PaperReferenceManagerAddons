@@ -70,6 +70,35 @@ const Api = {
     } );
   },
 
+  // A POST whose answer is a file (the .xlsx exports): saved under its name,
+  // never read as JSON. A refusal still arrives as a JSON error.
+  async download( path , body , name ) {
+    let response;
+    try {
+      response = await fetch( path , {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify( Object.assign( {} , body || {} , { csrf_token: this.csrfToken } ) ),
+      } );
+    } catch ( networkError ) {
+      throw new Error( I18n.get( "errors.network" ) || networkError.message );
+    }
+    if ( !response.ok ) {
+      let payload = {};
+      try {
+        payload = await response.json();
+      } catch ( parseError ) { /* not JSON */ }
+      throw new Error( this.failureText( payload , response ) );
+    }
+    const url = URL.createObjectURL( await response.blob() );
+    const link = Dom.el( "a" , { attrs: { href: url , download: name } } );
+    document.body.appendChild( link );
+    link.click();
+    link.remove();
+    setTimeout( () => URL.revokeObjectURL( url ) , 1000 );
+  },
+
   async me() {
     try {
       const payload = await this.request( "/api/me" );

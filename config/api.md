@@ -14,7 +14,9 @@ This file is generated: do not edit it. Change the docs next to the handlers and
 - [Admin](#admin)
 - [Owner](#owner)
 - [Monitoring](#monitoring)
+- [Code and datasets](#code-and-datasets)
 - [Content](#content)
+- [Figures](#figures)
 - [Library](#library)
 - [Lists](#lists)
 - [Missing papers](#missing-papers)
@@ -2048,6 +2050,78 @@ Refused: this server keeps no sessions
 
 **Reply 405**: Success
 
+## Code and datasets
+
+| Method | Path | Summary | Who may call |
+|---|---|---|---|
+| GET | [`/api/code`](#get-apicode) | Every paper that ships code | browser session or API key, anyone signed in |
+| GET | [`/api/datasets`](#get-apidatasets) | What public data the library stands on | browser session or API key, anyone signed in |
+| POST | [`/api/export/xlsx`](#post-apiexportxlsx) | A table as an Excel workbook | browser session or API key, anyone signed in |
+
+### GET /api/code
+
+Every paper that ships code
+
+One row per paper whose text links a code host, with each repository as GitHub or OSF describe it, the methods its README confirms or its citing papers suggest, and where the paper is curated.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`list_code`](mcp.md#list_code) |
+| Errors | 401, 429, 503 |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `enrich` | map of boolean | yes |  | github, osf: whether a token is set (without one that host is not asked). |
+| `papers` | array of object | yes |  | One per paper that links code: key, title, year, doi, journal, added, cites (OpenAlex), mods, lists (slug, name, position), tiers (slug, name, tier, color), figs (figures picked), and code: url, host, where, repo, info (GitHub or OSF: status, description, stars, language, methods), inferred (methods of the papers linking it), repaired (url, tier, confidence, original) for a link the PDF text mangled. |
+
+### GET /api/datasets
+
+What public data the library stands on
+
+One row per paper that links a data archive record or names a public collection (HCP, NSD, ...), each record with what its archive says it is. The Datasets screen also groups these by dataset.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`list_datasets`](mcp.md#list_datasets) |
+| Errors | 401, 429, 503 |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `papers` | array of object | yes |  | One per paper that links data or names a public collection: key, title, year, doi, added, cites, mods, lists, tiers, figs, code_n, data (url, host, where, accession when recovered from a bare ds number, target, info: status, title, description), names (name, url, description). |
+
+### POST /api/export/xlsx
+
+A table as an Excel workbook
+
+Turns the tables a screen is showing into one .xlsx: a sheet each, the header frozen and bold, links clickable. The screens send exactly the rows they show, in their order.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | None, HTTP only: A file to download, made from the rows sent. |
+| Errors | 400, 401, 403, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `filename` | string | no | default `export` | The download's name, without .xlsx. |
+| `sheets` | array of object | yes |  | The sheets, in order. At most 8. |
+| `sheets[].columns` | array of string | yes |  | The header row. |
+| `sheets[].name` | string | yes |  | The sheet's tab name (31 characters at most; cut to fit). |
+| `sheets[].rows` | array of array of any | yes |  | The rows: text, numbers, or null. A cell that is an http(s) URL becomes a link. |
+
+**Reply 200**: Success
+
+Text, as `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
+
 ## Content
 
 | Method | Path | Summary | Who may call |
@@ -2074,7 +2148,7 @@ A stage's papers in some states, a page at a time: the ones still to do, or the 
 
 | Name | In | Type | Required | Limits | Description |
 |---|---|---|---|---|---|
-| `stage` | query | string | no | one of `openalex`, `methods`, `code`, `datasets`, `modalities`; default `openalex` | The stage. |
+| `stage` | query | string | no | one of `openalex`, `methods`, `code`, `datasets`, `modalities`, `figures`, `ocr`; default `openalex` | The stage. |
 | `state` | query | string | no | one of `unfinished`, `failed`, `not_found`, `errors`, `pending`, `done`; default `unfinished` | "unfinished" (default): pending, running and failed. "errors": failed and not found. |
 | `q` | query | string | no |  | Only papers whose title, DOI or error contains this. |
 | `sort` | query | string | no | one of `added`, `title`, `year`, `journal`, `state`, `error`, `attempts`, `first_failed`, `last_failed`; default `added` | Default added (newest first). |
@@ -2112,6 +2186,7 @@ Per stage, how many papers are done, pending, running, failed or not found; the 
 | `pool` | map of integer | yes |  | The missing pool: all, refs, citing, and papers (library papers whose network is in). |
 | `running` | map of string | yes |  | The paper each lane (net, local) is working on now. |
 | `stages` | map of map of integer | yes |  | Per stage, how many papers are in each state. |
+| `workers` | array of object | yes |  | The heavy-stage workers (`python -m app worker`) that checked in lately: id, host, pid, started, beat, doing (the task in hand), stages, alive (checked in within 90 s). |
 
 ### GET /api/paper/content
 
@@ -2189,6 +2264,215 @@ Put failed (and not-found) stages back in the queue at once: one paper's, one st
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
 | `queued` | integer | yes |  | How many stages were put back in the queue. |
+
+## Figures
+
+| Method | Path | Summary | Who may call |
+|---|---|---|---|
+| GET | [`/api/figures`](#get-apifigures) | Papers and their figures | browser session or API key, anyone signed in |
+| GET | [`/api/figures/export`](#get-apifiguresexport) | A view's picks as a file | browser session or API key, anyone signed in |
+| GET | [`/api/figures/image`](#get-apifiguresimage) | One figure's image | browser session or API key, anyone signed in |
+| POST | [`/api/figures/pick`](#post-apifigurespick) | Pick or unpick figures | browser session or API key, anyone signed in |
+| POST | [`/api/figures/replace`](#post-apifiguresreplace) | Replace a view's picks | browser session or API key, anyone signed in |
+| POST | [`/api/figures/skip`](#post-apifiguresskip) | Skip or unskip papers | browser session or API key, anyone signed in |
+| GET | [`/api/figures/state`](#get-apifiguresstate) | A view's picks and skipped papers | browser session or API key, anyone signed in |
+
+### GET /api/figures
+
+Papers and their figures
+
+The papers whose figures have been cropped, with their figures, a page of papers at a time: every figure, or the method figures (captions matching config/method-images.txt). Each figure says whether it is picked in this view and in the other; chips, modality and keyword filters narrow the papers.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`list_figures`](mcp.md#list_figures) |
+| Errors | 400, 401, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `view` | query | string | no | one of `all`, `method`; default `all` | "all" (default): every figure. "method": the figures whose caption reads as a model design. |
+| `sort` | query | string | no | one of `added`, `published`, `match`, `count`, `title`; default `added` | added (default: when it reached Zotero), published, match (best caption match), count (most figures), title. |
+| `dir` | query | string | no | one of `asc`, `desc`; default `desc` | Default desc. |
+| `chip` | query | string | no | one of `all`, `lead`, `selected`, `skipped`, `other`; default `all` | all (default: every paper not skipped), lead (a structural term opens a caption), selected (a figure is picked), skipped, other (a figure is picked in the other view). |
+| `mod` | query | string | no |  | Only papers tagged with this modality. |
+| `term` | query | string | no |  | Only papers with a caption matching this keyword (method view). |
+| `q` | query | string | no |  | Only papers whose title, DOI or a caption contains this. |
+| `limit` | query | integer | no | 1 to 200; default `40` | Papers to return. Default 40. |
+| `offset` | query | integer | no | at least 0 | Papers to skip: the next value of the previous page. |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `counts` | map of integer | yes |  | Papers under each chip: all, lead, selected, skipped, other. |
+| `figures` | integer | yes |  | How many figures the matching papers show. |
+| `mods` | array of object | yes |  | The modalities of the papers shown, with counts. |
+| `next` | integer or null | yes |  | Offset of the next page, or null on the last one. |
+| `papers` | array of object | yes |  | key, title, year, doi, added, date, skipped, mods, terms, lead, best, and figures: n, id (<key>#figure-N), page, caption, w, h, dup, picked, picked_other, match (score, terms, strong, lead, spans). |
+| `picks` | integer | yes |  | Figures picked in this view. |
+| `skips` | integer | yes |  | Papers skipped in this view. |
+| `terms` | array of object | yes |  | The caption keywords matched, with counts (method view). |
+| `total` | integer | yes |  |  |
+| `workers` | boolean | yes |  | Whether a figures worker is running now. |
+
+### GET /api/figures/export
+
+A view's picks as a file
+
+Every picked figure of a view, in pick order, with its paper, DOI and caption: a JSON or CSV file to download.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | None, HTTP only: A file to download; figure_picks gives the ids as data. |
+| Errors | 400, 401, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `view` | query | string | no | one of `all`, `method`; default `all` | "all" (default): every figure. "method": the figures whose caption reads as a model design. |
+| `format` | query | string | no | one of `json`, `csv`; default `json` | json (default) or csv. |
+
+**Reply 200**: Success
+
+Raw bytes, as `application/octet-stream`.
+
+### GET /api/figures/image
+
+One figure's image
+
+A figure crop: a small copy for the grid (WebP), or the full crop (PNG). n=0 is the paper's montage.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | None, HTTP only: An image, for a browser to show. |
+| Errors | 400, 401, 404, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `key` | query | string | no |  | The paper's key. |
+| `n` | query | integer | no | at least 0 | The figure's number; 0 is the paper's montage. |
+| `size` | query | string | no | one of `thumb`, `full`; default `thumb` | thumb (default, 640 px wide) or full (the 400 DPI crop). |
+
+**Reply 200**: Success
+
+Text, as `image/webp`.
+
+### POST /api/figures/pick
+
+Pick or unpick figures
+
+Pick figures in one view (a new pick goes last), or take picks back.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`pick_figures`](mcp.md#pick_figures) |
+| Errors | 400, 401, 403, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `ids` | array of string | yes |  | Figure ids, "<paper key>#figure-N". At most 1000. |
+| `pick` | boolean | no | default `true` | true picks them (default), false unpicks them. |
+| `view` | string | yes | one of `all`, `method` | "all" or "method": each view has its own picks. |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `selected` | array of string | yes |  | The picked figures' ids, in pick order. |
+| `skipped` | array of string | yes |  | The skipped papers' keys. |
+
+### POST /api/figures/replace
+
+Replace a view's picks
+
+Set a view's picks and skipped papers outright: Clear sends both empty, and its undo sends the old ones back.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`set_figure_picks`](mcp.md#set_figure_picks) |
+| Errors | 400, 401, 403, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `selected` | array of string | no |  | The picks to keep, in order. |
+| `skipped` | array of string | no |  | The skipped papers to keep. |
+| `view` | string | yes | one of `all`, `method` | "all" or "method": each view has its own picks. |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `selected` | array of string | yes |  | The picked figures' ids, in pick order. |
+| `skipped` | array of string | yes |  | The skipped papers' keys. |
+
+### POST /api/figures/skip
+
+Skip or unskip papers
+
+Hide papers you are done with from one view, or bring them back.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`skip_figure_papers`](mcp.md#skip_figure_papers) |
+| Errors | 400, 401, 403, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `keys` | array of string | yes |  | Paper keys. At most 1000. |
+| `skip` | boolean | no | default `true` | true skips them (default), false brings them back. |
+| `view` | string | yes | one of `all`, `method` | "all" or "method": each view has its own picks. |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `selected` | array of string | yes |  | The picked figures' ids, in pick order. |
+| `skipped` | array of string | yes |  | The skipped papers' keys. |
+
+### GET /api/figures/state
+
+A view's picks and skipped papers
+
+Every picked figure (in pick order) and every skipped paper of one view.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`figure_picks`](mcp.md#figure_picks) |
+| Errors | 400, 401, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `view` | query | string | no | one of `all`, `method`; default `all` | "all" (default): every figure. "method": the figures whose caption reads as a model design. |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `selected` | array of string | yes |  | The picked figures' ids, in pick order. |
+| `skipped` | array of string | yes |  | The skipped papers' keys. |
 
 ## Library
 

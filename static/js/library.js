@@ -16,7 +16,6 @@ const Library = {
 
   async init() {
     Dom.show( Dom.get( "library-panel" ) , true );
-    ViewHead.watch( Dom.get( "library-panel" ) );
     await PaperLinks.init();
     const search = Dom.get( "library-search" );
     search.addEventListener( "input" , () => this.later() );
@@ -118,7 +117,7 @@ const Library = {
   },
 
   status( status ) {
-    Dom.text( Dom.get( "library-count" ) , I18n.get( "library.count" ).replace( "{count}" , ( status.papers || 0 ).toLocaleString() ) );
+    Nav.summary( "library" , I18n.get( "library.count" ).replace( "{count}" , ( status.papers || 0 ).toLocaleString() ) );
     let text;
     if ( status.error ) text = I18n.get( "library.zotero_missing" ).replace( "{error}" , () => status.error );
     else if ( !status.ready ) text = I18n.get( "library.loading" );
@@ -128,7 +127,12 @@ const Library = {
         .replace( "{with_text}" , ( status.with_text || 0 ).toLocaleString() )
         .replace( "{papers}" , ( status.papers || 0 ).toLocaleString() );
     }
+    // The full line is on Info; the Library screen only says when Zotero
+    // could not be read, since nothing else there would.
     Dom.text( Dom.get( "library-status" ) , text );
+    const problem = Dom.get( "library-problem" );
+    Dom.text( problem , status.error ? text : "" );
+    Dom.show( problem , Boolean( status.error ) );
   },
 
   textBadge( paper ) {

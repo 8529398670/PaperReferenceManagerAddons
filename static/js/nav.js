@@ -29,6 +29,9 @@ const Nav = {
       Dom.show( link , this.available( link.getAttribute( "data-nav" ) ) );
       link.addEventListener( "click" , () => this.closeSidebar() );
     } );
+    // Info lists only the screens this person has.
+    Dom.all( "[data-info]" ).forEach( ( item ) => Dom.show( item , this.available( item.getAttribute( "data-info" ) ) ) );
+    Dom.show( Dom.get( "nav-screen" ) , true );
     // A group heading with nothing left under it goes too.
     Dom.all( ".sidebar-group" ).forEach( function ( group ) {
       Dom.show( group , Dom.all( "[data-nav]:not([hidden])" , group ).length > 0 );
@@ -44,7 +47,43 @@ const Nav = {
     // are that, and an undo that only changed the screen would get in the way
     // of undoing what was done on it.
     window.addEventListener( "hashchange" , () => this.render() );
+    this.autoHide();
     this.render();
+  },
+
+  // On a wide screen the sidebar shows when a screen is opened and folds away
+  // once the reader starts scrolling down it, giving the screen the width.
+  // Not remembered (the menu button's choice is, see saveCollapsed): the next
+  // screen opened shows it again. Any scroll on the screen counts -- the page,
+  // or a table's own rows -- but not the sidebar's, a menu's or a dialog's.
+  autoHide() {
+    this.hideArmed = false;
+    document.addEventListener( "scroll" , ( event ) => {
+      if ( !this.hideArmed || !this.wide.matches ) return;
+      const target = event.target === document ? document.scrollingElement : event.target;
+      if ( !target || !( target === document.scrollingElement || target.closest( ".app-main" ) ) ) return;
+      if ( target.closest && target.closest( ".dropdown-menu, .modal" ) ) return;
+      if ( target.scrollTop < 60 ) return;
+      this.hideArmed = false;
+      this.setCollapsed( true );
+    } , { capture: true , passive: true } );
+  },
+
+  // A screen was opened: the sidebar back as the reader left it, and ready to
+  // fold away again.
+  armAutoHide() {
+    const collapsed = this.savedCollapsed();
+    this.setCollapsed( collapsed );
+    this.hideArmed = !collapsed;
+  },
+
+  // Each screen's one-line summary in the top bar, beside its name (the
+  // Library's paper count). Kept per screen and shown while it is showing.
+  summaries: {},
+
+  summary( name , text ) {
+    this.summaries[ name ] = text || "";
+    if ( this.shown === name ) Dom.text( Dom.get( "nav-screen-summary" ) , this.summaries[ name ] );
   },
 
   // Undo uses this to go back to the screen an action happened on.
@@ -81,6 +120,7 @@ const Nav = {
 
   render() {
     const name = this.current();
+    if ( name !== this.shown ) this.armAutoHide();
     Track.nav( name );
     Dom.all( ".view" ).forEach( function ( view ) {
       view.classList.toggle( "view-active" , view.getAttribute( "data-view" ) === name );
@@ -104,8 +144,14 @@ const Nav = {
   // browser's tab that anything happened. The title names the screen, and the
   // focus moves to its heading, except on load, when it belongs to the page.
   announce( name ) {
-    const heading = document.querySelector( '.view[data-view="' + name + '"] h2' );
+    const view = document.querySelector( '.view[data-view="' + name + '"]' );
+    const heading = view && view.querySelector( "h2" );
     if ( !heading ) return;
+    // The top bar names the screen. The paper screen's heading is the paper's
+    // title, so it names itself with data-nav-title instead.
+    const key = view.getAttribute( "data-nav-title" );
+    Dom.text( Dom.get( "nav-screen-title" ) , key ? I18n.get( key ) : heading.textContent );
+    Dom.text( Dom.get( "nav-screen-summary" ) , this.summaries[ name ] || "" );
     const title = I18n.get( "nav.page_title" );
     if ( title !== "" ) document.title = title.replace( "{screen}" , heading.textContent ).replace( "{app}" , I18n.get( "app.title" ) );
     const moved = this.shown !== undefined && this.shown !== name;
@@ -119,6 +165,8 @@ const Nav = {
   // back; on a phone it slides the panel in and out. Only the folding is
   // undoable: the phone panel is gone again as soon as a screen is picked.
   toggleSidebar() {
+    // The reader is choosing: no folding it away under them this visit.
+    this.hideArmed = false;
     if ( this.wide.matches ) {
       const collapsed = !document.documentElement.classList.contains( "sidebar-collapsed" );
       Undo.run( {
