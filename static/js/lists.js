@@ -826,8 +826,8 @@ const Lists = {
 
   listen() {
     if ( this.stream || typeof EventSource === "undefined" ) return;
-    this.stream = new EventSource( "/api/lists/stream" );
-    this.stream.addEventListener( "list" , ( event ) => {
+    this.stream = true;
+    Live.on( "/api/lists/stream" , "list" , ( event ) => {
       let data;
       try {
         data = JSON.parse( event.data );

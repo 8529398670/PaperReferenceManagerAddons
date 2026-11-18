@@ -7,8 +7,8 @@
 // carries its paper's key, so when an event arrives the strips showing that
 // paper are fetched again and repainted where they are, with no reload.
 //
-// The library's stream is opened once here and shared, so every screen that
-// wants to hear it does so through Content.on.
+// The library's stream is opened once here (through Live, which shares it with
+// the other tabs), so every screen that wants to hear it does so through Content.on.
 const Content = {
   source: null,
   handlers: {},
@@ -22,13 +22,13 @@ const Content = {
     if ( !this.refreshSoon ) this.refreshSoon = this.throttle( () => this.refresh() , 4000 );
     if ( typeof EventSource === "undefined" ) return;
     if ( !this.source ) {
-      this.source = new EventSource( "/api/library/stream" );
-      this.source.addEventListener( "paper" , ( event ) => this.heard( event ) );
+      this.source = "/api/library/stream";
+      Live.on( this.source , "paper" , ( event ) => this.heard( event ) );
     }
     if ( !this.handlers[ name ] ) {
       this.handlers[ name ] = [];
       if ( name !== "paper" ) {
-        this.source.addEventListener( name , ( event ) => this.handlers[ name ].forEach( ( fn ) => fn( this.data( event ) ) ) );
+        Live.on( this.source , name , ( event ) => this.handlers[ name ].forEach( ( fn ) => fn( this.data( event ) ) ) );
       }
     }
     this.handlers[ name ].push( handler );
