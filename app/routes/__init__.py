@@ -40,10 +40,12 @@ from app.core.security import RequireAdmin, RequireLogin, RequireSession
 from app.core.security import Guard
 from app.core.security import RequireAPIKey
 from app.core.security import RequireOwner
+from app.core.live_reload import Watcher
 from app.core.static_files import StaticServer
 from app.routes import (
     account,
     admin,
+    api_docs_md,
     api_keys,
     auth,
     boards,
@@ -111,6 +113,7 @@ class RequireLogs(Guard):
 MODULES = [
     account,
     admin,
+    api_docs_md,
     api_keys,
     auth,
     boards,
@@ -232,16 +235,23 @@ def declared_routes() -> list[Declared]:
     return ordered
 
 
-def build_routes(static_server: StaticServer) -> list[BaseRoute]:
+def build_routes(static_server: StaticServer, live_reload: Watcher | None = None) -> list[BaseRoute]:
     routes: list[BaseRoute] = [
         # The pages a login link and an invite link open. Opening one only
         # shows a page; the link is spent by the POST that page sends when the
         # person confirms. See auth.py and join.py.
         Route("/login/{credential:path}", static_server.serve_login_page),
+        # The readable API and MCP references (app/routes/api_docs_md.py).
+        Route("/docs/{page:path}", static_server.serve_docs_page),
     ]
     for declared in declared_routes():
         middleware = [Middleware(guard) for guard in declared.guards]
         routes.append(Route(declared.path, declared.endpoint, methods=[declared.method], middleware=middleware))
+    # Open pages wait here to hear about a change to the frontend
+    # (server.live_reload; app/core/live_reload.py, static/js/reload.js). Not
+    # part of the API.
+    if live_reload is not None:
+        routes.append(Route("/api/live", live_reload.endpoint))
     return routes + [
         # Any other /api/ path is a JSON 404, not the index.html fallback.
         Route("/api/{rest:path}", meta.unknown_api),

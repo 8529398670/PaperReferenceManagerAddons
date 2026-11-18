@@ -65,7 +65,7 @@ class Revoked(Reply):
     api_name: ClassVar[str] = "Revoked"
     sessions: int
     login_links: int
-    api_keys: int
+    api_keys: Annotated[int, Meta(extra_json_schema={"x-feature": "api_keys"})]
 
 
 class UserRow(Reply):
@@ -80,7 +80,7 @@ class UserRow(Reply):
     created_at: DateTime
     disabled: bool
     owner: bool
-    two_factor: bool
+    two_factor: Annotated[bool, Meta(extra_json_schema={"x-feature": "two_factor"})]
     login_link: Annotated[LoginLink | None, Meta(description="The account's live login link, or null.")]
 
 

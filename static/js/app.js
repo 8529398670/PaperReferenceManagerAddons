@@ -177,6 +177,7 @@ const App = {
     Track.init( me );
     TwoFactor.init( me );
     Fresh.init( me );
+    LiveReload.init( me );
     // Side by side: the wait is the slowest screen, not all of them added up.
     const loading = [];
     loading.push( Library.init( me ) );

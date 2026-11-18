@@ -57,6 +57,8 @@ const ReviewRules = {
     window.addEventListener( "beforeunload" , ( event ) => {
       if ( this.dirty() ) event.preventDefault();
     } );
+    // A newer build waits rather than reload over unsaved rules (fresh.js).
+    Fresh.holdWhile( () => this.dirty() );
     if ( Nav.current() === "review-rules" ) this.load();
   },
 

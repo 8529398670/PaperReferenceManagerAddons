@@ -1,7 +1,7 @@
 # Written by the skill that scaffolded this app; `webserver-upgrade` reads and
 # updates it. Commit it: it is how an update knows where this app started.
 skill: python-webserver
-commit: 70b6415925f7d74e8c73a85b0e348a310af644f0
+commit: 145e4d486c171417ccce30f74f91389b2f7cb991
 project_name: "Paper Reference Manager"
 slug: paper-reference-manager
 port: 25620

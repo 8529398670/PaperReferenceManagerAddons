@@ -20,6 +20,8 @@ from app.models import login_tokens, sessions, users
 from app.models import api_keys
 from app.models import themes
 from app.models import two_factor
+from app.routes.api_docs_md import api_doc_url
+from app.routes.api_docs_md import mcp_doc_url
 from app.routes.admin import CancelLoginLinkReply, DisplayName, ExpiresInMinutes, LoginLink, LoginLinkReply, MaxUses, OkReply, RenameUserReply, link_options, link_reply
 from app.routes.helpers import Refused, get_config, get_store, run
 from app.routes.logs import audit
@@ -38,30 +40,32 @@ class Me(Reply, kw_only=True):
     account_role: str
     is_owner: bool
     login_link: Annotated[LoginLink | None, Meta(description="Your own live login link, or null.")]
-    maintenance: Literal["none", "read_only", "full"]
+    maintenance: Annotated[Literal["none", "read_only", "full"], Meta(extra_json_schema={"x-feature": "maintenance"})]
     version: Annotated[str, Meta(description="The running build. dev when none was stamped.")]
     announcement: Annotated[str, Meta(description="server.announcement. Empty when there is none.")]
     repo: Annotated[str, Meta(description="app.repo without a trailing / or .git: where the source lives. Empty when it is not set.")]
     description: Annotated[str, Meta(description="app.description. Empty when there is none.")]
-    show_about: Annotated[bool, Meta(description="app.show_about: whether the menu has About.")]
-    openapi_url: Annotated[str, Meta(description="Where to read this API's reference: config/api.json in app.repo, or /api/api.json when there is no repo.")]
-    mcp_url: Annotated[str, Meta(description="Where to read the MCP reference: config/mcp.json in app.repo, or /api/mcp.json when there is no repo. Only with server.mcp on.")]
-    shortcuts: Annotated[dict[str, str], Meta(description="The keyboard shortcuts you changed, by action. Mod is Cmd on a Mac and Ctrl elsewhere.")]
-    themes: Annotated[list[Theme] | None, Meta(description="Your themes (see the Theme schema): your own list, else the app's defaults, else null for the built-in ones.")]
-    themes_custom: Annotated[bool, Meta(description="Whether you have your own list rather than following the defaults.")]
-    themes_builtins: Annotated[int, Meta(description="Which built-in themes that list has seen (see builtins on POST /api/account/themes).")]
-    theme_id: Annotated[str, Meta(description="The theme you use. Empty: the first.")]
+    show_about: Annotated[bool, Meta(description="app.show_about: whether the menu has About.", extra_json_schema={"x-feature": "about"})]
+    openapi_url: Annotated[str, Meta(description="Where to read this API's reference: config/api.json in app.repo, or /api/api.json when there is no repo.", extra_json_schema={"x-feature": "openapi"})]
+    mcp_url: Annotated[str, Meta(description="Where to read the MCP reference: config/mcp.json in app.repo, or /api/mcp.json when there is no repo. Only with server.mcp on.", extra_json_schema={"x-feature": "mcp"})]
+    api_doc_url: Annotated[str, Meta(description="Where to read the API reference as a page for people: config/api.md in app.repo, or /docs/api when there is no repo.", extra_json_schema={"x-feature": "openapi"})]
+    mcp_doc_url: Annotated[str, Meta(description="Where to read the MCP tools as a page for people: config/mcp.md in app.repo, or /docs/mcp when there is no repo.", extra_json_schema={"x-feature": "mcp"})]
+    shortcuts: Annotated[dict[str, str], Meta(description="The keyboard shortcuts you changed, by action. Mod is Cmd on a Mac and Ctrl elsewhere.", extra_json_schema={"x-feature": "shortcuts"})]
+    themes: Annotated[list[Theme] | None, Meta(description="Your themes (see the Theme schema): your own list, else the app's defaults, else null for the built-in ones.", extra_json_schema={"x-feature": "appearance"})]
+    themes_custom: Annotated[bool, Meta(description="Whether you have your own list rather than following the defaults.", extra_json_schema={"x-feature": "appearance"})]
+    themes_builtins: Annotated[int, Meta(description="Which built-in themes that list has seen (see builtins on POST /api/account/themes).", extra_json_schema={"x-feature": "appearance"})]
+    theme_id: Annotated[str, Meta(description="The theme you use. Empty: the first.", extra_json_schema={"x-feature": "appearance"})]
     tag_colors: Annotated[str, Meta(description="Where your tag colours come from: wsu or theme (see POST /api/account/tag-colors).")]
-    two_factor: bool
-    two_factor_enabled: bool
+    two_factor: Annotated[bool, Meta(extra_json_schema={"x-feature": "two_factor"})]
+    two_factor_enabled: Annotated[bool, Meta(extra_json_schema={"x-feature": "two_factor"})]
     auth: str
-    api_keys_enabled: bool
-    mcp_enabled: Annotated[bool, Meta(description="server.mcp: whether POST /mcp answers.")]
-    logs_enabled: bool
-    logs_ui_clicks: bool
+    api_keys_enabled: Annotated[bool, Meta(extra_json_schema={"x-feature": "api_keys"})]
+    mcp_enabled: Annotated[bool, Meta(description="server.mcp: whether POST /mcp answers.", extra_json_schema={"x-feature": "mcp"})]
+    logs_enabled: Annotated[bool, Meta(extra_json_schema={"x-feature": "logs"})]
+    logs_ui_clicks: Annotated[bool, Meta(extra_json_schema={"x-feature": "logs"})]
     csrf_token: Annotated[str, Meta(description="Browser sessions only.")] | UnsetType = UNSET
-    api_key_id: Annotated[str, Meta(description="API keys only.")] | UnsetType = UNSET
-    api_key_name: Annotated[str, Meta(description="API keys only.")] | UnsetType = UNSET
+    api_key_id: Annotated[str, Meta(description="API keys only.", extra_json_schema={"x-feature": "api_keys"})] | UnsetType = UNSET
+    api_key_name: Annotated[str, Meta(description="API keys only.", extra_json_schema={"x-feature": "api_keys"})] | UnsetType = UNSET
 
 
 @route(
@@ -106,6 +110,8 @@ def me(request: Request) -> Me:
         show_about=cfg.show_about,
         openapi_url=open_api_url(cfg),
         mcp_url=mcp_url(cfg),
+        api_doc_url=api_doc_url(cfg),
+        mcp_doc_url=mcp_doc_url(cfg),
         shortcuts=actor.user.shortcuts,
         themes=theme_list(my_themes),
         themes_custom=themes_custom,

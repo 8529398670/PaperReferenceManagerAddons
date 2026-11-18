@@ -33,11 +33,11 @@ const ThemeEditor = {
   baseFields: [ "accent" , "second" , "background" , "surface" ],
   // A table's alternating rows: optional, like background and surface.
   rowFields: [ "rowOdd" , "rowEven" ],
-  fineFields: [ "text" , "background" , "surface" , "nested" , "chrome" , "border" , "link" , "navLink" ,
+  fineFields: [ "text" , "background" , "surface" , "nested" , "chrome" , "bar" , "barText" , "border" , "link" , "navLink" ,
     "accentFg" , "accentText" , "secondText" , "secondFg" , "info" , "infoBorder" ],
   labelKeys: {
     accent: "accent" , second: "second" , background: "background" , surface: "surface" , text: "text" ,
-    nested: "nested" , chrome: "chrome" , border: "border" , link: "link" , navLink: "nav_link" ,
+    nested: "nested" , chrome: "chrome" , bar: "bar" , barText: "bar_text" , border: "border" , link: "link" , navLink: "nav_link" ,
     accentFg: "accent_fg" , accentText: "accent_text" , secondText: "second_text" , secondFg: "second_fg" , info: "info" , infoBorder: "info_border" ,
   },
 

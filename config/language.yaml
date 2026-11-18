@@ -1251,7 +1251,9 @@ theme:
   color_background: "Page, tinted"
   color_surface: "Card, tinted"
   color_nested: "Card inside a card"
-  color_chrome: "Navbar and sidebar"
+  color_chrome: "Sidebar"
+  color_bar: "Bar across the top"
+  color_bar_text: "Bar text"
   color_border: "Borders"
   color_link: "Links"
   color_nav_link: "Sidebar links"
@@ -1302,6 +1304,7 @@ theme:
   check_heading: "Headings"
   check_active_nav: "The current sidebar item"
   check_sidebar_link: "Sidebar links"
+  check_top_bar: "Text on the bar across the top"
   preview_nav: "Here"
   preview_nav_other: "Elsewhere"
   preview_card: "A card"
@@ -1512,8 +1515,8 @@ api_keys:
   # app.repo, or this server's own copy.
   spec_text: "What a key can call:"
   spec_link: "API reference (api.json)"
-  # Beside it when app.repo is set: the same reference as tables, config/api.md,
-  # which the repository's site shows as a readable page.
+  # Beside it: the same reference as tables, config/api.md, on the repository's
+  # site when app.repo is set, else on this server's /docs/api page.
   doc_link: "readable version (api.md)"
   days_label: "Expires in (days)"
   days_placeholder: "leave blank for the default, 0 for never"
@@ -1556,6 +1559,16 @@ api_keys:
   # Followed by when, as in "Created 3 days ago".
   created: "Created"
 
+# The readable API and MCP references (static/docs.html, static/js/docs.js):
+# /docs/api and /docs/mcp, linked from the API keys and MCP cards when
+# app.repo is not set.
+docs:
+  api_title: "API reference"
+  mcp_title: "MCP tools"
+  back: "Back to Account"
+  loading: "Loading..."
+  failed: "The reference could not be loaded. Sign in, then try again."
+
 # The MCP card on Account (static/js/mcp.js): an API key set up for an agent.
 mcp:
   heading: "MCP: Claude and other agents"
@@ -1564,8 +1577,8 @@ mcp:
   # in app.repo, or this server's own copy.
   spec_text: "What an agent can call:"
   spec_link: "MCP reference (mcp.json)"
-  # Beside it when app.repo is set: the same reference as tables, config/mcp.md,
-  # which the repository's site shows as a readable page.
+  # Beside it: the same reference as tables, config/mcp.md, on the repository's
+  # site when app.repo is set, else on this server's /docs/mcp page.
   doc_link: "readable version (mcp.md)"
   endpoint_label: "Endpoint"
   client_label: "Set up for"

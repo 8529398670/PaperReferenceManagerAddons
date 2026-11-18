@@ -102,29 +102,71 @@ const Theme = {
       light: { accent: "#b0164c" , second: "#e64980" , background: "#fdf2f6" , surface: "#ffffff" } },
     { id: "pink" , mode: "light" , accent: "#c2255c" , second: "#6b3fc0" , background: "#fdf0f5" , surface: "#ffffff" ,
       dark: { accent: "#f783ac" , second: "#b197fc" , background: "#1f1018" , surface: "#2a1621" } },
-    // Wright State University: Green on Off White; switched to dark, Gold on Black with Dark Green panels.
+    // Wright State University: Green on Off White under a Green bar; switched
+    // to dark, Gold on Black with Dark Green panels under a Gold bar.
     // Rows: white and Faded Gold; dark, Dark Green and Dark Green lit with Leaf.
     { id: "wsu" , mode: "light" , accent: ThemePalettes.wsu.green , second: ThemePalettes.wsu.gold , background: ThemePalettes.wsu.off_white , surface: "#ffffff" ,
       rowOdd: "#ffffff" , rowEven: ThemePalettes.wsu.faded_gold ,
+      overrides: { bar: ThemePalettes.wsu.green , barText: "#ffffff" } ,
       dark: { accent: ThemePalettes.wsu.gold , second: ThemePalettes.wsu.yellow , background: ThemePalettes.wsu.black , surface: ThemePalettes.wsu.dark_green ,
-        rowOdd: ThemePalettes.wsu.dark_green , rowEven: "#175831" } },
+        rowOdd: ThemePalettes.wsu.dark_green , rowEven: "#175831" ,
+        overrides: { bar: ThemePalettes.wsu.gold , barText: ThemePalettes.wsu.black } } },
     // The Ohio State University: Scarlet on Gray Light 90 with Gray Dark 40 for
     // where you are; switched to dark, Scarlet on Gray Dark 80 with Gray Dark 60 panels.
     // Text is the gray shades; dark links and outline buttons are gray tints,
-    // never a scarlet tint (no scarlet reads on a dark card).
+    // never a scarlet tint (no scarlet reads on a dark card). The bar across
+    // the top is Scarlet with White words in both modes.
     // Rows: White and Gray Light 80; dark, Gray Dark 60 and a step toward Gray Dark 80.
     { id: "osu" , since: 1 , mode: "light" , accent: ThemePalettes.osu.scarlet , second: ThemePalettes.osu.gray_dark_40 , background: ThemePalettes.osu.gray_light_90 , surface: ThemePalettes.osu.white ,
       rowOdd: ThemePalettes.osu.white , rowEven: ThemePalettes.osu.gray_light_80 ,
-      overrides: { text: ThemePalettes.osu.gray_dark_80 } ,
+      overrides: { text: ThemePalettes.osu.gray_dark_80 , bar: ThemePalettes.osu.scarlet , barText: ThemePalettes.osu.white } ,
       dark: { accent: ThemePalettes.osu.scarlet , second: ThemePalettes.osu.gray , background: ThemePalettes.osu.gray_dark_80 , surface: ThemePalettes.osu.gray_dark_60 ,
         rowOdd: ThemePalettes.osu.gray_dark_60 , rowEven: "#323635" ,
         overrides: { text: ThemePalettes.osu.gray_light_60 , link: ThemePalettes.osu.gray_light_40 , navLink: ThemePalettes.osu.gray_light_40 ,
-          accentText: ThemePalettes.osu.gray_light_40 } } },
+          accentText: ThemePalettes.osu.gray_light_40 , bar: ThemePalettes.osu.scarlet , barText: ThemePalettes.osu.white } } },
     { id: "midnight" , mode: "dark" , accent: "#8c7cff" , second: "#ffb86b" , background: "#0e1020" , surface: "#171a30" ,
       light: { accent: "#5b4bd6" , second: "#c26a00" , background: "#f3f3fb" , surface: "#ffffff" } },
     { id: "slate" , mode: "dark" , accent: "#4fb3a9" , second: "#e6b450" , background: "#15191e" , surface: "#1d232a" ,
       light: { accent: "#2b7a72" , second: "#a0711a" , background: "#f2f4f6" , surface: "#ffffff" } },
   ],
+
+  // Changes to a built-in theme after people may have saved it: a saved list
+  // holds a copy, so editing builtIn alone never reaches them. Each change
+  // names the theme (id), the mode, an override field, what it was (null:
+  // not set) and what it is now (null: not set, so the worked-out color
+  // shows). A saved theme gets it once, when its list has not seen that
+  // since, and only while the field is still what it was: a color someone
+  // set themselves stays. Give each new batch one more than the highest
+  // since so far, here or in builtIn, and add the same values to builtIn.
+  builtInChanges: [
+    // The bar across the top in the brand's colors.
+    { since: 2 , id: "osu" , mode: "light" , field: "bar" , was: null , now: ThemePalettes.osu.scarlet },
+    { since: 2 , id: "osu" , mode: "light" , field: "barText" , was: null , now: ThemePalettes.osu.white },
+    { since: 2 , id: "osu" , mode: "dark" , field: "bar" , was: null , now: ThemePalettes.osu.scarlet },
+    { since: 2 , id: "osu" , mode: "dark" , field: "barText" , was: null , now: ThemePalettes.osu.white },
+    { since: 2 , id: "wsu" , mode: "light" , field: "bar" , was: null , now: ThemePalettes.wsu.green },
+    { since: 2 , id: "wsu" , mode: "light" , field: "barText" , was: null , now: "#ffffff" },
+    { since: 2 , id: "wsu" , mode: "dark" , field: "bar" , was: null , now: ThemePalettes.wsu.gold },
+    { since: 2 , id: "wsu" , mode: "dark" , field: "barText" , was: null , now: ThemePalettes.wsu.black },
+  ],
+
+  // A saved theme with the built-in changes its list has not seen applied,
+  // in place, in the mode it is in and the one it keeps for later.
+  applyBuiltInChanges( theme , seen ) {
+    this.builtInChanges.forEach( ( change ) => {
+      if ( change.since <= seen || change.id !== theme.id ) return;
+      const colors = theme.mode === change.mode ? theme : theme[ change.mode ];
+      if ( !colors || typeof colors !== "object" ) return;
+      const overrides = colors.overrides = Object.assign( {} , colors.overrides || {} );
+      const current = overrides[ change.field ];
+      const same = change.was === null ? current === undefined
+        : String( current || "" ).toLowerCase() === change.was.toLowerCase();
+      if ( !same ) return;
+      if ( change.now === null ) delete overrides[ change.field ];
+      else overrides[ change.field ] = change.now;
+    } );
+    return theme;
+  },
 
   // What a theme leaves out.
   modes: {
@@ -181,6 +223,8 @@ const Theme = {
     surface: "--app-surface",
     nested: "--app-nested",
     chrome: "--app-chrome",
+    bar: "--app-bar",
+    barText: "--app-bar-text",
     info: "--app-info",
     infoBorder: "--app-info-border",
     border: "--app-border",
@@ -201,6 +245,7 @@ const Theme = {
     heading: [ "secondText" , "nested" ],
     active_nav: [ "secondFg" , "second" ],
     sidebar_link: [ "navLink" , "chrome" ],
+    top_bar: [ "barText" , "bar" ],
     row_odd: [ "text" , "rowOdd" ],
     row_even: [ "text" , "rowEven" ],
   },
@@ -277,6 +322,7 @@ const Theme = {
       // Storage blocked (private window, previews) or unreadable: stay light.
     }
     if ( !this.valid( saved ) ) saved = this.builtIn[ 0 ];
+    else this.applyBuiltInChanges( saved , this.keptSeen() );
     this.list = this.builtIn.slice();
     this.current = saved.id;
     this.apply( saved );
@@ -298,8 +344,18 @@ const Theme = {
       if ( plain && JSON.stringify( this.buttonStyle( theme ) ) !== JSON.stringify( this.buttonStyle( this.builtIn[ 0 ] ) ) ) plain = false;
       if ( plain ) window.localStorage.removeItem( this.storageKey );
       else window.localStorage.setItem( this.storageKey , JSON.stringify( theme ) );
+      window.localStorage.setItem( this.storageKey + ".builtins" , String( this.builtInsSeen() ) );
     } catch ( error ) {
       // Not remembered for next time, but still applied now.
+    }
+  },
+
+  // Which built-in changes the theme kept in this browser has seen.
+  keptSeen() {
+    try {
+      return Number( window.localStorage.getItem( this.storageKey + ".builtins" ) ) || 0;
+    } catch ( error ) {
+      return 0;
     }
   },
 
@@ -309,6 +365,8 @@ const Theme = {
     else root.removeAttribute( "data-bs-theme" );
     const colors = this.colors( theme );
     Object.keys( this.vars ).forEach( ( field ) => root.style.setProperty( this.vars[ field ] , colors[ field ] ) );
+    // The quieter words on the bar (the tagline).
+    root.style.setProperty( "--app-bar-muted" , this.muted( colors.barText , colors.bar ) );
     const style = this.buttonStyle( theme );
     Object.keys( style ).forEach( ( name ) => root.style.setProperty( name , style[ name ] ) );
   },
@@ -380,14 +438,16 @@ const Theme = {
 
   // Which built-in themes a list saved now has seen: the highest since.
   builtInsSeen() {
-    return Math.max( 0 , ...this.builtIn.map( ( theme ) => theme.since || 0 ) );
+    return Math.max( 0 , ...this.builtIn.map( ( theme ) => theme.since || 0 ) ,
+      ...this.builtInChanges.map( ( change ) => change.since ) );
   },
 
-  // A saved list with every built-in theme newer than seen added, each just
-  // after the built-in before it (or at the end), while there is room (40, the
+  // A saved list with the built-in changes newer than seen made to its
+  // themes, and every built-in theme newer than seen added, each just after
+  // the built-in before it (or at the end), while there is room (40, the
   // server's limit). One already there by id is left as it is.
   withNewBuiltIns( list , seen ) {
-    const result = list.slice();
+    const result = list.map( ( theme ) => this.applyBuiltInChanges( theme , seen ) );
     this.builtIn.forEach( ( theme , index ) => {
       if ( ( theme.since || 0 ) <= seen || result.length >= 40 ) return;
       if ( result.some( ( item ) => item.id === theme.id ) ) return;
@@ -431,6 +491,11 @@ const Theme = {
       surface: card,
       nested: nested,
       chrome: chrome,
+      // The bar across the top: the sidebar's ground and the page's words,
+      // until a theme gives it colors of its own (colors() keeps them
+      // following chrome and text).
+      bar: chrome,
+      barText: mode.text,
       info: this.mix( second , card , this.tints.info ),
       infoBorder: this.mix( second , card , this.tints.infoBorder ),
       // From the card, not the page: most borders sit on a card, and a card can be
@@ -491,9 +556,14 @@ const Theme = {
   // What the page uses: the worked-out colors, with the theme's overrides on top.
   colors( theme ) {
     const colors = this.derived( theme );
-    Object.keys( theme.overrides || {} ).forEach( ( field ) => {
-      if ( field in colors ) colors[ field ] = theme.overrides[ field ];
+    const overrides = theme.overrides || {};
+    Object.keys( overrides ).forEach( ( field ) => {
+      if ( field in colors ) colors[ field ] = overrides[ field ];
     } );
+    // The bar follows an edited sidebar ground and text, unless it has
+    // colors of its own.
+    if ( !overrides.bar ) colors.bar = colors.chrome;
+    if ( !overrides.barText ) colors.barText = colors.text;
     return colors;
   },
 
@@ -530,6 +600,18 @@ const Theme = {
       if ( this.contrast( tried , ground ) >= this.minContrast ) return tried;
     }
     return away;
+  },
+
+  // A quieter line of text in this color, still readable on ground: mixed
+  // into the ground as far as it can go and still read. It moves toward the
+  // text itself, never away from it: on a mid-tone ground pushing toward
+  // white would turn dark words white.
+  muted( text , ground ) {
+    for ( let percent = 62 ; percent < 100 ; percent += 2 ) {
+      const tried = this.mix( text , ground , percent );
+      if ( this.contrast( tried , ground ) >= this.minContrast ) return tried;
+    }
+    return text;
   },
 
   // Relative luminance (WCAG) of #rrggbb.
