@@ -59,6 +59,9 @@ def retry(milliseconds: int) -> bytes:
 
 
 CHANGED = event("changed", "1")
+# Sent to a stream another of the same session's took the place of
+# (Hub.join's owner): the page stops it and does not reconnect.
+REPLACED = event("replaced", "1")
 PING = b": ping\n\n"
 
 
@@ -73,10 +76,13 @@ class Client:
         except asyncio.QueueFull:
             pass
 
-    def close(self) -> None:
-        """Make room if it has to: this one message is never dropped."""
+    def close(self, last: bytes | None = None) -> None:
+        """Make room if it has to: this one message (and last, said before
+        it) is never dropped."""
         while not self.queue.empty():
             self.queue.get_nowait()
+        if last is not None:
+            self.queue.put_nowait(last)
         self.queue.put_nowait(None)
 
 
@@ -84,21 +90,39 @@ class Hub:
     def __init__(self, max_clients: int = MAX_CLIENTS) -> None:
         self.max_clients = max_clients
         self.clients: set[Client] = set()
+        # owner -> its one stream. A browser can hold only six connections to
+        # a server over HTTP/1.1, so one session's tabs share a stream
+        # (static/js/live.js); a second one from the same session takes the
+        # first one's place instead of using up another connection.
+        self.owned: dict[str, Client] = {}
         self.closed = False
         # Replaced in tests.
         self.tick_seconds = TICK_SECONDS
         self.send_timeout_seconds = SEND_TIMEOUT_SECONDS
 
-    def join(self) -> Client | None:
-        """A slot, or None when there is none to give."""
-        if self.closed or len(self.clients) >= self.max_clients:
+    def join(self, owner: str = "") -> Client | None:
+        """A slot, or None when there is none to give. With owner, any stream
+        that owner already has is told it was replaced and ends."""
+        if self.closed:
+            return None
+        if owner:
+            older = self.owned.pop(owner, None)
+            if older is not None:
+                older.close(REPLACED)
+                self.clients.discard(older)
+        if len(self.clients) >= self.max_clients:
             return None
         client = Client()
         self.clients.add(client)
+        if owner:
+            self.owned[owner] = client
         return client
 
     def leave(self, client: Client) -> None:
         self.clients.discard(client)
+        for owner, held in list(self.owned.items()):
+            if held is client:
+                del self.owned[owner]
 
     def publish(self, message: bytes) -> None:
         for client in self.clients:

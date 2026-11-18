@@ -26,8 +26,10 @@ const PaperLinks = {
     } );
   },
 
-  // paper needs key, doi, and has_pdf.
-  strip( paper ) {
+  // paper needs key, doi, and has_pdf. With content (the paper's badge
+  // summary, Content.badges), the links to what the stages made follow PDF:
+  // Figures, MD and Methods (Content.links).
+  strip( paper , content ) {
     const links = [];
     if ( paper.doi ) {
       links.push( this.link( "https://doi.org/" + paper.doi , "links.doi" , "links.doi_title" ) );
@@ -38,6 +40,7 @@ const PaperLinks = {
     if ( paper.has_pdf ) {
       links.push( this.link( "/api/paper/pdf?key=" + encodeURIComponent( paper.key ) , "links.pdf" , "links.pdf_title" ) );
     }
+    if ( content !== undefined && paper.key ) links.push( Content.links( paper.key , content ) );
     return Dom.el( "span" , { class: "paper-links" , children: links } );
   },
 

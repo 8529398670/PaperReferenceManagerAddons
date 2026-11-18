@@ -129,23 +129,27 @@ def list_papers(request: Request, body: SearchPapers) -> SearchReply:
 
 
 class RecentPapers(RequestType):
-    days: Annotated[int, QUERY, Meta(ge=1, le=3650, description="How far back. Default 7.", extra={"error": "days must be 1-3650"})] = 7
+    days: Annotated[int, QUERY, Meta(ge=0, le=3650, description="How far back, in days. 0 (default): every paper, newest first.", extra={"error": "days must be 0-3650"})] = 0
     not_on: Annotated[str, QUERY, Meta(description="A list's slug: leave out the papers already on it.")] = ""
     limit: Limit = PAGE_DEFAULT
     offset: Offset = 0
 
 
 class PapersReply(Paged):
-    papers: list[dict[str, Any]]
+    papers: Annotated[list[dict[str, Any]], Meta(description=(
+        "Each paper as the library has it, with content (what is ready of it, as content_badges gives it; null "
+        "before its first stage is queued)."
+    ))]
+    on_list: Annotated[int, Meta(description="How many papers not_on's list already holds (0 without not_on).")] = 0
 
 
 @route(
     "GET /api/papers/recent", summary="Papers added lately",
     tag=TAG, errors=(404,),
     description=(
-        "Papers added in Zotero in the last days, newest first, leaving out those already on the list not_on names: "
-        "\"what did I save this week that isn't on this list yet?\". Read from the live catalogue, so a paper saved "
-        "seconds ago is there."
+        "Papers in order of when they were added to Zotero, newest first (only the last days, if days is set), leaving "
+        "out those already on the list not_on names: \"what did I save lately that isn't on this list yet?\". Page "
+        "through with offset and next. Read from the live catalogue, so a paper saved seconds ago is there."
     ),
     mcp="recent_papers", read_only=True,
 )
@@ -158,12 +162,16 @@ def recent_papers(request: Request, body: RecentPapers) -> PapersReply:
         if record is None:
             raise Refused(404, "no such list")
         have = {row["key"] for row in (record["doc"].get("items") or [])}
-    since = (datetime.now(timezone.utc) - timedelta(days=body.days)).strftime("%Y-%m-%d %H:%M:%S")
+    since = (datetime.now(timezone.utc) - timedelta(days=body.days)).strftime("%Y-%m-%d %H:%M:%S") if body.days else ""
     rows = [p for p in get_catalogue(request).all() if (p.record.get("date_added") or "") >= since and p.key not in have]
     rows.sort(key=lambda p: p.record.get("date_added") or "", reverse=True)
     page = rows[body.offset : body.offset + body.limit]
     end = body.offset + len(page)
-    return PapersReply(papers=[public(p) for p in page], next=end if end < len(rows) else None, total=len(rows))
+    found = request.app.state.content.badges([p.key for p in page])
+    return PapersReply(
+        papers=[{**public(p), "content": found.get(p.key)} for p in page],
+        next=end if end < len(rows) else None, total=len(rows), on_list=len(have),
+    )
 
 
 @route(
@@ -292,10 +300,13 @@ def get_config_links(request: Request) -> LinksReply:
 async def stream_library(request: Request) -> Response:
     if request.method == "HEAD":
         return Response(headers=sse.HEADERS)
-    from app.routes.streams import still_signed_in
+    from app.routes.streams import still_signed_in, stream_owner, stream_refused
 
+    refused = stream_refused(request)
+    if refused is not None:
+        return refused
     hub: sse.Hub = request.app.state.library.hub
-    client = hub.join()
+    client = hub.join(stream_owner(request))
     if client is None:
         return error(503, "too many live streams")
     allowed = still_signed_in(request)

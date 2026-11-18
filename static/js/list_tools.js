@@ -108,7 +108,10 @@ const ListTools = {
       order.appendChild( Dom.el( "li" , { children: [ button ] } ) );
     } );
     Dom.get( "list-auto-move" ).addEventListener( "change" , ( event ) => this.option( "auto_move" , event.target.checked ) );
-    Dom.get( "list-add-where" ).addEventListener( "change" , ( event ) => this.option( "add_where" , event.target.value ) );
+    // The same setting in two places: Options, and beside Recently added.
+    [ "list-add-where" , "list-add-where-bar" ].forEach( ( id ) => {
+      Dom.get( id ).addEventListener( "change" , ( event ) => this.option( "add_where" , event.target.value ) );
+    } );
 
     // Getting around.
     const jump = Dom.get( "list-jump" );
@@ -181,6 +184,8 @@ const ListTools = {
     const options = view.doc.options || {};
     Dom.get( "list-auto-move" ).checked = Boolean( options.auto_move );
     Dom.get( "list-add-where" ).value = options.add_where || "bottom";
+    Dom.get( "list-add-where-bar" ).value = options.add_where || "bottom";
+    Dom.get( "list-add-where-bar" ).disabled = locked;
     Dom.get( "list-filter-on" ).checked = this.filterOn;
     Dom.show( Dom.get( "list-filter-match" ) , this.filterOn );
     Dom.get( "list-filter-match" ).value = this.match;

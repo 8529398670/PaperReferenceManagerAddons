@@ -52,6 +52,10 @@
       "route": "GET /api/paper/pdf"
     },
     {
+      "reason": "Plain text, for a browser to show.",
+      "route": "GET /api/paper/text"
+    },
+    {
       "reason": "A file to download; get_screener_setup gives the same rules as JSON.",
       "route": "GET /api/review/setups/{setup}/export"
     },
@@ -2719,15 +2723,14 @@
         "readOnlyHint": true,
         "title": "Papers added lately"
       },
-      "description": "Papers added in Zotero in the last days, newest first, leaving out those already on the list not_on names: \"what did I save this week that isn't on this list yet?\". Read from the live catalogue, so a paper saved seconds ago is there.",
+      "description": "Papers in order of when they were added to Zotero, newest first (only the last days, if days is set), leaving out those already on the list not_on names: \"what did I save lately that isn't on this list yet?\". Page through with offset and next. Read from the live catalogue, so a paper saved seconds ago is there.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
           "days": {
-            "default": 7,
-            "description": "How far back. Default 7.",
+            "description": "How far back, in days. 0 (default): every paper, newest first.",
             "maximum": 3650,
-            "minimum": 1,
+            "minimum": 0,
             "type": "integer"
           },
           "limit": {

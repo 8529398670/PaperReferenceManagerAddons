@@ -46,7 +46,8 @@ const Content = {
     const data = this.data( event );
     ( this.handlers.paper || [] ).forEach( ( fn ) => fn( data ) );
     if ( !data.key ) return;
-    if ( !document.querySelector( '[data-content-key="' + CSS.escape( data.key ) + '"]' ) ) return;
+    const key = CSS.escape( data.key );
+    if ( !document.querySelector( '[data-content-key="' + key + '"], [data-content-links="' + key + '"]' ) ) return;
     this.stale.add( data.key );
     this.refreshSoon();
   },
@@ -77,6 +78,7 @@ const Content = {
       const answer = await Api.post( "/api/papers/badges" , { keys: keys } );
       keys.forEach( ( key ) => {
         Dom.all( '[data-content-key="' + CSS.escape( key ) + '"]' ).forEach( ( strip ) => this.paint( strip , answer.badges[ key ] ) );
+        Dom.all( '[data-content-links="' + CSS.escape( key ) + '"]' ).forEach( ( span ) => this.paintLinks( span , answer.badges[ key ] ) );
       } );
     } catch ( error ) { /* the next event tries again */ }
   },
@@ -90,10 +92,96 @@ const Content = {
 
   paint( strip , badge ) {
     Dom.clear( strip );
-    this.badges( badge ).forEach( ( node ) => strip.appendChild( node ) );
+    const key = strip.getAttribute( "data-content-key" );
+    const nodes = strip.hasAttribute( "data-labels" ) ? this.labels( strip , badge ) : this.badges( badge , key );
+    nodes.forEach( ( node ) => strip.appendChild( node ) );
   },
 
-  chip( text , tone , icon , title ) {
+  // One strip of coloured labels for a paper (the Lists board): its links
+  // and what the stages made, in one fixed order -- DOI, Proxy, PDF,
+  // Figures, MD, Methods, Code, Datasets -- then OpenAlex and stage states,
+  // then modalities. paper needs key, doi and has_pdf; they ride on the
+  // strip so it can repaint itself. content undefined: the paper is not in
+  // the library, so only its DOI links show.
+  labelStrip( paper , content ) {
+    const strip = Dom.el( "span" , { class: "content-badges" , attrs: {
+      "data-content-key": paper.key || "",
+      "data-labels": "",
+      "data-doi": paper.doi || "",
+      "data-pdf": paper.has_pdf ? "1" : "",
+    } } );
+    this.paint( strip , content );
+    return strip;
+  },
+
+  labels( strip , badge ) {
+    const key = strip.getAttribute( "data-content-key" );
+    const doi = strip.getAttribute( "data-doi" );
+    const b = badge || {};
+    const out = [];
+    const tone = {
+      doi: "bg-primary-subtle text-primary-emphasis border border-primary-subtle",
+      proxy: "bg-primary-subtle text-primary-emphasis border border-primary-subtle",
+      pdf: "content-badge-pdf border",
+      figures: "bg-warning-subtle text-warning-emphasis border border-warning-subtle",
+      md: "bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle",
+      methods: "bg-dark-subtle text-dark-emphasis border border-dark-subtle",
+      code: "bg-success-subtle text-success-emphasis border border-success-subtle",
+      data: "bg-info-subtle text-info-emphasis border border-info-subtle",
+    };
+    if ( doi ) {
+      out.push( this.chip( I18n.get( "links.doi" ) , tone.doi , "link-45deg" , I18n.get( "links.doi_title" ) , "https://doi.org/" + doi ) );
+      if ( PaperLinks.proxyUrl ) {
+        out.push( this.chip( I18n.get( "links.proxy" ) , tone.proxy , "building" , I18n.get( "links.proxy_title" ) , PaperLinks.proxyUrl.replace( "{doi}" , () => doi ) ) );
+      }
+    }
+    if ( key && strip.getAttribute( "data-pdf" ) ) {
+      out.push( this.chip( I18n.get( "links.pdf" ) , tone.pdf , "file-earmark-pdf" , I18n.get( "links.pdf_title" ) , "/api/paper/pdf?key=" + encodeURIComponent( key ) ) );
+    }
+    if ( !badge || !key ) return out;
+    if ( b.figures ) out.push( this.chip( I18n.get( "content.figures" ).replace( "{n}" , b.figures ) , tone.figures , "images" , I18n.get( "links.figures_title" ) , this.href( key , "montage" ) ) );
+    if ( b.has_text || b.methods ) out.push( this.chip( I18n.get( "links.md" ) , tone.md , "file-earmark-text" , I18n.get( "links.md_title" ) , this.href( key , "md" ) ) );
+    if ( b.methods ) out.push( this.chip( I18n.get( "links.methods" ) , tone.methods , "journal-text" , I18n.get( "links.methods_title" ) , this.href( key , "methods" ) ) );
+    if ( b.code ) out.push( this.chip( I18n.get( "content.code" ).replace( "{n}" , b.code ) , tone.code , "code-slash" , I18n.get( "content.found_title" ) , this.href( key , "found" ) ) );
+    if ( b.data ) out.push( this.chip( I18n.get( "content.data" ).replace( "{n}" , b.data ) , tone.data , "database" , I18n.get( "content.found_title" ) , this.href( key , "found" ) ) );
+    // The rest of the usual badges: OpenAlex, stage states, modalities --
+    // everything badges() makes but the ones drawn above.
+    const shown = new Set( [ "methods" , "code" , "data" , "figures" ] );
+    return out.concat( this.badges( b , key , shown ) );
+  },
+
+  // The links to what the stages made, as the old app had them after PDF:
+  // Figures (the montage), MD (the whole text) and Methods. Each shows once
+  // there is something to open; they repaint with the badges.
+  links( key , badge ) {
+    const span = Dom.el( "span" , { class: "paper-links" , attrs: { "data-content-links": key } } );
+    this.paintLinks( span , badge );
+    return span;
+  },
+
+  paintLinks( span , badge ) {
+    const key = span.getAttribute( "data-content-links" );
+    const links = [];
+    const b = badge || {};
+    if ( b.figures ) links.push( PaperLinks.link( this.href( key , "montage" ) , "links.figures" , "links.figures_title" ) );
+    if ( b.has_text || b.methods ) links.push( PaperLinks.link( this.href( key , "md" ) , "links.md" , "links.md_title" ) );
+    if ( b.methods ) links.push( PaperLinks.link( this.href( key , "methods" ) , "links.methods" , "links.methods_title" ) );
+    span.replaceChildren( ...links );
+    span.hidden = links.length === 0;
+  },
+
+  // Where each thing about a paper opens: a file in a new tab (montage, md,
+  // methods), or a card of its Paper screen (#paper/<key>/<card>).
+  href( key , what ) {
+    const k = encodeURIComponent( key );
+    if ( what === "montage" ) return "/api/figures/image?n=0&key=" + k;
+    if ( what === "md" || what === "methods" ) return "/api/paper/text?part=" + what + "&key=" + k;
+    return "#paper/" + k + "/" + what;
+  },
+
+  // A badge that opens what it names (href from Content.href); a file opens
+  // in a new tab, a Paper screen card in this one.
+  chip( text , tone , icon , title , href ) {
     const children = [];
     if ( icon === "spin" ) {
       children.push( Dom.el( "span" , { class: "spinner-border spinner-border-sm content-spin" , attrs: { "aria-hidden": "true" } } ) );
@@ -102,37 +190,46 @@ const Content = {
     }
     children.push( Dom.el( "span" , { text: text } ) );
     const attrs = title ? { title: title } : {};
-    return Dom.el( "span" , { class: "badge content-badge " + tone , attrs: attrs , children: children } );
+    if ( !href ) return Dom.el( "span" , { class: "badge content-badge " + tone , attrs: attrs , children: children } );
+    attrs.href = href;
+    if ( !href.startsWith( "#" ) ) {
+      attrs.target = "_blank";
+      attrs.rel = "noopener";
+    }
+    return Dom.el( "a" , { class: "badge content-badge content-badge-link " + tone , attrs: attrs , children: children } );
   },
 
   stageName( stage ) {
     return I18n.get( "content.stage_" + stage );
   },
 
-  // The badges for one paper's summary (null: nothing queued yet).
-  badges( badge ) {
+  // The badges for one paper's summary (null: nothing queued yet). With
+  // key, each badge links to what it names.
+  badges( badge , key , skip ) {
     const out = [];
+    const omit = skip || new Set();
     if ( !badge ) return out;
+    const to = ( what ) => ( key ? this.href( key , what ) : "" );
     const states = badge.states || {};
     const errors = badge.errors || {};
     const oa = states.openalex;
-    if ( oa === "done" ) out.push( this.chip( I18n.get( "content.openalex" ) , "text-bg-light border" , "check2" , I18n.get( "content.openalex_done_title" ).replace( "{refs}" , badge.refs || 0 ).replace( "{citers}" , badge.citers || 0 ) ) );
-    else if ( oa === "pending" || oa === "running" ) out.push( this.chip( I18n.get( "content.openalex" ) , "text-bg-light border" , "spin" , I18n.get( "content.pending_title" ) ) );
-    else if ( oa === "not_found" ) out.push( this.chip( I18n.get( "content.openalex_not_found" ) , "bg-warning-subtle text-warning-emphasis border" , "question-circle" , errors.openalex || "" ) );
-    else if ( oa === "failed" ) out.push( this.chip( I18n.get( "content.openalex_failed" ) , "bg-danger-subtle text-danger-emphasis border" , "exclamation-triangle" , errors.openalex || "" ) );
+    if ( oa === "done" ) out.push( this.chip( I18n.get( "content.openalex" ) , "text-bg-light border" , "check2" , I18n.get( "content.openalex_done_title" ).replace( "{refs}" , badge.refs || 0 ).replace( "{citers}" , badge.citers || 0 ) , to( "network" ) ) );
+    else if ( oa === "pending" || oa === "running" ) out.push( this.chip( I18n.get( "content.openalex" ) , "text-bg-light border" , "spin" , I18n.get( "content.pending_title" ) , to( "stages" ) ) );
+    else if ( oa === "not_found" ) out.push( this.chip( I18n.get( "content.openalex_not_found" ) , "bg-warning-subtle text-warning-emphasis border" , "question-circle" , errors.openalex || "" , to( "stages" ) ) );
+    else if ( oa === "failed" ) out.push( this.chip( I18n.get( "content.openalex_failed" ) , "bg-danger-subtle text-danger-emphasis border" , "exclamation-triangle" , errors.openalex || "" , to( "stages" ) ) );
 
     const reading = this.local.some( ( stage ) => states[ stage ] === "pending" || states[ stage ] === "running" );
-    if ( reading ) out.push( this.chip( I18n.get( "content.reading" ) , "text-bg-light border" , "spin" , I18n.get( "content.pending_title" ) ) );
+    if ( reading ) out.push( this.chip( I18n.get( "content.reading" ) , "text-bg-light border" , "spin" , I18n.get( "content.pending_title" ) , to( "stages" ) ) );
     this.local.forEach( ( stage ) => {
       if ( states[ stage ] === "failed" ) {
-        out.push( this.chip( I18n.get( "content.failed" ).replace( "{stage}" , this.stageName( stage ) ) , "bg-danger-subtle text-danger-emphasis border" , "exclamation-triangle" , errors[ stage ] || "" ) );
+        out.push( this.chip( I18n.get( "content.failed" ).replace( "{stage}" , this.stageName( stage ) ) , "bg-danger-subtle text-danger-emphasis border" , "exclamation-triangle" , errors[ stage ] || "" , to( "stages" ) ) );
       }
     } );
-    if ( badge.methods ) out.push( this.chip( I18n.get( "content.methods" ) , "text-bg-light border" , "check2" , "" ) );
-    if ( badge.code ) out.push( this.chip( I18n.get( "content.code" ).replace( "{n}" , badge.code ) , "bg-success-subtle text-success-emphasis border" , "code-slash" , "" ) );
-    if ( badge.data ) out.push( this.chip( I18n.get( "content.data" ).replace( "{n}" , badge.data ) , "bg-info-subtle text-info-emphasis border" , "database" , "" ) );
-    if ( badge.figures ) out.push( this.chip( I18n.get( "content.figures" ).replace( "{n}" , badge.figures ) , "text-bg-light border" , "images" , "" ) );
-    ( badge.mods || [] ).forEach( ( mod ) => out.push( this.chip( mod , "bg-secondary-subtle text-secondary-emphasis border" , "" , I18n.get( "content.modality_title" ) ) ) );
+    if ( !omit.has( "methods" ) && badge.methods ) out.push( this.chip( I18n.get( "content.methods" ) , "text-bg-light border" , "check2" , I18n.get( "links.methods_title" ) , to( "methods" ) ) );
+    if ( !omit.has( "code" ) && badge.code ) out.push( this.chip( I18n.get( "content.code" ).replace( "{n}" , badge.code ) , "bg-success-subtle text-success-emphasis border" , "code-slash" , I18n.get( "content.found_title" ) , to( "found" ) ) );
+    if ( !omit.has( "data" ) && badge.data ) out.push( this.chip( I18n.get( "content.data" ).replace( "{n}" , badge.data ) , "bg-info-subtle text-info-emphasis border" , "database" , I18n.get( "content.found_title" ) , to( "found" ) ) );
+    if ( !omit.has( "figures" ) && badge.figures ) out.push( this.chip( I18n.get( "content.figures" ).replace( "{n}" , badge.figures ) , "text-bg-light border" , "images" , I18n.get( "links.figures_title" ) , to( "montage" ) ) );
+    ( badge.mods || [] ).forEach( ( mod ) => out.push( this.chip( mod , "bg-secondary-subtle text-secondary-emphasis border" , "" , I18n.get( "content.modality_title" ) , to( "sections" ) ) ) );
     return out;
   },
 

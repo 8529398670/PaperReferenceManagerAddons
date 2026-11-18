@@ -284,9 +284,21 @@ class ListOpsTest(LibraryCase):
         self.ops([{"op": "add", "paper": "10.5555/fresh2"}])
         status, body = self.call("GET", "/api/papers/recent?days=7&not_on=ops", key=self.user_key)
         self.assertEqual((status, [p["key"] for p in body["papers"]]), (200, ["10.5555/fresh"]))
+        self.assertEqual(body["on_list"], len(self.doc("ops")["items"]))
+        self.assertIn("content", body["papers"][0])
         self.assertEqual(self.call("GET", "/api/papers/recent?days=7", key=self.user_key)[1]["total"], 2)
-        self.assertEqual(self.call("GET", "/api/papers/recent?days=0", key=self.user_key)[0], 400)
+        # No days: every paper, newest first, a page at a time.
+        status, body = self.call("GET", "/api/papers/recent?limit=1", key=self.user_key)
+        self.assertEqual((status, len(body["papers"]), body["next"]), (200, 1, 1))
+        self.assertGreaterEqual(body["total"], 2)
+        self.assertEqual(self.call("GET", "/api/papers/recent?days=-1", key=self.user_key)[0], 400)
         self.assertEqual(self.call("GET", "/api/papers/recent?not_on=nope", key=self.user_key)[0], 404)
+
+    def test_an_old_page_gets_no_stream(self) -> None:
+        # Without ?v=2 (a tab still running older code): 204, which a browser
+        # never reconnects after, so such tabs cannot use up its connections.
+        for path in ("/api/lists/stream", "/api/library/stream"):
+            self.assertEqual(self.call("GET", path, key=self.user_key)[0], 204)
 
     # -- the schema and MCP ---------------------------------------------------------
 

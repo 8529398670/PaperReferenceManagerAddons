@@ -1350,7 +1350,7 @@ Pick figures in one view (a new pick goes last), or take picks back.
 
 ## recent_papers
 
-Papers added in Zotero in the last days, newest first, leaving out those already on the list not_on names: "what did I save this week that isn't on this list yet?". Read from the live catalogue, so a paper saved seconds ago is there.
+Papers in order of when they were added to Zotero, newest first (only the last days, if days is set), leaving out those already on the list not_on names: "what did I save lately that isn't on this list yet?". Page through with offset and next. Read from the live catalogue, so a paper saved seconds ago is there.
 
 |  |  |
 |---|---|
@@ -1362,7 +1362,7 @@ Papers added in Zotero in the last days, newest first, leaving out those already
 
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
-| `days` | integer | no | 1 to 3650; default `7` | How far back. Default 7. |
+| `days` | integer | no | 0 to 3650 | How far back, in days. 0 (default): every paper, newest first. |
 | `limit` | integer | no | 1 to 1000; default `50` | Papers to return. Default 50. |
 | `not_on` | string | no |  | A list's slug: leave out the papers already on it. |
 | `offset` | integer | no | at least 0 | Papers to skip: the next value of the previous page. |
@@ -1961,6 +1961,7 @@ Routes an API key may call that have no tool, and why.
 | [`GET /api/mcp.json`](api.md#get-apimcpjson) | The MCP reference itself; tools/list gives the same list. |
 | [`GET /api/missing/export.xlsx`](api.md#get-apimissingexportxlsx) | A file to download. |
 | [`GET /api/paper/pdf`](api.md#get-apipaperpdf) | The file itself, for a browser to show. |
+| [`GET /api/paper/text`](api.md#get-apipapertext) | Plain text, for a browser to show. |
 | [`GET /api/review/setups/{setup}/export`](api.md#get-apireviewsetupssetupexport) | A file to download; get_screener_setup gives the same rules as JSON. |
 | [`GET /api/searches/{search}/export`](api.md#get-apisearchessearchexport) | A file to download. |
 | [`GET /api/summaries/rollup.xlsx`](api.md#get-apisummariesrollupxlsx) | A file to download. |

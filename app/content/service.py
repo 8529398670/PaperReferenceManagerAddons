@@ -639,6 +639,24 @@ class ContentService:
             "worker": any(w["alive"] for w in self.files.workers()),
         }
 
+    def text_of(self, key: str, part: str, title: str = "") -> str:
+        """A paper's text as Markdown, as the old app's MD and Methods links
+        opened it: part "md" is the whole text split on its headings, part
+        "methods" its methods sections only. Empty when the methods stage has
+        not read it yet."""
+        parts = (self.files.read(key, "sections.json") or {}).get("sections") or []
+        if part == "methods":
+            parts = [s for s in parts if s.get("key") == "methods" and (s.get("text") or "").strip()]
+        out = [f"# {title}"] if title else []
+        for s in parts:
+            text = (s.get("text") or "").strip()
+            if not text:
+                continue
+            if s.get("heading"):
+                out.append(f"## {s['heading']}")
+            out.append(text)
+        return "\n\n".join(out) + "\n" if len(out) > (1 if title else 0) else ""
+
     def figures_of(self, key: str) -> list[dict[str, Any]]:
         """A paper's figure crops: {n, page, caption, dup, w, h} each."""
         manifest = self.files.read(key, FIGURES_FILE) or {}

@@ -310,6 +310,7 @@ const Lists = {
     return {
       move: ( key , position ) => this.move( key , position ),
       moveNear: ( key , anchor , side ) => this.moveNear( key , anchor , side ),
+      addNear: ( indexes , anchor , side ) => this.addNear( indexes , anchor , side ),
       remove: ( key ) => this.remove( key ),
       addTag: ( key , name ) => this.addTag( [ key ] , name ),
       removeTag: ( key , name ) => this.removeTag( [ key ] , name ),
@@ -605,6 +606,13 @@ const Lists = {
   },
 
   // ---- adding from the library: search, or what was saved recently ------------
+  //
+  // As the old app's hits list had it: each hit not on the list yet has tags
+  // to arrive with (chips), a # for where it goes (empty: the "add to…"
+  // setting beside Recently added), and ＋ Add. Enter or a double-click adds
+  // too; Cmd/Ctrl-click and Shift-click pick several, and then a tag, ＋ Add
+  // or a drag goes for all of them. A hit can be dragged onto a row to land
+  // right there. An added hit stays, as ✓ #n, so the reader keeps their place.
 
   initAdd() {
     const add = Dom.get( "list-add" );
@@ -620,16 +628,27 @@ const Lists = {
       }
     } );
     Dom.onPress( Dom.get( "list-recent" ) , () => this.recent() );
+    Dom.get( "list-add-results" ).addEventListener( "scroll" , ( event ) => {
+      const list = event.currentTarget;
+      if ( list.scrollTop + list.clientHeight > list.scrollHeight - 240 ) this.moreRecent();
+    } , { passive: true } );
     Dom.onPress( Dom.get( "list-add-picked" ) , () => this.addPicked() );
     Dom.get( "list-add-close" ).addEventListener( "click" , () => this.closeHits() );
     // Open while the pointer or the focus is in it: the hits have boxes of
-    // their own (a tag, a position) to type in.
+    // their own (a tag, a position) to type in. Not while a hit is being
+    // dragged onto the list below.
     document.addEventListener( "mousedown" , ( event ) => {
       if ( !Dom.get( "list-add-wrap" ).contains( event.target ) ) this.closeHits();
     } );
     Dom.get( "list-add-wrap" ).addEventListener( "focusout" , ( event ) => {
       if ( event.relatedTarget && !Dom.get( "list-add-wrap" ).contains( event.relatedTarget ) ) this.closeHits();
     } );
+    // A paper saved into Zotero while Recently added is open shows up in it.
+    Content.on( "changed" , () => this.freshRecent() );
+  },
+
+  hitsOpen() {
+    return !Dom.get( "list-add-panel" ).hidden;
   },
 
   async search() {
@@ -645,24 +664,100 @@ const Lists = {
     this.showHits( "search" , answer.papers , "" );
   },
 
+  // Every paper not on the list, newest in Zotero first, a page at a time:
+  // scrolling to the foot of the panel (or arrowing down to it) brings more.
   async recent() {
-    const days = Dom.get( "list-recent-days" ).value;
     const ticket = ++this.addTicket;
-    const params = new URLSearchParams( { days: days , not_on: this.slug , limit: "200" } );
-    const answer = await Api.request( "/api/papers/recent?" + params );
+    const answer = await this.recentPage( 0 );
     if ( ticket !== this.addTicket ) return;
-    this.recentRange = Dom.get( "list-recent-days" ).selectedOptions[ 0 ].textContent;
     this.recentTotal = answer.total;
+    this.recentNext = answer.next;
+    this.recentOn = answer.on_list || 0;
     this.showHits( "recent" , answer.papers , this.recentHead() );
+    Dom.get( "list-add-results" ).scrollTop = 0;
+  },
+
+  recentPage( offset ) {
+    const params = new URLSearchParams( { not_on: this.slug , limit: String( this.recentChunk ) , offset: String( offset ) } );
+    return Api.request( "/api/papers/recent?" + params );
+  },
+
+  recentChunk: 50,
+
+  hit( paper ) {
+    return Object.assign( {} , paper , { addTags: [] , at: "" , draft: "" } );
+  },
+
+  async moreRecent() {
+    if ( this.hitsKind !== "recent" || this.recentNext == null || this.recentLoading ) return;
+    if ( !this.hitsOpen() ) return;
+    const ticket = this.addTicket;
+    this.recentLoading = true;
+    const list = Dom.get( "list-add-results" );
+    const wait = Dom.el( "li" , { class: "list-group-item text-body-secondary small" , text: I18n.get( "lists.recent_more" ) } );
+    list.appendChild( wait );
+    try {
+      const answer = await this.recentPage( this.recentNext );
+      if ( ticket !== this.addTicket || this.hitsKind !== "recent" ) return;
+      this.recentNext = answer.next;
+      this.recentTotal = answer.total;
+      this.recentOn = answer.on_list || 0;
+      Dom.text( Dom.get( "list-add-head" ) , this.recentHead() );
+      const have = new Set( this.hits.map( ( paper ) => paper.key ) );
+      const start = this.hits.length;
+      answer.papers.filter( ( paper ) => !have.has( paper.key ) ).forEach( ( paper ) => this.hits.push( this.hit( paper ) ) );
+      // Added below what is there, so the reader's place does not move.
+      const rows = [];
+      for ( let at = start ; at < this.hits.length ; at++ ) rows.push( this.hitRow( this.hits[ at ] , at ) );
+      wait.remove();
+      list.append( ...rows );
+    } catch ( error ) {
+      Dom.toast( error.message , "error" );
+    } finally {
+      wait.remove();
+      this.recentLoading = false;
+    }
+  },
+
+  // The library changed: anything newer than the top hit goes in at the top,
+  // and what was picked or typed stays with its paper.
+  async freshRecent() {
+    if ( this.hitsKind !== "recent" || !this.hitsOpen() || this.recentLoading ) return;
+    const ticket = this.addTicket;
+    let answer;
+    try {
+      answer = await this.recentPage( 0 );
+    } catch ( error ) {
+      return;
+    }
+    if ( ticket !== this.addTicket || this.hitsKind !== "recent" || !this.hitsOpen() ) return;
+    const have = new Set( this.hits.map( ( paper ) => paper.key ) );
+    const fresh = [];
+    for ( const paper of answer.papers ) {
+      if ( have.has( paper.key ) ) break;
+      fresh.push( this.hit( paper ) );
+    }
+    this.recentTotal = answer.total;
+    this.recentOn = answer.on_list || 0;
+    if ( fresh.length ) {
+      const n = fresh.length;
+      this.hits = fresh.concat( this.hits );
+      this.picked = new Set( Array.from( this.picked , ( index ) => index + n ) );
+      if ( this.active >= 0 ) this.active += n;
+      if ( this.pickAnchor >= 0 ) this.pickAnchor += n;
+      if ( this.recentNext != null ) this.recentNext += n;
+      this.drawHits( this.focusSpot() );
+    }
+    Dom.text( Dom.get( "list-add-head" ) , this.recentHead() );
   },
 
   recentHead() {
-    return I18n.get( "lists.recent_head" ).replace( "{range}" , () => this.recentRange ).replace( "{count}" , this.recentTotal );
+    return I18n.get( "lists.recent_head" ).replace( "{count}" , this.recentTotal ).replace( "{on}" , this.recentOn || 0 );
   },
 
   showHits( kind , papers , head ) {
     this.hitsKind = kind;
-    this.hits = papers.map( ( paper ) => Object.assign( {} , paper , { addTags: [] , at: "" } ) );
+    this.hits = papers.map( ( paper ) => this.hit( paper ) );
     this.picked = new Set();
     this.active = this.hits.length ? 0 : -1;
     this.pickAnchor = this.active;
@@ -671,72 +766,205 @@ const Lists = {
     this.drawHits();
   },
 
-  drawHits() {
+  // Which box of which hit has the focus, to give it back after a redraw.
+  focusSpot() {
+    const focused = document.activeElement;
+    const row = focused && focused.closest && focused.closest( "#list-add-results .add-hit" );
+    if ( !row || !focused.getAttribute( "data-hit-box" ) ) return null;
+    return { key: row.getAttribute( "data-key" ) , box: focused.getAttribute( "data-hit-box" ) };
+  },
+
+  drawHits( focus ) {
     const list = Dom.get( "list-add-results" );
+    const top = list.scrollTop;
     const items = this.hits.map( ( paper , index ) => this.hitRow( paper , index ) );
     if ( items.length === 0 ) {
       items.push( Dom.el( "li" , { class: "list-group-item text-body-secondary" , text: I18n.get( this.hitsKind === "recent" ? "lists.recent_nothing" : "lists.add_nothing" ) } ) );
     }
     list.replaceChildren( ...items );
+    list.scrollTop = top;
     const button = Dom.get( "list-add-picked" );
-    Dom.show( button , this.picked.size > 1 );
-    Dom.text( button , I18n.get( "lists.add_picked" ).replace( "{count}" , this.picked.size ) );
+    const waiting = Array.from( this.picked ).filter( ( index ) => this.hits[ index ] && !this.positions.has( this.hits[ index ].key ) );
+    Dom.show( button , waiting.length > 1 );
+    Dom.text( button , I18n.get( "lists.add_picked" ).replace( "{count}" , waiting.length ) );
     Dom.show( Dom.get( "list-add-panel" ) , true );
     Dom.get( "list-add" ).setAttribute( "aria-expanded" , "true" );
+    if ( focus ) {
+      const row = list.querySelector( '.add-hit[data-key="' + CSS.escape( focus.key ) + '"]' );
+      const box = row && row.querySelector( '[data-hit-box="' + focus.box + '"]' );
+      if ( box ) {
+        box.focus();
+        if ( box.setSelectionRange && typeof box.value === "string" ) box.setSelectionRange( box.value.length , box.value.length );
+        return;
+      }
+    }
     const active = list.querySelector( ".add-hit.active" );
-    if ( active ) active.scrollIntoView( { block: "nearest" } );
+    if ( active && !focus ) {
+      const view = list.getBoundingClientRect();
+      const box = active.getBoundingClientRect();
+      if ( box.top < view.top ) list.scrollTop -= view.top - box.top;
+      else if ( box.bottom > view.bottom ) list.scrollTop += box.bottom - view.bottom;
+    }
+  },
+
+  // The hits an action on hit index acts on: every picked one when it is
+  // among several picked, else just it.
+  group( index ) {
+    return this.picked.has( index ) && this.picked.size > 1 ? Array.from( this.picked ).sort( ( a , b ) => a - b ) : [ index ];
+  },
+
+  // "added 3h ago": how long ago, which is all anyone reads of the stamp.
+  // The catalogue's stamps are UTC without a zone.
+  ago( stamp ) {
+    const time = Date.parse( String( stamp || "" ).replace( " " , "T" ) + "Z" );
+    if ( !time ) return "";
+    const minutes = Math.max( 0 , ( Date.now() - time ) / 60000 );
+    let when;
+    if ( minutes < 2 ) when = I18n.get( "lists.ago_now" );
+    else if ( minutes < 60 ) when = I18n.get( "lists.ago_minutes" ).replace( "{n}" , Math.round( minutes ) );
+    else if ( minutes < 1440 ) when = I18n.get( "lists.ago_hours" ).replace( "{n}" , Math.round( minutes / 60 ) );
+    else if ( minutes < 43200 ) when = I18n.get( "lists.ago_days" ).replace( "{n}" , Math.round( minutes / 1440 ) );
+    else when = String( stamp ).slice( 0 , 10 );
+    return I18n.get( "lists.added_ago" ).replace( "{when}" , when );
   },
 
   hitRow( paper , index ) {
     const on = this.positions.get( paper.key );
     const picked = this.picked.has( index );
+    const meta = [ PaperLinks.meta( paper ) ];
+    if ( this.hitsKind === "recent" && paper.added ) meta.push( this.ago( paper.added ) );
     const children = [
       Dom.el( "div" , { class: "paper-title" , text: paper.title } ),
-      Dom.el( "div" , { class: "paper-meta" , text: PaperLinks.meta( paper ) } ),
+      Dom.el( "div" , { class: "paper-meta" , text: meta.filter( Boolean ).join( " · " ) } ),
     ];
+    if ( paper.content !== undefined ) children.push( Content.strip( paper.key , paper.content ) );
+    const locked = Boolean( this.view && this.view.locked );
     if ( on ) {
-      children.push( Dom.el( "div" , { class: "small text-success" , text: I18n.get( "lists.add_on_list" ).replace( "{n}" , on ) } ) );
-    } else {
-      // A tag and a position for this one, so it arrives where and as it should.
-      const tag = Dom.el( "input" , {
-        class: "form-control form-control-sm tag-input",
-        attrs: { type: "text" , list: "list-tag-options" , autocomplete: "off" , placeholder: I18n.get( "lists.tag_add_placeholder" ) , "aria-label": BoardView.label( "lists.tag_add_label" , paper.title ) },
-      } );
-      tag.value = paper.addTags.join( ", " );
-      tag.addEventListener( "change" , () => {
-        paper.addTags = tag.value.split( "," ).map( ( name ) => name.trim() ).filter( Boolean );
-      } );
-      const at = Dom.el( "input" , {
-        class: "form-control form-control-sm board-row-num",
-        attrs: { type: "text" , inputmode: "numeric" , placeholder: "#" , "aria-label": BoardView.label( "lists.add_at_label" , paper.title ) },
-      } );
-      at.value = paper.at;
-      at.addEventListener( "change" , () => { paper.at = at.value.trim(); } );
-      [ tag , at ].forEach( ( input ) => input.addEventListener( "keydown" , ( event ) => {
-        if ( event.key === "Enter" ) {
-          event.preventDefault();
-          input.dispatchEvent( new Event( "change" ) );
-          this.addHits( this.picked.has( index ) && this.picked.size > 1 ? Array.from( this.picked ) : [ index ] );
-        }
-      } ) );
-      children.push( Dom.el( "div" , { class: "add-hit-extra" , children: [ tag , at ] } ) );
+      children.push( Dom.el( "div" , { class: "small text-success fw-semibold" , children: [
+        Dom.el( "i" , { class: "bi bi-check2 me-1" , attrs: { "aria-hidden": "true" } } ),
+        Dom.el( "span" , { text: I18n.get( "lists.add_on_list" ).replace( "{n}" , on ) } ),
+      ] } ) );
+    } else if ( !locked ) {
+      children.push( Dom.el( "div" , { class: "d-flex flex-wrap align-items-center column-gap-3 row-gap-1 mt-1" , children: [
+        this.hitTags( paper , index ) , this.hitControls( paper , index ),
+      ] } ) );
     }
     const element = Dom.el( "li" , {
       class: "list-group-item list-group-item-action add-hit" + ( index === this.active ? " active" : "" ) + ( picked ? " is-picked" : "" ),
-      attrs: { role: "option" , "aria-selected": String( picked || index === this.active ) },
+      attrs: { role: "option" , "aria-selected": String( picked || index === this.active ) , "data-key": paper.key },
       children: children,
     } );
     element.addEventListener( "mousedown" , ( event ) => {
-      if ( event.target.closest( "input" ) ) return;
+      if ( event.target.closest( "input, button, a" ) ) return;
       // Not the input's blur first.
       event.preventDefault();
       this.pickHit( index , event );
     } );
     element.addEventListener( "dblclick" , ( event ) => {
-      if ( event.target.closest( "input" ) ) return;
+      if ( event.target.closest( "input, button, a" ) ) return;
       this.addHits( [ index ] );
     } );
+    if ( !on && !locked ) this.hitDraggable( element , index );
     return element;
+  },
+
+  // The tags it will arrive with, as chips, and a box to type another in.
+  // Enter with text adds the tag (to every picked hit, when this is one of
+  // several); Enter on an empty box adds the paper.
+  hitTags( paper , index ) {
+    const vocab = ( this.view.doc.vocab && this.view.doc.vocab.tags ) || [];
+    const chips = paper.addTags.map( ( name ) => {
+      const chip = Dom.el( "span" , { class: "tag-chip" , children: [ Dom.el( "span" , { text: name } ) ] } );
+      TagColors.paint( chip , name , vocab );
+      chip.appendChild( Dom.el( "button" , {
+        class: "tag-chip-remove",
+        attrs: { type: "button" , "aria-label": I18n.get( "lists.tag_unadd" ).replace( "{tag}" , () => name ) },
+        text: "×",
+        on: { click: () => {
+          paper.addTags = paper.addTags.filter( ( tag ) => tag.toLowerCase() !== name.toLowerCase() );
+          this.drawHits();
+        } },
+      } ) );
+      return chip;
+    } );
+    const input = Dom.el( "input" , {
+      class: "form-control form-control-sm tag-input",
+      attrs: {
+        type: "text" , list: "list-tag-options" , autocomplete: "off" , draggable: "false" , "data-hit-box": "tag",
+        placeholder: I18n.get( "lists.tag_add_placeholder" ),
+        title: I18n.get( "lists.hit_tag_help" ),
+        "aria-label": BoardView.label( "lists.tag_add_label" , paper.title ),
+      },
+    } );
+    input.value = paper.draft;
+    input.addEventListener( "input" , () => { paper.draft = input.value; } );
+    input.addEventListener( "keydown" , ( event ) => {
+      if ( event.key !== "Enter" ) return;
+      event.preventDefault();
+      const names = input.value.split( "," ).map( ( name ) => name.trim() ).filter( Boolean );
+      if ( names.length === 0 ) {
+        this.addHits( this.group( index ) );
+        return;
+      }
+      this.group( index ).forEach( ( at ) => {
+        const hit = this.hits[ at ];
+        hit.draft = "";
+        names.forEach( ( name ) => {
+          if ( !hit.addTags.some( ( tag ) => tag.toLowerCase() === name.toLowerCase() ) ) hit.addTags.push( name );
+        } );
+      } );
+      this.drawHits( { key: paper.key , box: "tag" } );
+    } );
+    return Dom.el( "div" , { class: "board-row-tags" , children: chips.concat( [ input ] ) } );
+  },
+
+  // Where it goes and the button that puts it there.
+  hitControls( paper , index ) {
+    const at = Dom.el( "input" , {
+      class: "form-control form-control-sm board-row-num",
+      attrs: {
+        type: "text" , inputmode: "numeric" , autocomplete: "off" , draggable: "false" , "data-hit-box": "at",
+        placeholder: "#" , title: I18n.get( "lists.add_at_help" ),
+        "aria-label": BoardView.label( "lists.add_at_label" , paper.title ),
+      },
+    } );
+    at.value = paper.at;
+    at.addEventListener( "input" , () => { paper.at = at.value.trim(); } );
+    at.addEventListener( "keydown" , ( event ) => {
+      if ( event.key !== "Enter" ) return;
+      event.preventDefault();
+      this.addHits( this.group( index ) );
+    } );
+    const count = this.group( index ).filter( ( i ) => this.hits[ i ] && !this.positions.has( this.hits[ i ].key ) ).length;
+    const button = Dom.el( "button" , {
+      class: "btn btn-sm btn-primary",
+      attrs: { type: "button" , "data-hit-box": "add" , title: I18n.get( "lists.add_button_help" ) },
+      text: count > 1 ? I18n.get( "lists.add_picked" ).replace( "{count}" , count ) : I18n.get( "lists.add_one" ),
+      on: { click: () => this.addHits( this.group( index ) ) },
+    } );
+    return Dom.el( "div" , { class: "add-hit-extra align-items-center mt-0" , children: [ at , button ] } );
+  },
+
+  // Dragged onto a row of the list, it lands right there (BoardView.draggable
+  // takes the drop); several picked go together.
+  hitDraggable( element , index ) {
+    element.draggable = true;
+    element.addEventListener( "dragstart" , ( event ) => {
+      if ( event.target.closest && event.target.closest( "input" ) ) {
+        event.preventDefault();
+        return;
+      }
+      const indexes = this.group( index ).filter( ( i ) => this.hits[ i ] && !this.positions.has( this.hits[ i ].key ) );
+      BoardView.dragging = { add: indexes };
+      this.hitDragging = true;
+      event.dataTransfer.effectAllowed = "copy";
+      event.dataTransfer.setData( "text/plain" , this.hits[ index ].key );
+    } );
+    element.addEventListener( "dragend" , () => {
+      BoardView.dragging = null;
+      this.hitDragging = false;
+      Dom.all( ".drop-before, .drop-after, .drop-into" ).forEach( ( row ) => row.classList.remove( "drop-before" , "drop-after" , "drop-into" ) );
+    } );
   },
 
   // Click picks one, Cmd/Ctrl-click adds or drops one, Shift-click a range.
@@ -758,12 +986,13 @@ const Lists = {
   },
 
   closeHits() {
+    if ( this.hitDragging ) return;
     Dom.show( Dom.get( "list-add-panel" ) , false );
     Dom.get( "list-add" ).setAttribute( "aria-expanded" , "false" );
   },
 
   onAddKey( event ) {
-    const open = !Dom.get( "list-add-panel" ).hidden;
+    const open = this.hitsOpen();
     if ( event.key === "ArrowDown" || event.key === "ArrowUp" ) {
       if ( !open || !this.hits.length ) return;
       event.preventDefault();
@@ -771,6 +1000,7 @@ const Lists = {
       this.active = ( this.active + step + this.hits.length ) % this.hits.length;
       if ( event.shiftKey ) this.picked.add( this.active );
       this.drawHits();
+      if ( this.active >= this.hits.length - 5 ) this.moreRecent();
     } else if ( event.key === "Enter" ) {
       event.preventDefault();
       if ( !open ) return;
@@ -785,9 +1015,28 @@ const Lists = {
     return this.addHits( Array.from( this.picked ).sort( ( a , b ) => a - b ) );
   },
 
-  // Adds hits as one change: each with its tags, at its position if it has
-  // one. Papers already on the list are shown rather than refused.
-  async addHits( indexes ) {
+  // What a hit's # box says: a position, "top" / "bottom", or nothing (the
+  // "add to…" setting).
+  hitAt( text ) {
+    const value = String( text || "" ).trim().toLowerCase();
+    if ( !value ) return undefined;
+    if ( value === "top" || value === "t" ) return "top";
+    if ( value === "bottom" || value === "b" ) return "bottom";
+    const at = parseInt( value.replace( /^#/ , "" ) , 10 );
+    return Number.isFinite( at ) && at > 0 ? at : undefined;
+  },
+
+  // Dropped on a row: before or after it, in the order they were listed.
+  addNear( indexes , anchor , side ) {
+    // Onto the list's own rows only (not the shelf's).
+    if ( !this.positions.has( anchor ) ) return undefined;
+    return this.addHits( indexes , { anchor: anchor , side: side } );
+  },
+
+  // Adds hits as one change: each with its tags (and any tag still typed in
+  // its box), at its position if it has one, or next to a row they were
+  // dropped on. Papers already on the list are shown rather than refused.
+  async addHits( indexes , near ) {
     const papers = indexes.map( ( index ) => this.hits[ index ] ).filter( Boolean );
     const fresh = papers.filter( ( paper ) => !this.positions.has( paper.key ) );
     if ( fresh.length === 0 ) {
@@ -796,30 +1045,43 @@ const Lists = {
     }
     const ops = [];
     const back = [];
+    let previous = null;
     fresh.forEach( ( paper ) => {
-      const tags = paper.addTags.map( ( name ) => this.createTag( name , ops , back ) );
+      const typed = paper.draft.split( "," ).map( ( name ) => name.trim() ).filter( Boolean );
+      const names = paper.addTags.concat( typed.filter( ( name ) => !paper.addTags.some( ( tag ) => tag.toLowerCase() === name.toLowerCase() ) ) );
+      const tags = names.map( ( name ) => this.createTag( name , ops , back ) );
       const op = { op: "add" , paper: paper.key };
       if ( tags.length ) op.tags = tags;
-      const at = parseInt( paper.at , 10 );
-      if ( Number.isFinite( at ) && at > 0 ) op.at = at;
+      if ( near ) {
+        // Before the row: each lands in front of it, so they keep their order.
+        // After it: each after the one before.
+        op.at = near.side === "before" ? { before: near.anchor } : { after: previous || near.anchor };
+        previous = paper.key;
+      } else {
+        const at = this.hitAt( paper.at );
+        if ( at !== undefined ) op.at = at;
+      }
       ops.push( op );
     } );
     back.unshift( { op: "remove" , rows: fresh.map( ( paper ) => paper.key ) } );
-    const added = new Set( fresh.map( ( paper ) => paper.key ) );
+    const focus = this.focusSpot();
     const done = await this.change( fresh.length > 1 ? "undo.list_add_many" : "undo.list_add" , ops , back , { flash: fresh[ 0 ].key } );
     if ( !done ) return;
+    fresh.forEach( ( paper ) => {
+      paper.draft = "";
+      paper.addTags = [];
+      paper.at = "";
+    } );
     if ( this.hitsKind === "recent" ) {
-      // Recently added lists what is NOT on the list: what was added goes.
-      this.hits = this.hits.filter( ( paper ) => !added.has( paper.key ) );
-      this.recentTotal = Math.max( 0 , this.recentTotal - added.size );
+      // The server leaves out what is on the list, so its pages shift up by
+      // what was added; here the added ones stay, as ✓ #n.
+      this.recentTotal = Math.max( 0 , this.recentTotal - fresh.length );
+      this.recentOn = ( this.recentOn || 0 ) + fresh.length;
+      if ( this.recentNext != null ) this.recentNext = Math.max( 0 , this.recentNext - fresh.length );
       Dom.text( Dom.get( "list-add-head" ) , this.recentHead() );
-      this.picked = new Set();
-      this.active = Math.min( this.active , this.hits.length - 1 );
-      this.drawHits();
-    } else {
-      Dom.get( "list-add" ).value = "";
-      this.closeHits();
     }
+    this.picked = new Set();
+    if ( this.hitsOpen() ) this.drawHits( focus );
   },
 
   // ---- live ------------------------------------------------------------------

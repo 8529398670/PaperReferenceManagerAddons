@@ -359,12 +359,11 @@ const BoardView = {
 
   paperBlock( item , ctx , paper , cite ) {
     const meta = PaperLinks.meta( { authors: paper.authors || [] , year: item.year , journal: item.journal } , paper.n_authors );
-    const foot = [ PaperLinks.strip( { key: item.key , doi: item.doi , has_pdf: paper.has_pdf } ) ];
-    if ( paper.in_library === false ) {
-      foot.push( Dom.el( "span" , { class: "badge text-bg-light border" , text: I18n.get( "lists.not_in_library" ) } ) );
-    } else {
-      foot.push( Content.strip( item.key , paper.content ) );
-    }
+    // One strip of coloured labels: DOI, Proxy, PDF, Figures, MD, Methods,
+    // Code, Datasets, then OpenAlex and modalities (Content.labelStrip).
+    const inLibrary = paper.in_library !== false;
+    const foot = [ Content.labelStrip( { key: item.key , doi: item.doi , has_pdf: paper.has_pdf } , inLibrary ? ( paper.content || null ) : undefined ) ];
+    if ( !inLibrary ) foot.push( Dom.el( "span" , { class: "badge text-bg-light border" , text: I18n.get( "lists.not_in_library" ) } ) );
     // In the library, the title opens the Paper screen, with Prev / Next
     // stepping through this list.
     const title = paper.in_library === false
@@ -598,7 +597,7 @@ const BoardView = {
       title,
       Dom.el( "div" , { class: "paper-meta" , text: meta } ),
       Dom.el( "div" , { class: "paper-foot" , children: [
-        PaperLinks.strip( { key: item.key , doi: item.doi , has_pdf: paper.has_pdf } ),
+        Content.labelStrip( { key: item.key , doi: item.doi , has_pdf: paper.has_pdf } ),
         Dom.el( "span" , { class: "badge border " + ( paper.in_library ? "text-bg-success" : "text-bg-light" ) , text: badge } ),
       ] } ),
       this.tags( item , ctx ),
@@ -637,7 +636,8 @@ const BoardView = {
     } );
     li.style.setProperty( "--section-color" , section.color || "#8b94a3" );
     li.addEventListener( "dragover" , ( event ) => {
-      if ( !this.dragging ) return;
+      // A row only: a hit from the add panel is dropped on a row instead.
+      if ( typeof this.dragging !== "string" ) return;
       event.preventDefault();
       li.classList.add( "drop-into" );
     } );
@@ -645,7 +645,7 @@ const BoardView = {
     li.addEventListener( "drop" , ( event ) => {
       event.preventDefault();
       li.classList.remove( "drop-into" );
-      if ( this.dragging ) handlers.dropOnSection( this.dragging , section.id );
+      if ( typeof this.dragging === "string" ) handlers.dropOnSection( this.dragging , section.id );
     } );
     return li;
   },
@@ -653,6 +653,9 @@ const BoardView = {
   // ---- dragging ---------------------------------------------------------------------
 
   // Drag by the grip only, so the text in a row can still be selected.
+  // dragging is a row's key, or { add: [hit indexes] } for papers dragged in
+  // from the add panel (lists.js hitDraggable), which land next to the row
+  // they are dropped on.
   draggable( li , grip , key , handlers ) {
     grip.addEventListener( "pointerdown" , () => { li.draggable = true; } );
     li.addEventListener( "dragstart" , ( event ) => {
@@ -670,6 +673,7 @@ const BoardView = {
     li.addEventListener( "dragover" , ( event ) => {
       if ( !this.dragging || this.dragging === key ) return;
       event.preventDefault();
+      event.dataTransfer.dropEffect = typeof this.dragging === "string" ? "move" : "copy";
       const box = li.getBoundingClientRect();
       const after = event.clientY > box.top + box.height / 2;
       li.classList.toggle( "drop-after" , after );
@@ -681,7 +685,8 @@ const BoardView = {
       const moving = this.dragging;
       const side = li.classList.contains( "drop-after" ) ? "after" : "before";
       li.classList.remove( "drop-before" , "drop-after" );
-      if ( moving && moving !== key ) handlers.moveNear( moving , key , side );
+      if ( moving && moving.add ) handlers.addNear( moving.add , key , side );
+      else if ( moving && moving !== key ) handlers.moveNear( moving , key , side );
     } );
   },
 

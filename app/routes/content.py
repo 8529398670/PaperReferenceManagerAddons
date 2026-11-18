@@ -12,6 +12,7 @@ from typing import Annotated, Any, Literal
 
 from msgspec import Meta
 from starlette.requests import Request
+from starlette.responses import Response
 
 from app.apidocs import QUERY, Reply, route
 from app.apidocs import Request as RequestType
@@ -86,6 +87,36 @@ def paper_content(request: Request, body: PaperKey) -> ContentReply:
     content = get_content(request)
     content.open(paper.key)
     return ContentReply(key=paper.key, content=content.paper(paper.key), lists=lists_holding(request, paper.key))
+
+
+class PaperText(RequestType):
+    key: Annotated[str, QUERY, Meta(description="The paper's key, from search_library.")] = ""
+    part: Annotated[Literal["md", "methods"], QUERY, Meta(
+        description="md (default): the whole text, a heading per section. methods: its methods sections only.",
+        extra={"error": "part must be md or methods"},
+    )] = "md"
+
+
+@route(
+    "GET /api/paper/text", summary="A paper's text as Markdown",
+    tag=TAG, errors=(404,), reply_type="text/plain",
+    description=(
+        "The paper's text as the methods stage split it, as Markdown (a heading per section), to read in the browser: "
+        "the whole text (part=md) or only its methods (part=methods). 404 until that stage has read it."
+    ),
+    mcp_http="Plain text, for a browser to show.",
+)
+def paper_text(request: Request, body: PaperText) -> Response:
+    paper = request.app.state.library.catalogue.find(body.key)
+    if paper is None:
+        raise Refused(404, "no such paper in the library")
+    text = get_content(request).text_of(paper.key, body.part, paper.record.get("title") or "")
+    if not text:
+        raise Refused(404, "no methods section found yet" if body.part == "methods" else "this paper's text has not been read yet")
+    # text/plain, inline: every browser shows it (text/markdown is often saved instead).
+    name = "".join(c if c.isalnum() or c in "-_." else "_" for c in paper.key)[:80] + ("-methods" if body.part == "methods" else "") + ".md"
+    return Response(text.encode("utf-8"), media_type="text/plain; charset=utf-8",
+                    headers={"Content-Disposition": f'inline; filename="{name}"'})
 
 
 class RetryBody(RequestType):

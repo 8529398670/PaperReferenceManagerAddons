@@ -334,10 +334,13 @@ def get_schema(request: Request) -> SchemaReply:
 async def stream_lists(request: Request) -> Response:
     if request.method == "HEAD":
         return Response(headers=sse.HEADERS)
-    from app.routes.streams import still_signed_in
+    from app.routes.streams import still_signed_in, stream_owner, stream_refused
 
+    refused = stream_refused(request)
+    if refused is not None:
+        return refused
     hub = get_service(request).hub
-    client = hub.join()
+    client = hub.join(stream_owner(request))
     if client is None:
         return error(503, "too many live streams")
     return sse.EventStream(hub, client, still_signed_in(request), opening=(sse.retry(sse.RETRY_MS),))

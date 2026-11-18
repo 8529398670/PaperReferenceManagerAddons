@@ -255,7 +255,7 @@
                 </section>
               </div>
               <div class="col-12 col-xl-5">
-                <section class="card h-100">
+                <section class="card h-100" id="paper-network-card">
                   <div class="card-body">
                     <h3 class="card-title h5" data-i18n="paper.network_heading"></h3>
                     <div id="paper-network"></div>
@@ -264,7 +264,7 @@
               </div>
             </div>
 
-            <section class="card">
+            <section class="card" id="paper-stages-card">
               <div class="card-body">
                 <h3 class="card-title h5" data-i18n="paper.content_heading"></h3>
                 <p class="small text-body-secondary" data-i18n="paper.content_help"></p>
@@ -312,7 +312,7 @@
 
             <div class="row g-3 align-items-start">
               <div class="col-12 col-xxl-8">
-                <section class="card">
+                <section class="card" id="paper-sections-card">
                   <div class="card-body">
                     <h3 class="card-title h5" data-i18n="paper.sections_heading"></h3>
                     <p class="small text-body-secondary" data-i18n="paper.sections_help"></p>
@@ -329,7 +329,7 @@
                 </section>
               </div>
               <div class="col-12 col-xxl-4">
-                <section class="card">
+                <section class="card" id="paper-found-card">
                   <div class="card-body">
                     <h3 class="card-title h5" data-i18n="paper.found_heading"></h3>
                     <div id="paper-found"></div>
@@ -1149,11 +1149,11 @@
                       <input id="list-add" class="form-control" type="search" autocomplete="off" spellcheck="false"
                              role="combobox" aria-expanded="false" aria-controls="list-add-panel"
                              data-i18n-attr="placeholder:lists.add_placeholder" />
-                      <label for="list-recent-days" class="visually-hidden" data-i18n="lists.recent_range"></label>
-                      <select id="list-recent-days" class="form-select flex-grow-0 w-auto">
-                        <option value="7" data-i18n="lists.recent_week"></option>
-                        <option value="14" data-i18n="lists.recent_2weeks"></option>
-                        <option value="31" data-i18n="lists.recent_month"></option>
+                      <label for="list-add-where-bar" class="visually-hidden" data-i18n="lists.add_where"></label>
+                      <select id="list-add-where-bar" class="form-select flex-grow-0 w-auto" data-i18n-attr="title:lists.add_where_help">
+                        <option value="bottom" data-i18n="lists.where_bar_bottom"></option>
+                        <option value="top" data-i18n="lists.where_bar_top"></option>
+                        <option value="placed" data-i18n="lists.where_bar_placed"></option>
                       </select>
                       <button id="list-recent" type="button" class="btn btn-outline-secondary">
                         <i class="bi bi-clock-history" aria-hidden="true"></i> <span data-i18n="lists.recent"></span>

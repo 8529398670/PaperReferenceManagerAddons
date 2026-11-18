@@ -125,6 +125,7 @@ content:
   not_available: "Not available"
   not_available_title: "No worker is running: scripts/run.sh worker crops figures and reads scanned PDFs."
   modality_title: "A modality this paper uses"
+  found_title: "See the code and dataset links found in it"
   retry: "Retry"
   # {error} why it failed, {attempts} how many tries so far.
   why: "{error} ({attempts} tries)"
@@ -598,6 +599,12 @@ links:
   doi_title: "Open the publisher's page"
   proxy_title: "Open through the library proxy"
   pdf_title: "Open the PDF from your Zotero library"
+  figures: "Figures"
+  figures_title: "Open all the paper's figures in one image (the montage)"
+  md: "MD"
+  md_title: "Open the paper's whole text, a heading per section"
+  methods: "Methods"
+  methods_title: "Open the paper's methods section"
 
 # The Lists screen (static/js/lists.js, board_view.js).
 lists:
@@ -614,7 +621,19 @@ lists:
   empty: "This list is empty. Search above to add a paper."
   add_label: "Add a paper"
   add_placeholder: "Add a paper: part of its title, or paste a DOI"
-  add_help: "Enter or double-click adds. Cmd/Ctrl-click or Shift-click to pick several."
+  add_help: "Enter, double-click or ＋ Add adds. Cmd/Ctrl-click or Shift-click picks several. Type tags or a # first, or drag one onto a row."
+  add_one: "＋ Add"
+  add_button_help: "Add it, with its tags, where its # says (empty: where \"Add to\" says). When several are picked, adds them all."
+  add_at_help: "Where to put it: 1 is the top, past the end is the bottom; top or bottom work too. Empty: where \"Add to\" says."
+  hit_tag_help: "Tags it arrives with. Enter adds one (to every picked hit, when this is one of several); Enter on an empty box adds the paper."
+  # {tag}
+  tag_unadd: "Don't add the tag {tag}"
+  added_ago: "added {when}"
+  ago_now: "just now"
+  # {n} minutes / hours / days.
+  ago_minutes: "{n}m ago"
+  ago_hours: "{n}h ago"
+  ago_days: "{n}d ago"
   add_on_list: "On the list at #{n}"
   add_nothing: "No paper in the library looks like that."
   filter_label: "Filter this list"
@@ -655,13 +674,10 @@ lists:
   # {count} picked papers.
   add_picked: "＋ Add {count}"
   recent: "Recently added"
-  recent_range: "How far back"
-  recent_week: "Past week"
-  recent_2weeks: "Past 2 weeks"
-  recent_month: "Past month"
-  # {range} as picked, {count} papers.
-  recent_head: "Added to Zotero ({range}) and not on this list: {count}"
-  recent_nothing: "Nothing saved in Zotero in that time is missing from this list."
+  # {count} papers not on the list, {on} already on it.
+  recent_head: "Newest in Zotero first: {count} not on this list yet ({on} already on it)"
+  recent_nothing: "Every paper in Zotero is already on this list."
+  recent_more: "Loading more..."
 
   # The tag bar.
   menu: "List"
@@ -706,6 +722,11 @@ lists:
   where_bottom: "the bottom"
   where_top: "the top"
   where_placed: "after the last row placed by hand"
+  # The same setting beside Recently added: "Add to: Bottom".
+  where_bar_bottom: "Add to bottom"
+  where_bar_top: "Add to top"
+  where_bar_placed: "Add after last sorted"
+  add_where_help: "Where a paper you add lands when its # box is empty"
   jump_label: "Jump to row number"
   jump_placeholder: "Go #"
   to_anchor: "To anchor"

@@ -2137,6 +2137,7 @@ Text, as `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
 | GET | [`/api/content/papers`](#get-apicontentpapers) | The papers a stage has not finished | browser session or API key, anyone signed in |
 | GET | [`/api/content/status`](#get-apicontentstatus) | How far the content queue has got | browser session or API key, anyone signed in |
 | GET | [`/api/paper/content`](#get-apipapercontent) | What is known about a paper | browser session or API key, anyone signed in |
+| GET | [`/api/paper/text`](#get-apipapertext) | A paper's text as Markdown | browser session or API key, anyone signed in |
 | POST | [`/api/papers/badges`](#post-apipapersbadges) | What is ready, for many papers | browser session or API key, anyone signed in |
 | POST | [`/api/papers/retry`](#post-apipapersretry) | Try a failed stage again | browser session or API key, anyone signed in |
 
@@ -2221,6 +2222,29 @@ Everything derived about one paper so far: its sections (the methods split), cod
 | `content` | object | yes |  | stages: each stage's state (pending, running, done, failed, not_found, none) with its error and summary; sections (the text split on its headings), code, data and names (links and datasets found), modalities, network (OpenAlex id, reference and citer counts, how many of each are in the library) and openalex_abstract. |
 | `key` | string | yes |  |  |
 | `lists` | array of object | yes |  | The lists the paper is on: slug, name, position. |
+
+### GET /api/paper/text
+
+A paper's text as Markdown
+
+The paper's text as the methods stage split it, as Markdown (a heading per section), to read in the browser: the whole text (part=md) or only its methods (part=methods). 404 until that stage has read it.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | None, HTTP only: Plain text, for a browser to show. |
+| Errors | 400, 401, 404, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `key` | query | string | no |  | The paper's key, from search_library. |
+| `part` | query | string | no | one of `md`, `methods`; default `md` | md (default): the whole text, a heading per section. methods: its methods sections only. |
+
+**Reply 200**: Success
+
+Text, as `text/plain`.
 
 ### POST /api/papers/badges
 
@@ -2854,7 +2878,7 @@ Search the papers in the Zotero library, a page at a time. mode "text" (default)
 
 Papers added lately
 
-Papers added in Zotero in the last days, newest first, leaving out those already on the list not_on names: "what did I save this week that isn't on this list yet?". Read from the live catalogue, so a paper saved seconds ago is there.
+Papers in order of when they were added to Zotero, newest first (only the last days, if days is set), leaving out those already on the list not_on names: "what did I save lately that isn't on this list yet?". Page through with offset and next. Read from the live catalogue, so a paper saved seconds ago is there.
 
 |  |  |
 |---|---|
@@ -2866,7 +2890,7 @@ Papers added in Zotero in the last days, newest first, leaving out those already
 
 | Name | In | Type | Required | Limits | Description |
 |---|---|---|---|---|---|
-| `days` | query | integer | no | 1 to 3650; default `7` | How far back. Default 7. |
+| `days` | query | integer | no | 0 to 3650 | How far back, in days. 0 (default): every paper, newest first. |
 | `not_on` | query | string | no |  | A list's slug: leave out the papers already on it. |
 | `limit` | query | integer | no | 1 to 1000; default `50` | Papers to return. Default 50. |
 | `offset` | query | integer | no | at least 0 | Papers to skip: the next value of the previous page. |
@@ -2876,7 +2900,8 @@ Papers added in Zotero in the last days, newest first, leaving out those already
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
 | `next` | integer or null | yes |  | Offset of the next page, or null on the last one. |
-| `papers` | array of object | yes |  |  |
+| `on_list` | integer | no |  | How many papers not_on's list already holds (0 without not_on). |
+| `papers` | array of object | yes |  | Each paper as the library has it, with content (what is ready of it, as content_badges gives it; null before its first stage is queued). |
 | `total` | integer | yes |  |  |
 
 ### GET /api/version

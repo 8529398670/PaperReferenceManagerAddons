@@ -12482,6 +12482,75 @@
         "x-mcp-http": "The file itself, for a browser to show."
       }
     },
+    "/api/paper/text": {
+      "get": {
+        "description": "The paper's text as the methods stage split it, as Markdown (a heading per section), to read in the browser: the whole text (part=md) or only its methods (part=methods). 404 until that stage has read it.",
+        "operationId": "get_api_paper_text",
+        "parameters": [
+          {
+            "description": "The paper's key, from search_library.",
+            "in": "query",
+            "name": "key",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "md (default): the whole text, a heading per section. methods: its methods sections only.",
+            "in": "query",
+            "name": "part",
+            "schema": {
+              "default": "md",
+              "enum": [
+                "md",
+                "methods"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "A paper's text as Markdown",
+        "tags": [
+          "Content"
+        ],
+        "x-mcp-http": "Plain text, for a browser to show."
+      }
+    },
     "/api/papers": {
       "get": {
         "description": "Search the papers in the Zotero library, a page at a time. mode \"text\" (default) is boolean full-text search over title, authors, abstract and the PDF's text: words are ANDed, OR between alternatives, -word or NOT word excludes, \"a phrase\" is literal. mode \"title\" finds a half-remembered title, typos and all, or a pasted DOI.",
@@ -12752,17 +12821,16 @@
     },
     "/api/papers/recent": {
       "get": {
-        "description": "Papers added in Zotero in the last days, newest first, leaving out those already on the list not_on names: \"what did I save this week that isn't on this list yet?\". Read from the live catalogue, so a paper saved seconds ago is there.",
+        "description": "Papers in order of when they were added to Zotero, newest first (only the last days, if days is set), leaving out those already on the list not_on names: \"what did I save lately that isn't on this list yet?\". Page through with offset and next. Read from the live catalogue, so a paper saved seconds ago is there.",
         "operationId": "get_api_papers_recent",
         "parameters": [
           {
-            "description": "How far back. Default 7.",
+            "description": "How far back, in days. 0 (default): every paper, newest first.",
             "in": "query",
             "name": "days",
             "schema": {
-              "default": 7,
               "maximum": 3650,
-              "minimum": 1,
+              "minimum": 0,
               "type": "integer"
             }
           },
@@ -12808,7 +12876,12 @@
                         "null"
                       ]
                     },
+                    "on_list": {
+                      "description": "How many papers not_on's list already holds (0 without not_on).",
+                      "type": "integer"
+                    },
                     "papers": {
+                      "description": "Each paper as the library has it, with content (what is ready of it, as content_badges gives it; null before its first stage is queued).",
                       "items": {
                         "type": "object"
                       },

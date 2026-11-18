@@ -25,7 +25,7 @@ const BoardColumns = {
   // In rem, as style.css has them: a column's default, the # / grip /
   // anchor cell (--board-side), the remove button, and the column gap.
   COLUMN: 16,
-  SIDE: 7.5,
+  SIDE: 5.75,
   END: 2.25,
   GAP: 0.75,
 
@@ -53,6 +53,15 @@ const BoardColumns = {
     new ResizeObserver( () => {
       if ( this.ids.length && !this.stored().paper ) this.apply();
     } ).observe( board );
+    // A mouse wheel turned over the column labels scrolls the board
+    // sideways: a plain wheel has no other way to reach the columns past the
+    // window's edge (Shift+wheel and a trackpad still work anywhere).
+    Dom.get( "list-head" ).addEventListener( "wheel" , ( event ) => {
+      if ( event.shiftKey || event.ctrlKey || Math.abs( event.deltaX ) >= Math.abs( event.deltaY ) ) return;
+      if ( board.scrollWidth <= board.clientWidth ) return;
+      event.preventDefault();
+      board.scrollLeft += event.deltaY;
+    } , { passive: false } );
   },
 
   stored() {

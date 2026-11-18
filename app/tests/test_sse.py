@@ -59,6 +59,24 @@ class HubTest(unittest.IsolatedAsyncioTestCase):
         hub.leave(first)
         self.assertIsNotNone(hub.join())
 
+    async def test_one_stream_per_owner(self) -> None:
+        # A browser has six connections per server: a session's second stream
+        # replaces its first (told "replaced", then the end) instead of
+        # taking another.
+        hub = sse.Hub(max_clients=10)
+        first = hub.join("session-a")
+        other = hub.join("session-b")
+        second = hub.join("session-a")
+        self.assertEqual(len(hub.clients), 2)
+        self.assertNotIn(first, hub.clients)
+        self.assertEqual([first.queue.get_nowait(), first.queue.get_nowait()], [sse.REPLACED, None])
+        self.assertTrue(other.queue.empty())
+        hub.leave(first)
+        self.assertIs(hub.owned["session-a"], second)
+        hub.leave(second)
+        self.assertNotIn("session-a", hub.owned)
+        self.assertEqual(len([hub.join(), hub.join()]), 2)
+
     async def test_closing_reaches_a_client_with_a_full_queue(self) -> None:
         hub = sse.Hub()
         client = hub.join()

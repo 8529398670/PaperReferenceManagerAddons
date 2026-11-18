@@ -31,14 +31,21 @@ const PaperView = {
     this.route();
   },
 
+  // #paper/<key>, or #paper/<key>/<card> to open it at one of its cards
+  // (network, stages, figures, sections, found): the badges link there.
   keyOfHash() {
     const hash = window.location.hash.replace( /^#/ , "" );
     if ( !hash.startsWith( "paper/" ) ) return "";
     try {
-      return decodeURIComponent( hash.slice( "paper/".length ) );
+      return decodeURIComponent( hash.slice( "paper/".length ).split( "/" )[ 0 ] );
     } catch ( error ) {
       return "";
     }
+  },
+
+  cardOfHash() {
+    const hash = window.location.hash.replace( /^#/ , "" );
+    return hash.startsWith( "paper/" ) ? hash.slice( "paper/".length ).split( "/" )[ 1 ] || "" : "";
   },
 
   route() {
@@ -47,7 +54,15 @@ const PaperView = {
     if ( key !== this.key ) {
       this.key = key;
       this.load( true );
+    } else {
+      this.revealCard();
     }
+  },
+
+  revealCard() {
+    const name = this.cardOfHash();
+    const card = /^[a-z]+$/.test( name ) ? Dom.get( "paper-" + name + "-card" ) : null;
+    if ( card && !card.hidden ) Dom.reveal( card , "start" );
   },
 
   async load( fresh ) {
@@ -76,18 +91,22 @@ const PaperView = {
     await PaperLinks.init();
     this.draw( paper.paper , content );
     Dom.show( Dom.get( "paper-body" ) , true );
-    if ( fresh ) Nav.announce( "paper" );
+    if ( fresh ) {
+      Nav.announce( "paper" );
+      this.revealCard();
+    }
   },
 
   draw( paper , answer ) {
     const content = answer.content;
     Dom.text( Dom.get( "paper-title" ) , paper.title || paper.key );
     Dom.text( Dom.get( "paper-meta" ) , [ ( paper.authors || [] ).join( ", " ) , paper.year || "" , paper.journal || "" ].filter( Boolean ).join( " · " ) );
-    const links = PaperLinks.strip( paper );
+    const badge = this.badgeOf( content );
+    const links = PaperLinks.strip( paper , badge );
     if ( content.openalex_url ) {
       links.appendChild( PaperLinks.link( content.openalex_url , "paper.openalex_link" , "paper.openalex_link_title" ) );
     }
-    Dom.swap( Dom.get( "paper-links" ) , links , Content.strip( paper.key , this.badgeOf( content ) ) );
+    Dom.swap( Dom.get( "paper-links" ) , links , Content.strip( paper.key , badge ) );
     this.drawTags( paper , answer.lists );
     this.drawNav();
     this.drawStages( content.stages , content.worker );
@@ -114,6 +133,7 @@ const PaperView = {
       code: states.code === "done" ? content.code.length : 0,
       data: states.datasets === "done" ? content.data.length + content.names.length : 0,
       methods: Boolean( methods.methods_chars ),
+      has_text: Boolean( methods.has_text ),
       figures: states.figures === "done" ? ( ( content.stages.figures || {} ).summary || {} ).n || 0 : 0,
       refs: ( content.network || {} ).refs , citers: ( content.network || {} ).citers,
     };
