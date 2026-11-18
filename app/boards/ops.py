@@ -974,7 +974,12 @@ def op_fill_shared( doc , ctx , p ):
 ADD_WHERE = ( "bottom" , "top" , "placed" )
 
 
-_OPTION_KEYS = ( "auto_move" , "add_where" , "cite_style" , "sync" , "sheet_url" )
+_OPTION_KEYS = ( "auto_move" , "add_where" , "cite_style" , "sync" , "sheet_url" , "auto_add" )
+
+
+def zotero_now():
+    """Now , as Zotero writes date_added ( UTC ) -- what auto_add_since compares with."""
+    return time.strftime( "%Y-%m-%d %H:%M:%S" , time.gmtime() )
 
 
 def op_options( doc , ctx , p ):
@@ -986,7 +991,10 @@ def op_options( doc , ctx , p ):
     on config.yaml's citation.style ) and sync ( how this list shares tag and
     cell edits with the other lists holding the same papers : "two-way" sends
     and takes , "one-way" only takes -- its own tweaks stay here -- and "off"
-    does neither ; true / false are two-way / off )."""
+    does neither ; true / false are two-way / off ) and auto_add ( papers newly
+    saved to the Zotero library join this list on their own : "off" , "top" or
+    "bottom" ; switching it on starts from now , never the papers already
+    there )."""
     opts = _options( doc )
     if not any( k in p for k in _OPTION_KEYS ):
         raise OpError( "give " + " and / or ".join( f"`{k}`" for k in _OPTION_KEYS ) )
@@ -1017,8 +1025,17 @@ def op_options( doc , ctx , p ):
         if url and not url.startswith( "https://docs.google.com/spreadsheets/" ):
             raise OpError( "`sheet_url` is a https://docs.google.com/spreadsheets/ link , or \"\"" )
         opts[ "sheet_url" ] = url[ :500 ]
+    if "auto_add" in p:
+        want = p[ "auto_add" ]
+        if want not in sortboard.AUTO_ADD:
+            raise OpError( "`auto_add` is " + " , ".join( f'"{m}"' for m in sortboard.AUTO_ADD ) )
+        was = opts.get( "auto_add" ) if opts.get( "auto_add" ) in sortboard.AUTO_ADD else "off"
+        if want != "off" and ( was == "off" or not opts.get( "auto_add_since" ) ):
+            opts[ "auto_add_since" ] = zotero_now()
+        opts[ "auto_add" ] = want
     return { "auto_move": bool( opts.get( "auto_move" ) ) , "add_where": opts.get( "add_where" ) ,
-        "cite_style": opts.get( "cite_style" ) or "" , "sync": sortboard.sync_mode( opts.get( "sync" ) ) }
+        "cite_style": opts.get( "cite_style" ) or "" , "sync": sortboard.sync_mode( opts.get( "sync" ) ) ,
+        "auto_add": opts.get( "auto_add" ) or "off" }
 
 
 def _have_index( doc ):
@@ -1733,7 +1750,9 @@ OPS = {
             "without .csl ( \"\" = the configured default )" ) ,
         "sync": ( "str" , False , "sharing tag / cell edits with the other lists : two-way ( default ) | "
             "one-way ( takes theirs , keeps its own ) | off" ) ,
-        "sheet_url": ( "str" , False , "the Google Sheet last imported from ( a docs.google.com link , or \"\" )" ) } ) ,
+        "sheet_url": ( "str" , False , "the Google Sheet last imported from ( a docs.google.com link , or \"\" )" ) ,
+        "auto_add": ( "str" , False , "papers newly saved to the Zotero library join this list on their own : "
+            "off ( default ) | top | bottom ; switching it on starts from now" ) } ) ,
     "stage":      ( op_stage , { "text": ( "str" , True , "a pasted reference list" ) } ) ,
     "stage_add":  ( op_stage_add , { "rows": ( "rows" , False , ROWS ) ,
         "all": ( "bool" , False , "the whole shelf" ) , "at": ( "pos" , False , POS ) } ) ,
@@ -1891,7 +1910,8 @@ def rows_view( doc , meta=None , q="" , tags=None , match="any" , shelf=False ,
             "count": counts.get( lc( t[ "name" ] ) , 0 ) } for t in _vocab( doc ) ] ,
         "options": { "auto_move": bool( _options( doc ).get( "auto_move" ) ) ,
             "add_where": _options( doc ).get( "add_where" ) or "bottom" ,
-            "sync": sortboard.sync_mode( _options( doc ).get( "sync" ) ) } ,
+            "sync": sortboard.sync_mode( _options( doc ).get( "sync" ) ) ,
+            "auto_add": _options( doc ).get( "auto_add" ) or "off" } ,
         "list":    len( _items( doc ) ) ,
         "shelf":   len( _staged( doc ) ) ,
     }

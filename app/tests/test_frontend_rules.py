@@ -24,6 +24,10 @@ STATIC = Path(__file__).resolve().parents[2] / "static"
 # key caps beside what they do. This app adds the lists' board: a spreadsheet
 # of papers whose columns the reader resizes (--board-grid).
 GRID_COMPONENTS = {".log-cal-grid", ".theme-preview", ".shortcut-list", ".board-head", ".board-rows > .board-row"}
+# The scripts that size those components' tracks: the Lists board's column
+# widths are dragged, and set on one stylesheet rule rather than through an
+# inherited property so a long list does not restyle on every pointer move.
+GRID_SCRIPTS = {"board_columns.js"}
 
 CSS_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
 
@@ -67,6 +71,8 @@ class FrontendRulesTest(unittest.TestCase):
         sources = scripts()
         sources["index.html"] = read("index.html")
         for name, text in sources.items():
+            if name in GRID_SCRIPTS:
+                continue
             self.assertFalse(
                 "grid-template-columns" in text or "gridTemplateColumns" in text,
                 f"{name} sets grid columns itself. Use Bootstrap's .row / .col-* (frontend.md, Hard rules)",

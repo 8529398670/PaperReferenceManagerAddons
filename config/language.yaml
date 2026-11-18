@@ -30,8 +30,8 @@ nav:
   page_title: "{screen} · {app}"
   # Foot of the sidebar, for admins.
   version: "Version {version}"
-  library: "Library"
-  lists: "Lists"
+  # The Lists screen, whose first entry is the whole library.
+  lists: "Library"
   missing: "Missing"
   status: "Status"
   figures: "Figures"
@@ -54,9 +54,8 @@ nav:
   jobs: "Jobs"
   settings: "Settings"
 
-# The Library screen (static/js/library.js): every paper in Zotero, read live.
+# The Library entry on the Lists screen (static/js/library.js): every paper in Zotero, read live.
 library:
-  heading: "Library"
   # {count} papers in Zotero. In the top bar, beside the screen's name.
   count: "{count} papers"
   # On Info, above the live line (loading, indexing, ready).
@@ -606,10 +605,12 @@ links:
   methods: "Methods"
   methods_title: "Open the paper's methods section"
 
-# The Lists screen (static/js/lists.js, board_view.js).
+# The Lists screen, called Library in the sidebar (static/js/lists.js, board_view.js).
 lists:
-  description: "Curated, ordered, tagged lists of papers. Share them, export them, and keep them in step with a Google Sheet."
-  heading: "Lists"
+  description: "Every paper in Zotero, and your curated, ordered, tagged lists made from it. Share them, export them, and keep them in step with a Google Sheet."
+  heading: "Library"
+  # The picker's first entry: every paper in Zotero, not a list.
+  library_entry: "Library"
   picker_label: "List"
   new: "New list"
   new_name_label: "Name of the new list"
@@ -617,7 +618,7 @@ lists:
   create: "Create"
   # {count} papers on the list.
   count: "{count} papers"
-  none: "There are no lists yet. Make one to start collecting papers."
+  none: "No lists of your own yet. Make one to start collecting papers."
   empty: "This list is empty. Search above to add a paper."
   add_label: "Add a paper"
   add_placeholder: "Add a paper: part of its title, or paste a DOI"
@@ -652,6 +653,21 @@ lists:
   # Someone else changed the list; {by} is who.
   changed_by: "Updated by {by}."
   view_only: "This list is view-only. Turn it off in the list menu to change it."
+  # Each Library row's button, and the dialog it opens (the Copy to list one).
+  add_to: "Add…"
+  add_to_title: "Add this paper to any of your lists: at the top, the bottom, or a position"
+  # The quick buttons above it: the lists last added to, one press each.
+  add_go: "Add"
+  quick_title: "Add this paper to {list}, where that list adds papers"
+  quick_label: "Add {title} to {list}"
+  quick_added: "Added to {list} at #{at}."
+  quick_already: "Already on {list}."
+  # The same with several rows selected.
+  quick_added_many: "Added {count} to {list} at #{at}."
+  quick_already_many: "{count} already there."
+  add_to_label: "Add {title} to a list"
+  add_to_one_title: "Add “{title}” to a list"
+  add_to_many_title: "Add {count} papers to a list"
   saving: "Saving..."
   saved: "Saved"
   # {by} switched view-only on or off.
@@ -754,6 +770,11 @@ lists:
   shared_two_way: "Two-way: send and receive tag and cell edits"
   shared_one_way: "One-way: receive only"
   shared_off: "Off"
+  # Papers newly saved to Zotero join the list on their own (options.auto_add).
+  menu_auto_add: "Auto-add new library papers"
+  auto_add_top: "Add to the top"
+  auto_add_bottom: "Add to the bottom"
+  auto_add_off: "Off"
   duplicate_title: "Duplicate this list"
   # {name}: the list's name.
   duplicate_name: "{name} copy"

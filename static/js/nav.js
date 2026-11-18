@@ -13,7 +13,7 @@
 // if the server has them switched on); Nav only offers what was un-hidden. So
 // app.js calls Nav.init() last, once every screen has had its say.
 const Nav = {
-  fallback: "library",
+  fallback: "lists",
   // Matches Bootstrap's lg breakpoint, where offcanvas-lg becomes a column.
   wide: window.matchMedia( "(min-width: 992px)" ),
   // Collapsed-or-not is a per-browser convenience, like the theme.
@@ -78,7 +78,7 @@ const Nav = {
   },
 
   // Each screen's one-line summary in the top bar, beside its name (the
-  // Library's paper count). Kept per screen and shown while it is showing.
+  // Library entry's paper count). Kept per screen and shown while it is showing.
   summaries: {},
 
   summary( name , text ) {
@@ -101,6 +101,8 @@ const Nav = {
   // non-admin, a typo) shows the account screen rather than nothing.
   // "#lists/<slug>" is the Lists screen, opened on that list (list_manage.js).
   current() {
+    // The Library screen became the Library entry on Lists: old links land there.
+    if ( window.location.hash === "#library" ) window.history.replaceState( null , "" , "#lists/library" );
     const hash = window.location.hash.replace( /^#/ , "" );
     const name = hash.split( "/" )[ 0 ];
     if ( this.available( name ) ) return name;

@@ -94,7 +94,16 @@ def build_app(
         cfg.library.content_dir, cfg.library.index_path, library.catalogue, store,
         cfg.config_file.parent / "modalities.yaml", lambda: settings.get().library,
     )
-    library.after_sync = lambda: setattr(content, "dirty", True)
+    def after_sync() -> None:
+        content.dirty = True
+        boards.library_stale()
+        # Papers just saved to Zotero join the lists that asked for them.
+        try:
+            boards.auto_add()
+        except Exception as error:  # noqa: BLE001 -- the sync itself already landed
+            print(f"[lists] auto-add failed: {error!r}", flush=True)
+
+    library.after_sync = after_sync
     boards.content = content
     # The scanned PDFs' text, from the worker's OCR, searched like Zotero's.
     library.catalogue.text_fallback = content.ocr_text
@@ -126,6 +135,8 @@ def build_app(
     def publish(name: str, data: dict) -> None:
         library.publish(name, data)
         screens.heard(name, data)
+        # A paper's content moved on: the Library list shows its Code, Datasets and badges.
+        boards.library_stale()
 
     content.publish = publish
     # Phase 7: saved searches, the citation-graph crawl, LLM summaries and the

@@ -833,7 +833,7 @@ One list in full (a slug it was renamed away from answers the list as it is now)
 
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
-| `slug` | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+| `slug` | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"; "library" is every paper in Zotero, read-only). |
 
 ## get_list_sheet
 
@@ -1065,7 +1065,7 @@ The kept versions of a list (the last 40), newest first: rev, when, by whom, row
 |---|---|---|---|---|
 | `limit` | integer | no | 1 to 1000; default `200` | Versions to return. Default 200. |
 | `offset` | integer | no | at least 0 | Versions to skip. |
-| `slug` | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+| `slug` | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"; "library" is every paper in Zotero, read-only). |
 
 ## list_lists
 
@@ -1118,7 +1118,7 @@ Run a batch of ops against a list, atomically: every op succeeds and the list is
 | `dry_run` | boolean | no |  | Preview: run the ops and answer, but save nothing. |
 | `if_rev` | integer or null | no |  | Refuse the batch when the list has moved past this rev since you read it. |
 | `ops` | array of object | yes |  | The ops, in order: {op, ...} each. GET /api/lists/schema names them all. |
-| `slug` | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+| `slug` | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"; "library" is every paper in Zotero, read-only). |
 
 ## list_remaining
 
@@ -1134,7 +1134,7 @@ Every library paper not on the list (or its shelf), newest added first: what imp
 
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
-| `slug` | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+| `slug` | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"; "library" is every paper in Zotero, read-only). |
 
 ## list_review
 
@@ -1200,7 +1200,7 @@ The list as flat rows, each with its position and its cells under their column l
 | `offset` | integer | no | at least 0 | Rows to skip. |
 | `q` | string | no |  | A text filter. Read up to 500 characters. |
 | `shelf` | string | no |  | 1 or true: the staging shelf instead of the list. |
-| `slug` | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+| `slug` | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"; "library" is every paper in Zotero, read-only). |
 | `tags` | string | no |  | Tags to filter by, comma-separated. |
 
 ## list_saved_searches
@@ -1280,7 +1280,7 @@ One kept version of a list, with its whole document.
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
 | `rev` | integer | yes | at least 1 | The version's rev, from list_history. |
-| `slug` | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+| `slug` | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"; "library" is every paper in Zotero, read-only). |
 
 ## missing_authors
 

@@ -336,17 +336,94 @@ const ListManage = {
     } );
   },
 
+  // ---- the Library's quick add: the lists last added to ---------------------------------------
+
+  // A per-browser convenience, like the open list was: the last three lists
+  // papers were added or copied to, newest first.
+  recentKey: "lists-recent-targets",
+  RECENT: 3,
+
+  recent() {
+    let slugs = [];
+    try {
+      slugs = JSON.parse( this.lists.local( this.recentKey ) || "[]" ) || [];
+    } catch ( error ) { /* not kept: none yet */ }
+    return slugs.map( ( slug ) => this.lists.lists.find( ( list ) => list.slug === slug ) ).filter( Boolean ).slice( 0 , this.RECENT );
+  },
+
+  // A list used from the dialog goes first. A quick add leaves the order as
+  // it is, so the button just pressed does not move away under the pointer.
+  remember( slugs , reorder ) {
+    let kept = this.recent().map( ( list ) => list.slug );
+    slugs.forEach( ( slug ) => {
+      if ( kept.includes( slug ) && !reorder ) return;
+      kept = [ slug ].concat( kept.filter( ( other ) => other !== slug ) );
+    } );
+    const next = JSON.stringify( kept.slice( 0 , this.RECENT ) );
+    if ( next === this.lists.local( this.recentKey ) ) return;
+    this.lists.local( this.recentKey , next );
+    this.lists.draw();
+  },
+
+  // One paper from the Library onto `slug`, where that list adds papers
+  // (its own top / bottom setting). Undone by putting the list back.
+  // The rows a row's Add button acts on: every selected row when it is one
+  // of them, else just it.
+  rowsFor( key ) {
+    const selected = ListTools.selectedKeys();
+    return selected.includes( key ) ? selected : [ key ];
+  },
+
+  async quickAdd( key , slug ) {
+    const lists = this.lists;
+    const keys = this.rowsFor( key );
+    const listing = lists.lists.find( ( list ) => list.slug === slug );
+    const name = listing ? listing.name : slug;
+    let before = null;
+    let result = null;
+    const run = async () => {
+      const rev = ( await Api.request( this.url( slug ) ) ).list.rev;
+      const answer = await Api.post( this.url( slug , "/ops" ) , { ops: [ { op: "import_list" , from: lists.LIBRARY , keys: keys , existing: "skip" } ] } );
+      before = answer.changed ? rev : null;
+      result = answer.results[ 0 ];
+    };
+    const back = async () => {
+      if ( before !== null ) await Api.post( this.url( slug , "/restore" ) , { rev: before } );
+    };
+    try {
+      await Undo.run( { label: I18n.get( "undo.list_copy" ) , do: run , undo: back } );
+    } catch ( error ) {
+      Dom.toast( error.message , "error" );
+      return;
+    }
+    this.remember( [ slug ] , false );
+    const open = { text: I18n.get( "lists.copy_open" ).replace( "{list}" , () => name ) , run: () => lists.loadLists( slug ) };
+    const added = result ? result.imported.length : 0;
+    const already = result ? result.skipped.length : keys.length;
+    let text;
+    if ( keys.length === 1 ) {
+      text = added ? I18n.get( "lists.quick_added" ).replace( "{at}" , result.at || "–" ) : I18n.get( "lists.quick_already" );
+    } else {
+      text = I18n.get( "lists.quick_added_many" ).replace( "{count}" , added ).replace( "{at}" , ( result && result.at ) || "–" );
+      if ( already ) text += " " + I18n.get( "lists.quick_already_many" ).replace( "{count}" , already );
+    }
+    Dom.toast( text.replace( "{list}" , () => name ) , "ok" , open );
+  },
+
   // ---- Copy to list… --------------------------------------------------------------------------
 
   others() {
     return this.lists.lists.filter( ( list ) => list.slug !== this.lists.slug );
   },
 
-  copyTo() {
+  // keys: the rows to copy (the Library list's Add button names one); else
+  // the selected rows. From the Library they can only be copied, not moved.
+  copyTo( only ) {
     const lists = this.lists;
-    const keys = ListTools.selectedKeys();
+    const keys = Array.isArray( only ) ? only : ListTools.selectedKeys();
     if ( keys.length === 0 ) return;
     const from = lists.slug;
+    const fromLibrary = lists.builtin();
     const state = { targets: new Set() , fresh: false , freshName: "" , where: "bottom" , at: "" , mode: "copy" };
     const go = async () => {
       ListModal.problem( "" );
@@ -382,6 +459,7 @@ const ListManage = {
           const listing = lists.lists.find( ( list ) => list.slug === slug );
           results.push( { slug: slug , name: listing ? listing.name : name , result: answer.results[ 0 ] } );
         }
+        if ( fromLibrary ) this.remember( all , true );
         if ( move ) {
           const rev = lists.view.rev;
           const answer = await lists.send( from , [ { op: "remove" , rows: keys } ] );
@@ -416,7 +494,13 @@ const ListManage = {
         .replace( "{what}" , () => parts.join( ", " ) );
       Dom.toast( text , "ok" , { text: I18n.get( "lists.copy_open" ).replace( "{list}" , () => first.name ) , run: () => lists.loadLists( first.slug ) } );
     };
-    ListModal.open( I18n.get( "lists.copy_title" ).replace( "{count}" , keys.length ) , () => {
+    let title = I18n.get( "lists.copy_title" ).replace( "{count}" , keys.length );
+    if ( fromLibrary ) {
+      title = keys.length === 1
+        ? I18n.get( "lists.add_to_one_title" ).replace( "{title}" , () => ( lists.items.get( keys[ 0 ] ) || {} ).title || keys[ 0 ] )
+        : I18n.get( "lists.add_to_many_title" ).replace( "{count}" , keys.length );
+    }
+    ListModal.open( title , () => {
       const check = ( id , label , on , change ) => {
         const input = Dom.el( "input" , { class: "form-check-input" , attrs: { type: "checkbox" , id: id } } );
         input.checked = on;
@@ -450,25 +534,33 @@ const ListManage = {
       const where = [
         radio( "copy-where" , "top" , I18n.get( "lists.where_top_short" ) , state.where , ( value ) => { state.where = value; } ),
         radio( "copy-where" , "bottom" , I18n.get( "lists.where_bottom_short" ) , state.where , ( value ) => { state.where = value; } ),
-        radio( "copy-where" , "at" , I18n.get( "lists.where_at" ) , state.where , ( value ) => { state.where = value; } ),
+        radio( "copy-where" , "at" , I18n.get( "lists.where_at" ) , state.where , ( value ) => {
+          state.where = value;
+          setTimeout( () => { const box = document.getElementById( "list-copy-at" ); if ( box ) box.focus(); } , 0 );
+        } ),
       ];
-      if ( state.where === "at" ) {
-        const at = Dom.el( "input" , { class: "form-control form-control-sm board-row-num d-inline-block" , attrs: { type: "text" , inputmode: "numeric" , "aria-label": I18n.get( "lists.where_at" ) } } );
-        at.value = state.at;
-        at.addEventListener( "input" , () => { state.at = at.value.trim(); } );
-        where.push( at );
-      }
+      // Always there, so nothing moves: typing a position picks it.
+      const at = Dom.el( "input" , { class: "form-control form-control-sm board-row-num d-inline-block" , attrs: { id: "list-copy-at" , type: "text" , inputmode: "numeric" , "aria-label": I18n.get( "lists.where_at" ) } } );
+      at.value = state.at;
+      at.addEventListener( "input" , () => {
+        state.at = at.value.trim();
+        state.where = "at";
+        const radioAt = document.getElementById( "list-copy-where-at" );
+        if ( radioAt ) radioAt.checked = true;
+      } );
+      where.push( at );
       const legend = ( key ) => Dom.el( "legend" , { class: "form-label small fw-semibold mb-1" , text: I18n.get( key ) } );
       return {
         body: [
           Dom.el( "fieldset" , { class: "mb-3" , children: [ legend( "lists.copy_targets" ) ].concat( targets ) } ),
           Dom.el( "fieldset" , { class: "mb-3" , children: [ legend( "lists.copy_where" ) ].concat( where ) } ),
-          Dom.el( "fieldset" , { class: "mb-2" , children: [ legend( "lists.copy_mode" ) ,
+          // Nothing leaves the Library, so from it a paper is only copied.
+          fromLibrary ? null : Dom.el( "fieldset" , { class: "mb-2" , children: [ legend( "lists.copy_mode" ) ,
             radio( "copy-mode" , "copy" , I18n.get( "lists.copy_copy" ) , state.mode , ( value ) => { state.mode = value; } ),
             radio( "copy-mode" , "move" , I18n.get( "lists.copy_move" ) , state.mode , ( value ) => { state.mode = value; } ) ] } ),
-          Dom.el( "p" , { class: "form-text mb-0" , text: I18n.get( "lists.copy_help" ) } ),
-        ],
-        foot: [ Dom.el( "button" , { class: "btn btn-primary" , attrs: { type: "button" } , text: I18n.get( state.mode === "move" ? "lists.move_go" : "lists.copy_go" ) , on: { click: go } } ) ],
+          fromLibrary ? null : Dom.el( "p" , { class: "form-text mb-0" , text: I18n.get( "lists.copy_help" ) } ),
+        ].filter( Boolean ),
+        foot: [ Dom.el( "button" , { class: "btn btn-primary" , attrs: { type: "button" } , text: I18n.get( fromLibrary ? "lists.add_go" : state.mode === "move" ? "lists.move_go" : "lists.copy_go" ) , on: { click: go } } ) ],
       };
     } );
   },
@@ -685,14 +777,18 @@ const ListManage = {
       land.addEventListener( "change" , () => {
         state.land = land.value;
         ListModal.redraw();
+        if ( state.land === "at" ) setTimeout( () => { const box = document.getElementById( "list-import-at" ); if ( box ) box.focus(); } , 0 );
       } );
       const foot = [ Dom.el( "label" , { class: "small text-body-secondary" , text: I18n.get( "lists.import_to" ) , attrs: { for: "list-import-land" } } ) , land ];
-      if ( state.land === "at" ) {
-        const at = Dom.el( "input" , { class: "form-control form-control-sm board-row-num" , attrs: { type: "text" , inputmode: "numeric" , "aria-label": I18n.get( "lists.where_at" ) } } );
-        at.value = state.at;
-        at.addEventListener( "input" , () => { state.at = at.value.trim(); } );
-        foot.push( at );
-      }
+      // Always there, so nothing moves: typing a position picks it.
+      const at = Dom.el( "input" , { class: "form-control form-control-sm board-row-num" , attrs: { id: "list-import-at" , type: "text" , inputmode: "numeric" , "aria-label": I18n.get( "lists.where_at" ) } } );
+      at.value = state.at;
+      at.addEventListener( "input" , () => {
+        state.at = at.value.trim();
+        state.land = "at";
+        land.value = "at";
+      } );
+      foot.push( at );
       const button = Dom.el( "button" , { class: "btn btn-primary" , attrs: { type: "button" } , text: I18n.get( "lists.import_go" ).replace( "{count}" , count ) , on: { click: go } } );
       button.disabled = count === 0;
       foot.push( button );

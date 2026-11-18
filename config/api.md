@@ -3127,7 +3127,7 @@ One list in full (a slug it was renamed away from answers the list as it is now)
 
 | Name | In | Type | Required | Limits | Description |
 |---|---|---|---|---|---|
-| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"; "library" is every paper in Zotero, read-only). |
 
 **Reply 200**: Success
 
@@ -3151,7 +3151,7 @@ Into the trash: off the picker and its link, its versions kept. It can be put ba
 
 | Name | In | Type | Required | Limits | Description |
 |---|---|---|---|---|---|
-| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"; "library" is every paper in Zotero, read-only). |
 
 **Request body**
 
@@ -3181,7 +3181,7 @@ The list as CSV in its order: #, DOI_or_Key, Cite, Title, Year, Tags, <columns>,
 
 | Name | In | Type | Required | Limits | Description |
 |---|---|---|---|---|---|
-| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"; "library" is every paper in Zotero, read-only). |
 | `keys` | query | string | no |  | Only these rows: their keys, comma-separated. Leave out for every row. |
 
 **Reply 200**: Success
@@ -3204,7 +3204,7 @@ The list as CSV in its order: #, DOI_or_Key, Cite, Title, Year, Tags, <columns>,
 
 | Name | In | Type | Required | Limits | Description |
 |---|---|---|---|---|---|
-| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"; "library" is every paper in Zotero, read-only). |
 
 **Request body**
 
@@ -3233,7 +3233,7 @@ The kept versions of a list (the last 40), newest first: rev, when, by whom, row
 
 | Name | In | Type | Required | Limits | Description |
 |---|---|---|---|---|---|
-| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"; "library" is every paper in Zotero, read-only). |
 | `limit` | query | integer | no | 1 to 1000; default `200` | Versions to return. Default 200. |
 | `offset` | query | integer | no | at least 0 | Versions to skip. |
 
@@ -3261,7 +3261,7 @@ One kept version of a list, with its whole document.
 
 | Name | In | Type | Required | Limits | Description |
 |---|---|---|---|---|---|
-| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"; "library" is every paper in Zotero, read-only). |
 | `rev` | path | integer | yes | at least 1 | The version's rev, from list_history. |
 
 **Reply 200**: Success
@@ -3286,7 +3286,7 @@ View-only for everyone: ops then answer 403 (dry runs still work). Not a change 
 
 | Name | In | Type | Required | Limits | Description |
 |---|---|---|---|---|---|
-| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"; "library" is every paper in Zotero, read-only). |
 
 **Request body**
 
@@ -3318,7 +3318,7 @@ Run a batch of ops against a list, atomically: every op succeeds and the list is
 
 | Name | In | Type | Required | Limits | Description |
 |---|---|---|---|---|---|
-| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"; "library" is every paper in Zotero, read-only). |
 
 **Request body**
 
@@ -3356,7 +3356,7 @@ Every library paper not on the list (or its shelf), newest added first: what imp
 
 | Name | In | Type | Required | Limits | Description |
 |---|---|---|---|---|---|
-| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"; "library" is every paper in Zotero, read-only). |
 
 **Reply 200**: Success
 
@@ -3381,7 +3381,7 @@ A new name, and the slug it makes (the old slug still answers, for links sent be
 
 | Name | In | Type | Required | Limits | Description |
 |---|---|---|---|---|---|
-| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"; "library" is every paper in Zotero, read-only). |
 
 **Request body**
 
@@ -3412,7 +3412,7 @@ Put a kept version back as a new version, so it can be undone too. Refused while
 
 | Name | In | Type | Required | Limits | Description |
 |---|---|---|---|---|---|
-| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"; "library" is every paper in Zotero, read-only). |
 
 **Request body**
 
@@ -3445,7 +3445,7 @@ The list as flat rows, each with its position and its cells under their column l
 
 | Name | In | Type | Required | Limits | Description |
 |---|---|---|---|---|---|
-| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"; "library" is every paper in Zotero, read-only). |
 | `q` | query | string | no |  | A text filter. Read up to 500 characters. |
 | `tags` | query | string | no |  | Tags to filter by, comma-separated. |
 | `match` | query | string | no | one of `any`, `all`, `none`; default `any` | How the tags combine. Default any. |
@@ -3484,7 +3484,7 @@ Out of the trash, at the slug it had.
 
 | Name | In | Type | Required | Limits | Description |
 |---|---|---|---|---|---|
-| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+| `slug` | path | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"; "library" is every paper in Zotero, read-only). |
 
 **Request body**
 

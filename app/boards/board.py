@@ -24,7 +24,9 @@ Shape ( output/cache/sort.json ) :
                   "sheet_url": "" ,            # the Google Sheet last imported from
                   "cite_style": "" ,           # CSL style for the rows' citations
                                                #   ( "" = config.yaml's default )
-                  "sync": "two-way" } ,        # share tag / cell edits : two-way | one-way | off
+                  "sync": "two-way" ,          # share tag / cell edits : two-way | one-way | off
+                  "auto_add": "off" ,          # papers newly saved to Zotero join : off | top | bottom
+                  "auto_add_since": "" } ,     # ... those saved after this ( Zotero's date_added )
     "columns":  [ { "id": "notes" , "label": "Notes" } , ... ] ,
     "items":    [ { "key": "10.1038/..." , "title": "..." , "doi": "..." ,
                     "wid": "W..." , "pdf": "" , "year": 2023 , "journal": "" ,
@@ -102,6 +104,7 @@ def _standard_columns( columns , fold , dropped ):
 
 
 SYNC_MODES = ( "two-way" , "one-way" , "off" )
+AUTO_ADD = ( "off" , "top" , "bottom" )
 
 
 def sync_mode( v ):
@@ -117,7 +120,7 @@ def default_doc():
     return {
         "version":    VERSION ,
         "updated_at": "" ,
-        "options":    { "auto_move": False , "add_where": "bottom" ,
+        "options":    { "auto_move": False , "add_where": "bottom" , "auto_add": "off" ,
                         "fold_cols": [ c for c , _ , f , _ in STANDARD_COLS if f ] } ,
         "columns":    [ { "id": c , "label": l } for c , l , _ , _ in STANDARD_COLS ] ,
         "items":      [] ,
@@ -279,6 +282,12 @@ def normalize( doc ):
             # that follows the original without writing back to it -- and off
             # does neither. Two-way unless somebody chose otherwise.
             "sync": sync_mode( opts.get( "sync" ) ) ,
+            # Papers newly saved to the Zotero library join this list on their
+            # own , at its top or bottom ( BoardService.auto_add ) : those whose
+            # date_added is after auto_add_since , a mark that moves on past
+            # each one taken , so a paper removed from the list stays removed.
+            "auto_add": opts.get( "auto_add" ) if opts.get( "auto_add" ) in AUTO_ADD else "off" ,
+            "auto_add_since": tiers_db._clean_str( opts.get( "auto_add_since" ) , 19 ).strip() ,
             # Where a paper added to a tier board lands ( ◉ ) : a section id.
             # Unranked when nothing else is armed ; "" on a plain list.
             "section_target": target if sections else "" ,

@@ -123,6 +123,39 @@ class LibraryRoutesTest(LibraryCase):
         status, body = self.call("POST", "/api/lists/frozen/ops", key=self.user_key, body={"ops": [{"op": "add", "paper": WOOLRICH}]})
         self.assertEqual(status, 403)
 
+    def test_the_library_is_a_read_only_list(self) -> None:
+        # Every paper in Zotero, as a list: locked, built in, not stored.
+        status, body = self.call("GET", "/api/lists/library", key=self.user_key)
+        self.assertEqual(status, 200)
+        view = body["list"]
+        self.assertEqual((view["slug"], view["name"], view["locked"], view["builtin"], view["count"]), ("library", "Library", True, True, 3))
+        self.assertEqual(len(view["papers"]), 3)
+        self.assertIsNone(boards.get_board(self.store, "library"))
+        self.assertEqual(self.call("GET", "/api/lists/library/rows", key=self.user_key)[1]["total"], 3)
+        # It cannot be changed, and no list can take its slug.
+        self.assertEqual(self.call("POST", "/api/lists/library/ops", key=self.user_key, body={"ops": [{"op": "remove", "rows": ["#1"]}]})[0], 403)
+        self.assertEqual(self.call("POST", "/api/lists", key=self.user_key, body={"name": "Library"})[1]["list"]["slug"], "library-list")
+        # Add: a paper copied from it onto another list, at a position.
+        self.call("POST", "/api/lists", key=self.user_key, body={"name": "Aim 1"})
+        self.call("POST", "/api/lists/aim-1/ops", key=self.user_key, body={"ops": [{"op": "add", "paper": MINDALIGN}]})
+        ops = [{"op": "import_list", "from": "library", "keys": [WOOLRICH], "at": "top", "existing": "skip"}]
+        status, body = self.call("POST", "/api/lists/aim-1/ops", key=self.user_key, body={"ops": ops})
+        self.assertEqual(status, 200)
+        self.assertEqual([i["key"] for i in body["list"]["doc"]["items"]], [WOOLRICH, MINDALIGN])
+        # A paper is the same paper everywhere: what a list says about it, the
+        # Library shows, its column coming with it.
+        ops = [{"op": "column_add", "label": "Verdict"}, {"op": "set_cell", "row": WOOLRICH, "col": "Verdict", "value": "keep"},
+               {"op": "set_cell", "row": WOOLRICH, "col": "Notes", "value": "key paper"}, {"op": "tag", "rows": [WOOLRICH], "add": ["fMRI"]}]
+        self.assertEqual(self.call("POST", "/api/lists/aim-1/ops", key=self.user_key, body={"ops": ops})[0], 200)
+        doc = self.call("GET", "/api/lists/library", key=self.user_key)[1]["list"]["doc"]
+        row = next(i for i in doc["items"] if i["key"] == WOOLRICH)
+        verdict = next(c["id"] for c in doc["columns"] if c["label"] == "Verdict")
+        self.assertEqual((row["fields"]["notes"], row["fields"][verdict], row["tags"]), ("key paper", "keep", ["fMRI"]))
+        self.assertEqual(doc["options"]["fold_cols"], [])
+        # And Duplicate: a new list of all of it.
+        status, body = self.call("POST", "/api/lists", key=self.user_key, body={"name": "Everything", "from": "library"})
+        self.assertEqual((status, body["list"]["count"]), (200, 3))
+
     def test_legacy_import(self) -> None:
         old = self.root / "old"
         (old / "cache" / "sort-lists" / "aim-2").mkdir(parents=True)

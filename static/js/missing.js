@@ -311,7 +311,7 @@ const Missing = {
     const picker = Dom.get( "missing-add-list" );
     Dom.clear( picker );
     this.lists.forEach( ( list ) => picker.appendChild( Dom.el( "option" , { text: list.name , attrs: { value: list.slug } } ) ) );
-    if ( Lists.slug ) picker.value = Lists.slug;
+    if ( Lists.slug && Lists.slug !== Lists.LIBRARY ) picker.value = Lists.slug;
     Dom.text( Dom.get( "missing-add-title" ) , label );
     bootstrap.Modal.getOrCreateInstance( Dom.get( "missing-add-dialog" ) ).show();
   },

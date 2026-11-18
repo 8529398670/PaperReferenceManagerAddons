@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import threading
 from typing import Any, Callable
 
 from app.boards import board, cite, ops, refs, sync, store as boards
@@ -15,6 +16,12 @@ from app.library.catalogue import Catalogue
 from app.search import query as q
 
 RESOLVE_THRESHOLD = 96
+# Who an auto-added paper's version is by, in a list's history.
+AUTO_ADD_BY = "Zotero auto-add"
+# The built-in Library list: every paper in Zotero, newest added first,
+# read-only. It is not stored; it is made from the catalogue when asked for.
+LIBRARY = "library"
+LIBRARY_NAME = "Library"
 
 
 class BoardService:
@@ -31,6 +38,16 @@ class BoardService:
         # Told what changed, from whichever thread changed it: {slug, rev, by,
         # locked?, deleted?, renamed_from?} (the Google Sheets mirror).
         self.listeners: list[Callable[[dict[str, Any]], None]] = []
+        # The built-in Library list as last built: {"record", "view"}. Building
+        # it reads every paper's scan results, so it is kept until a list,
+        # Zotero or a paper's content changes (library_stale).
+        self._library: dict[str, Any] = {}
+        # One auto_add at a time: two syncs close together must not both add.
+        self._auto_add_lock = threading.Lock()
+
+    def library_stale(self) -> None:
+        """Something the Library list shows changed: build it again when next asked."""
+        self._library = {}
 
     def start(self) -> None:
         self._loop = asyncio.get_running_loop()
@@ -42,6 +59,7 @@ class BoardService:
         """Tell open pages. Safe from any thread. locked rides along when the
         view-only switch moved (rev does not move for that); deleted and
         renamed_from when the list itself went or moved."""
+        self.library_stale()
         data: dict[str, Any] = {"slug": slug, "rev": rev, "by": by}
         if locked is not None:
             data["locked"] = locked
@@ -126,12 +144,72 @@ class BoardService:
         gone = boards.purge_deleted(self.store)
         return (f"removed {gone} deleted list(s)" if gone else ""), ""
 
+    # -- the built-in Library list -------------------------------------------------
+
+    def library_record(self) -> dict[str, Any]:
+        """Every paper in Zotero as a list record, newest added first, locked.
+
+        A paper is the same paper on every list, so each row says what the
+        lists say about it: its tags and every cell (Notes, Methods summary,
+        Code, Datasets, any column a list added), the columns coming with them
+        (sync.fill, the same rule a paper arriving on a list follows; the
+        sharing lists first). A cell no list has filled gets the Code and
+        Datasets links the scans found (ops.prefill), and a paper with no tags
+        its modality tags, as an import does. Nothing is folded away: the
+        Library cannot change, so its Columns menu cannot unfold one.
+
+        Its rows are what an add would make, so copying from it (import_list
+        from "library") lands them like any other list's. Kept until stale:
+        callers only read it."""
+        cached = self._library.get("record")
+        if cached is not None:
+            return cached
+        doc = board.default_doc()
+        papers = sorted(self.catalogue.all(), key=lambda paper: paper.record.get("date_added") or "", reverse=True)
+        items = []
+        for paper in papers:
+            record = paper.record
+            row = ops.new_item(doc, {"key": record["key"], "title": record.get("title", ""), "doi": record.get("doi", ""),
+                                     "year": record.get("year"), "journal": record.get("journal", ""), "in_library": True})
+            row["added_at"] = record.get("date_added") or ""
+            items.append(row)
+        doc["items"] = items
+        keys = [row["key"] for row in items]
+        stored = [record["doc"] for _, record in self.store.all(db.BUCKET_BOARDS) if not record.get("deleted")]
+        stored.sort(key=lambda other: not sync.sends(other))
+        if stored:
+            sync.fill(doc, keys, stored)
+        meta = self.meta(keys, mods=True, links=True)
+        for row in items:
+            found = meta.get(row["key"]) or {}
+            ops.prefill(doc, row, found)
+            if not row.get("tags") and found.get("mods"):
+                row["tags"] = list(found["mods"])
+                ops.sort_tags(row)
+            for tag in row.get("tags") or []:
+                ops.remember_tag(doc, tag)
+        for row in items:
+            for column in doc.get("columns") or []:
+                row.setdefault("fields", {}).setdefault(column["id"], "")
+        doc.setdefault("options", {})["fold_cols"] = []
+        record = {"slug": LIBRARY, "name": LIBRARY_NAME, "rev": 0, "locked": True, "builtin": True, "doc": doc}
+        self._library = {"record": record}
+        return record
+
+    def find(self, slug: str) -> dict[str, Any]:
+        """A list to read: the built-in Library, or a stored one (following a
+        rename). Raises BoardError."""
+        if slug == LIBRARY:
+            return self.library_record()
+        return boards.find_board(self.store, slug)
+
     # -- the other lists, as ops see them ----------------------------------------
 
     def list_doc(self, slug: str) -> dict[str, Any]:
-        """Another list's document ("" is the main one), following a rename."""
+        """Another list's document ("" is the main one, "library" every paper
+        in Zotero), following a rename."""
         try:
-            return boards.find_board(self.store, slug or boards.MAIN)["doc"]
+            return self.find(slug or boards.MAIN)["doc"]
         except boards.BoardError as refusal:
             raise ops.OpError(str(refusal)) from None
 
@@ -242,6 +320,64 @@ class BoardService:
                 out.append({**entry, "papers": did})
         return out
 
+    # -- papers newly saved to Zotero joining a list (options.auto_add) ----------
+
+    def auto_add(self) -> list[dict[str, Any]]:
+        """Put the papers saved to Zotero since each list's auto_add_since on
+        every list with auto_add on, at its top or bottom, oldest first (so at
+        the top the newest ends up first), and move the mark past them. Called
+        after every library sync; a no-op when nothing is new. A locked list
+        keeps its mark, so it catches up once unlocked. -> {slug, added} per
+        list changed."""
+        with self._auto_add_lock:
+            out: list[dict[str, Any]] = []
+            lists = [record for _, record in self.store.all(db.BUCKET_BOARDS) if not record.get("deleted") and not record.get("locked")]
+            wanted = [(record, (record["doc"].get("options") or {})) for record in lists]
+            wanted = [(record, opts) for record, opts in wanted if opts.get("auto_add") in ("top", "bottom")]
+            if not wanted:
+                return out
+            papers = sorted(
+                ((paper.record.get("date_added") or "", paper.key) for paper in self.catalogue.all()),
+            )
+            for record, opts in wanted:
+                since = opts.get("auto_add_since") or ""
+                if not since:
+                    continue
+                new = [(added, key) for added, key in papers if added > since]
+                if not new:
+                    continue
+                try:
+                    added = self._auto_add_one(record["slug"], opts["auto_add"], new)
+                except boards.BoardError as refusal:
+                    print(f"[lists] auto-add to {record['slug']!r} failed: {refusal}", flush=True)
+                    continue
+                if added:
+                    out.append({"slug": record["slug"], "added": added})
+            return out
+
+    def _auto_add_one(self, slug: str, where: str, new: list[tuple[str, str]]) -> int:
+        """One list's share of auto_add. An add that fails (a paper the library
+        no longer finds) is left out and the rest go on. -> papers added."""
+        new = new[: ops.MAX_OPS - 1]  # the rest come with the next sync, the mark stopping short of them
+        # The options op is a no-op that keeps the batch from ever being empty,
+        # so the mark still moves when every add was skipped.
+        batch = [{"op": "add", "paper": key, "at": where, "if_absent": True} for _, key in new] + [{"op": "options", "auto_add": where}]
+        mark = {"auto_add_since": new[-1][0]}
+        while True:
+            try:
+                applied = boards.apply_ops(self.store, slug, batch, self.ctx(), AUTO_ADD_BY, set_options=mark)
+                break
+            except boards.BoardError as refusal:
+                index = refusal.extra.get("index")
+                if refusal.status != 400 or not isinstance(index, int) or not 0 <= index < len(batch) - 1:
+                    raise
+                print(f"[lists] auto-add to {slug!r} skipped {batch[index]['paper']!r}: {refusal}", flush=True)
+                batch.pop(index)
+        if applied.changed:
+            self.changed(slug, applied.rev, AUTO_ADD_BY)
+            self.mirror(slug, applied.before or {}, applied.doc, AUTO_ADD_BY)
+        return sum(1 for result in applied.results if result.get("op") == "add" and not result.get("skipped"))
+
     # -- citations ---------------------------------------------------------------
 
     def cite_style(self, doc: dict[str, Any] | None, default: str) -> str:
@@ -287,5 +423,10 @@ class BoardService:
         return out
 
     def view(self, record: dict[str, Any]) -> dict[str, Any]:
+        if record.get("builtin") and self._library.get("record") is record and "view" in self._library:
+            return self._library["view"]
         doc = record["doc"]
-        return {**boards.summary(record), "doc": doc, "papers": self.papers_for(doc)}
+        out = {**boards.summary(record), "doc": doc, "papers": self.papers_for(doc)}
+        if record.get("builtin") and self._library.get("record") is record:
+            self._library["view"] = out
+        return out

@@ -9347,7 +9347,7 @@
         "operationId": "get_api_lists_slug",
         "parameters": [
           {
-            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\"; \"library\" is every paper in Zotero, read-only).",
             "in": "path",
             "name": "slug",
             "required": true,
@@ -9414,7 +9414,7 @@
         "operationId": "post_api_lists_slug_delete",
         "parameters": [
           {
-            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\"; \"library\" is every paper in Zotero, read-only).",
             "in": "path",
             "name": "slug",
             "required": true,
@@ -9502,7 +9502,7 @@
         "operationId": "get_api_lists_slug_export_csv",
         "parameters": [
           {
-            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\"; \"library\" is every paper in Zotero, read-only).",
             "in": "path",
             "name": "slug",
             "required": true,
@@ -9565,7 +9565,7 @@
         "operationId": "post_api_lists_slug_export_csv",
         "parameters": [
           {
-            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\"; \"library\" is every paper in Zotero, read-only).",
             "in": "path",
             "name": "slug",
             "required": true,
@@ -9656,7 +9656,7 @@
         "operationId": "get_api_lists_slug_history",
         "parameters": [
           {
-            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\"; \"library\" is every paper in Zotero, read-only).",
             "in": "path",
             "name": "slug",
             "required": true,
@@ -9755,7 +9755,7 @@
         "operationId": "get_api_lists_slug_history_rev",
         "parameters": [
           {
-            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\"; \"library\" is every paper in Zotero, read-only).",
             "in": "path",
             "name": "slug",
             "required": true,
@@ -9829,7 +9829,7 @@
         "operationId": "post_api_lists_slug_lock",
         "parameters": [
           {
-            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\"; \"library\" is every paper in Zotero, read-only).",
             "in": "path",
             "name": "slug",
             "required": true,
@@ -9925,7 +9925,7 @@
         "operationId": "post_api_lists_slug_ops",
         "parameters": [
           {
-            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\"; \"library\" is every paper in Zotero, read-only).",
             "in": "path",
             "name": "slug",
             "required": true,
@@ -10063,7 +10063,7 @@
         "operationId": "get_api_lists_slug_remaining",
         "parameters": [
           {
-            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\"; \"library\" is every paper in Zotero, read-only).",
             "in": "path",
             "name": "slug",
             "required": true,
@@ -10138,7 +10138,7 @@
         "operationId": "post_api_lists_slug_rename",
         "parameters": [
           {
-            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\"; \"library\" is every paper in Zotero, read-only).",
             "in": "path",
             "name": "slug",
             "required": true,
@@ -10233,7 +10233,7 @@
         "operationId": "post_api_lists_slug_restore",
         "parameters": [
           {
-            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\"; \"library\" is every paper in Zotero, read-only).",
             "in": "path",
             "name": "slug",
             "required": true,
@@ -10340,7 +10340,7 @@
         "operationId": "get_api_lists_slug_rows",
         "parameters": [
           {
-            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\"; \"library\" is every paper in Zotero, read-only).",
             "in": "path",
             "name": "slug",
             "required": true,
@@ -10672,7 +10672,7 @@
         "operationId": "post_api_lists_slug_undelete",
         "parameters": [
           {
-            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\"; \"library\" is every paper in Zotero, read-only).",
             "in": "path",
             "name": "slug",
             "required": true,

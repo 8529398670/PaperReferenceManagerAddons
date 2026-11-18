@@ -64,8 +64,7 @@
       <div class="offcanvas-body">
         <nav id="sidebar-nav" class="nav nav-pills flex-column w-100 gap-1" data-i18n-attr="aria-label:nav.sidebar_label">
           <!-- The app's own screens first. -->
-          <a class="nav-link" href="#library" data-nav="library"><i class="bi bi-book" aria-hidden="true"></i><span data-i18n="nav.library"></span></a>
-          <a class="nav-link" href="#lists" data-nav="lists"><i class="bi bi-list-ol" aria-hidden="true"></i><span data-i18n="nav.lists"></span></a>
+          <a class="nav-link" href="#lists" data-nav="lists"><i class="bi bi-book" aria-hidden="true"></i><span data-i18n="nav.lists"></span></a>
           <a class="nav-link" href="#missing" data-nav="missing"><i class="bi bi-search-heart" aria-hidden="true"></i><span data-i18n="nav.missing"></span></a>
           <a class="nav-link" href="#searches" data-nav="searches"><i class="bi bi-bookmark-star" aria-hidden="true"></i><span data-i18n="nav.searches"></span></a>
           <a class="nav-link" href="#research-log" data-nav="research-log"><i class="bi bi-journal-check" aria-hidden="true"></i><span data-i18n="nav.research_log"></span></a>
@@ -160,71 +159,6 @@
         screen that does one thing is one card.
       -->
       <section id="signed-in" hidden>
-        <!-- Every paper in Zotero, searched live. static/js/library.js -->
-        <section class="view view-fill" data-view="library" id="library-panel" hidden>
-          <h2 class="view-title visually-hidden" data-i18n="library.heading"></h2>
-          <p id="library-problem" class="alert alert-warning py-2 mb-0" role="status" hidden></p>
-
-          <section class="card card-fill">
-            <div class="card-body py-2">
-              <div class="row g-2 align-items-center" role="search">
-                <div class="col-12 col-md-6 col-xl-5">
-                  <label for="library-search" class="visually-hidden" data-i18n="library.search_label"></label>
-                  <input id="library-search" class="form-control" type="search" autocomplete="off" spellcheck="false"
-                         data-i18n-attr="placeholder:library.search_placeholder,title:library.search_help" />
-                </div>
-                <div class="col-auto dropdown">
-                  <button id="library-filter" type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
-                    <i class="bi bi-funnel" aria-hidden="true"></i> <span data-i18n="table.filter"></span> <span class="badge text-bg-light ms-1" hidden></span>
-                  </button>
-                  <div class="dropdown-menu p-3 filter-menu">
-                    <div class="form-check form-switch mb-3">
-                      <input id="library-title-mode" class="form-check-input" type="checkbox" role="switch" />
-                      <label for="library-title-mode" class="form-check-label" data-i18n="library.mode_title"></label>
-                    </div>
-                    <fieldset class="mb-3">
-                      <legend class="form-label fs-6" data-i18n="library.filters_label"></legend>
-                      <div class="form-check">
-                        <input type="checkbox" class="form-check-input" id="library-has-code" data-library-has="code" />
-                        <label class="form-check-label" for="library-has-code"><i class="bi bi-code-slash me-1" aria-hidden="true"></i><span data-i18n="library.has_code"></span></label>
-                      </div>
-                      <div class="form-check">
-                        <input type="checkbox" class="form-check-input" id="library-has-data" data-library-has="data" />
-                        <label class="form-check-label" for="library-has-data"><i class="bi bi-database me-1" aria-hidden="true"></i><span data-i18n="library.has_data"></span></label>
-                      </div>
-                      <div class="form-check">
-                        <input type="checkbox" class="form-check-input" id="library-has-no-text" data-library-has="no_text" />
-                        <label class="form-check-label" for="library-has-no-text"><i class="bi bi-file-earmark-x me-1" aria-hidden="true"></i><span data-i18n="library.has_no_text"></span></label>
-                      </div>
-                      <div class="form-check">
-                        <input type="checkbox" class="form-check-input" id="library-has-no-openalex" data-library-has="no_openalex" />
-                        <label class="form-check-label" for="library-has-no-openalex"><i class="bi bi-question-circle me-1" aria-hidden="true"></i><span data-i18n="library.has_no_openalex"></span></label>
-                      </div>
-                    </fieldset>
-                    <p class="form-text" data-i18n="library.search_help"></p>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" data-filter-clear data-i18n="table.clear_filters"></button>
-                  </div>
-                </div>
-                <div class="col-auto dropdown">
-                  <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
-                    <i class="bi bi-layout-three-columns" aria-hidden="true"></i> <span data-i18n="table.columns"></span>
-                  </button>
-                  <ul id="library-columns" class="dropdown-menu data-table-menu"></ul>
-                </div>
-                <!-- How many are showing; scrolling to the end loads more (the
-                     button is there for the keyboard). -->
-                <div class="col-auto ms-auto d-flex align-items-center gap-2">
-                  <span id="library-results-count" class="small text-body-secondary"></span>
-                  <span id="library-empty" class="small text-body-secondary" hidden data-i18n="ui.no_matches"></span>
-                  <button id="library-more" type="button" class="btn btn-outline-secondary btn-sm visually-hidden-focusable" hidden data-i18n="ui.load_more"></button>
-                </div>
-              </div>
-              <p id="library-fuzzy" class="alert alert-info py-2 mt-2 mb-0" role="status" hidden data-i18n="library.fuzzy"></p>
-            </div>
-            <div id="library-table" class="table-fill"></div>
-          </section>
-        </section>
-
         <!-- One paper: #paper/<key>. static/js/paper.js -->
         <section class="view" data-view="paper" id="paper-panel" data-nav-title="paper.heading" hidden>
           <div id="paper-nav" class="d-flex flex-wrap align-items-center gap-2 mb-2" hidden>
@@ -345,7 +279,7 @@
           <h2 class="view-title visually-hidden" data-i18n="missing.heading"></h2>
           <div id="missing-paper" class="alert alert-info py-2 mb-0 d-flex flex-wrap align-items-center gap-2" role="status" hidden>
             <span data-i18n="missing.paper_filter"></span>
-            <a id="missing-paper-link" class="fw-semibold" href="#library"></a>
+            <a id="missing-paper-link" class="fw-semibold" href="#lists/library"></a>
             <button id="missing-clear-paper" type="button" class="btn btn-outline-secondary btn-sm ms-auto" data-i18n="missing.paper_clear"></button>
           </div>
           <section class="card card-fill">
@@ -1104,6 +1038,7 @@
              list_panels.js (the list menu's dialogs: columns, colours, history, CSV, references, shelf). -->
         <section class="view view-fill" data-view="lists" id="lists-panel" hidden>
           <h2 class="view-title visually-hidden" data-i18n="lists.heading"></h2>
+          <p id="library-problem" class="alert alert-warning py-2 mb-0" role="status" hidden></p>
 
           <section class="card">
             <div class="card-body">
@@ -1114,7 +1049,7 @@
                   <button id="list-menu" type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
                     <i class="bi bi-list-ul" aria-hidden="true"></i> <span data-i18n="lists.menu"></span>
                   </button>
-                  <ul id="list-menu-items" class="dropdown-menu"></ul>
+                  <div id="list-menu-items" class="dropdown-menu list-menu"></div>
                 </div>
                 <button id="list-new" type="button" class="btn btn-outline-secondary btn-sm">
                   <i class="bi bi-plus-lg" aria-hidden="true"></i> <span data-i18n="lists.new"></span>
@@ -1741,19 +1676,13 @@
               <p class="text-body-secondary mb-0" data-i18n="info.intro"></p>
             </div>
             <div class="list-group list-group-flush border-top info-list">
-              <a class="list-group-item list-group-item-action d-flex gap-3 py-3" href="#library" data-info="library">
+              <a class="list-group-item list-group-item-action d-flex gap-3 py-3" href="#lists/library" data-info="lists">
                 <i class="bi bi-book fs-5 info-icon" aria-hidden="true"></i>
                 <div class="min-w-0">
-                  <h3 class="h6 mb-1" data-i18n="nav.library"></h3>
-                  <p class="mb-0 text-body-secondary" data-i18n="library.description"></p>
-                  <p id="library-status" class="mb-0 mt-1 small" role="status"></p>
-                </div>
-              </a>
-              <a class="list-group-item list-group-item-action d-flex gap-3 py-3" href="#lists" data-info="lists">
-                <i class="bi bi-list-ol fs-5 info-icon" aria-hidden="true"></i>
-                <div class="min-w-0">
                   <h3 class="h6 mb-1" data-i18n="nav.lists"></h3>
+                  <p class="mb-0 text-body-secondary" data-i18n="library.description"></p>
                   <p class="mb-0 text-body-secondary" data-i18n="lists.description"></p>
+                  <p id="library-status" class="mb-0 mt-1 small" role="status"></p>
                 </div>
               </a>
               <a class="list-group-item list-group-item-action d-flex gap-3 py-3" href="#missing" data-info="missing">

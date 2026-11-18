@@ -27,6 +27,8 @@ const BoardColumns = {
   COLUMN: 16,
   SIDE: 5.75,
   END: 2.25,
+  // On the Library list the end column holds the Add button instead.
+  END_ADD: 9,
   GAP: 0.75,
 
   lists: null,
@@ -96,10 +98,18 @@ const BoardColumns = {
       out.paper = kept.paper;
     } else {
       const board = Dom.get( "list-scroll" ).clientWidth || 1200;
-      const fixed = ( this.SIDE + this.END + this.GAP * ( this.ids.length + 2 ) ) * rem + others;
+      const fixed = ( this.SIDE + this.end() + this.GAP * ( this.ids.length + 2 ) ) * rem + others;
       out.paper = Math.max( this.PAPER_MIN , board - fixed - 2 );
     }
     return out;
+  },
+
+  end() {
+    return this.addsFirst() ? this.END_ADD : this.END;
+  },
+
+  addsFirst() {
+    return Boolean( this.lists && this.lists.builtin() );
   },
 
   // columns: the shown columns in order (not the Paper one).
@@ -111,9 +121,12 @@ const BoardColumns = {
   // The grid template and the least width for these widths.
   track( w ) {
     const tracks = this.ids.map( ( id ) => w[ id ] + "px" );
-    const template = [ "var(--board-side)" ].concat( tracks , [ this.END + "rem" , "minmax(0, 1fr)" ] ).join( " " );
+    // On the Library list the Add column is third, after the paper's.
+    const template = ( this.addsFirst()
+      ? [ "var(--board-side)" , tracks[ 0 ] , this.end() + "rem" ].concat( tracks.slice( 1 ) , [ "minmax(0, 1fr)" ] )
+      : [ "var(--board-side)" ].concat( tracks , [ this.end() + "rem" , "minmax(0, 1fr)" ] ) ).join( " " );
     const fixed = this.ids.reduce( ( sum , id ) => sum + w[ id ] , 0 );
-    const least = "calc(var(--board-side) + " + ( this.END + this.GAP * ( this.ids.length + 2 ) ) + "rem + " + fixed + "px)";
+    const least = "calc(var(--board-side) + " + ( this.end() + this.GAP * ( this.ids.length + 2 ) ) + "rem + " + fixed + "px)";
     return { template , least };
   },
 
@@ -142,8 +155,10 @@ const BoardColumns = {
       return cell;
     };
     cells.push( label( I18n.get( "lists.paper_column" ) , "paper" , "board-cell-paper" ) );
+    const end = Dom.el( "div" , { class: "board-head-cell" } );
+    if ( this.addsFirst() ) cells.push( end );
     columns.forEach( ( column ) => cells.push( label( column.label , column.id ) ) );
-    cells.push( Dom.el( "div" , { class: "board-head-cell" } ) );
+    if ( !this.addsFirst() ) cells.push( end );
     element.replaceChildren( ...cells );
   },
 

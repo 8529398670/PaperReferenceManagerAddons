@@ -1,4 +1,11 @@
-// The Lists screen: hand-ordered, tagged lists of papers.
+// The Lists screen (named Library in the sidebar): hand-ordered, tagged lists
+// of papers.
+//
+// The picker's first entry, Library (#lists/library), is the built-in list
+// of every paper in Zotero, newest added first. The server makes it from the
+// catalogue (app/boards/service.py library_record); it is drawn like any other
+// list but read-only, and each row has an Add button that copies the paper to
+// another list (top, bottom or a position). It is the default.
 //
 // Every change is a batch of ops sent to POST /api/lists/<slug>/ops (the same
 // ops an API key or an MCP agent sends; app/boards/ops.py has them all). The
@@ -19,6 +26,9 @@
 // rows, list_tools.js the tag bar, selection, filter and moving around, and
 // list_panels.js the list menu's dialogs.
 const Lists = {
+  // The built-in Library list's slug. Reserved, so no stored list can take it
+  // (app/boards/store.py RESERVED).
+  LIBRARY: "library",
   me: null,
   lists: [],
   slug: null,
@@ -26,7 +36,6 @@ const Lists = {
   view: null,
   items: new Map(),
   positions: new Map(),
-  storageKey: "lists-open",
   stream: null,
   // Changes this page has sent and not heard back about. While there are any,
   // a live "the list moved" is most likely the echo of one of them, and is
@@ -80,6 +89,10 @@ const Lists = {
     ListSheet.init( this );
     await this.loadLists();
     this.listen();
+    // The Library list is Zotero: when papers come or go, fetch it again.
+    Content.on( "changed" , () => {
+      if ( this.slug === this.LIBRARY ) this.refreshLibrary();
+    } );
   },
 
   // ---- which list -------------------------------------------------------
@@ -96,17 +109,15 @@ const Lists = {
   async loadLists( choose ) {
     const answer = await Api.request( "/api/lists?limit=1000" );
     this.lists = answer.lists;
+    // Library first: it is always there, so the screen always has a list.
     const picker = Dom.get( "list-picker" );
-    picker.replaceChildren( ...this.lists.map( ( list ) => Dom.el( "option" , { text: list.name , attrs: { value: list.slug } } ) ) );
-    Dom.show( picker , this.lists.length > 0 );
-    Dom.show( Dom.get( "list-menu-holder" ) , this.lists.length > 0 );
+    picker.replaceChildren(
+      Dom.el( "option" , { text: I18n.get( "lists.library_entry" ) , attrs: { value: this.LIBRARY } } ),
+      ...this.lists.map( ( list ) => Dom.el( "option" , { text: list.name , attrs: { value: list.slug } } ) ),
+    );
+    Dom.show( Dom.get( "list-menu-holder" ) , true );
     Dom.show( Dom.get( "lists-none" ) , this.lists.length === 0 );
-    Dom.show( Dom.get( "list-body" ) , this.lists.length > 0 );
-    if ( this.lists.length === 0 ) {
-      this.view = null;
-      Dom.text( Dom.get( "list-count" ) , "" );
-      return;
-    }
+    Dom.show( Dom.get( "list-body" ) , true );
     // A link (#lists/<slug>) wins on the first load; a slug renamed away from
     // still opens, as the list it became.
     const linked = this.slug ? null : ListManage.hashSlug();
@@ -118,8 +129,25 @@ const Lists = {
         ListManage.cannotOpen( error );
       }
     }
-    const wanted = [ choose , linked , this.slug , this.local( this.storageKey ) , "main" ].find( ( slug ) => slug && this.lists.some( ( list ) => list.slug === slug ) );
-    await this.open( wanted || this.lists[ 0 ].slug );
+    // Library is the default: a fresh load opens it, unless a link names a list.
+    const known = ( slug ) => slug === this.LIBRARY || this.lists.some( ( list ) => list.slug === slug );
+    const wanted = [ choose , linked , this.slug ].find( ( slug ) => slug && known( slug ) );
+    await this.open( wanted || this.LIBRARY );
+  },
+
+  // Fetch the Library list again, at most every two seconds however many
+  // lists change at once (a shared edit reaches several).
+  refreshLibrary() {
+    if ( this.libraryTimer ) return;
+    this.libraryTimer = setTimeout( () => {
+      this.libraryTimer = null;
+      if ( this.slug === this.LIBRARY ) this.open( this.LIBRARY ).catch( () => {} );
+    } , 2000 );
+  },
+
+  // The open list is the built-in Library: read-only, its rows added elsewhere.
+  builtin() {
+    return Boolean( this.view && this.view.builtin );
   },
 
   async open( asked ) {
@@ -135,7 +163,6 @@ const Lists = {
       BoardView.reset( Dom.get( "list-shelf-rows" ) );
     }
     this.slug = slug;
-    this.local( this.storageKey , slug );
     Dom.get( "list-picker" ).value = slug;
     ListManage.showInHash( slug );
     this.take( answer.list );
@@ -238,10 +265,11 @@ const Lists = {
     const doc = view.doc;
     const count = ( doc.items || [] ).length;
     Dom.text( Dom.get( "list-count" ) , I18n.get( "lists.count" ).replace( "{count}" , count.toLocaleString() ) );
-    Dom.show( Dom.get( "list-view-only" ) , view.locked );
+    // Not on the Library: it is never editable, so there is nothing to say.
+    Dom.show( Dom.get( "list-view-only" ) , view.locked && !view.builtin );
     Dom.get( "lists-panel" ).classList.toggle( "is-locked" , Boolean( view.locked ) );
     const columns = this.columns();
-    const colSig = columns.map( ( column ) => column.id + "=" + column.label ).join( "|" );
+    const colSig = ( view.builtin ? "adds|" : "" ) + columns.map( ( column ) => column.id + "=" + column.label ).join( "|" );
     if ( colSig !== this.lastColSig ) {
       this.lastColSig = colSig;
       BoardColumns.head( Dom.get( "list-head" ) , columns );
@@ -259,7 +287,8 @@ const Lists = {
     this.paperContext.keys = visible.filter( ( key ) => ( view.papers[ key ] || {} ).in_library !== false );
     BoardView.render( Dom.get( "list-rows" ) , {
       paperContext: this.paperContext,
-      doc: doc , papers: view.papers || {} , handlers: handlers , locked: view.locked , columns: columns ,
+      doc: doc , papers: view.papers || {} , handlers: handlers , locked: view.locked , adds: Boolean( view.builtin ) ,
+      recent: view.builtin ? ListManage.recent().map( ( list ) => ( { slug: list.slug , name: list.name } ) ) : [] , columns: columns ,
       items: this.items , visible: visible , positions: this.positions , cites: this.cites , anchor: anchor ,
       sections: doc.sections || [] , sectionCounts: this.sectionCounts , target: ( doc.options && doc.options.section_target ) || "" ,
       lazy: true , scroller: Dom.get( "list-scroll" ) ,
@@ -312,6 +341,8 @@ const Lists = {
       moveNear: ( key , anchor , side ) => this.moveNear( key , anchor , side ),
       addNear: ( indexes , anchor , side ) => this.addNear( indexes , anchor , side ),
       remove: ( key ) => this.remove( key ),
+      addTo: ( key ) => ListManage.copyTo( ListManage.rowsFor( key ) ),
+      quickAdd: ( key , slug ) => ListManage.quickAdd( key , slug ),
       addTag: ( key , name ) => this.addTag( [ key ] , name ),
       removeTag: ( key , name ) => this.removeTag( [ key ] , name ),
       setCell: ( key , column , value , previous ) => this.setCell( key , column , value , previous ),
@@ -1096,6 +1127,8 @@ const Lists = {
       } catch ( error ) {
         return;
       }
+      // The Library shows what every list says about each paper.
+      if ( this.slug === this.LIBRARY && this.sending === 0 ) this.refreshLibrary();
       if ( data.deleted || data.renamed_from ) {
         // The open list went to the trash, or moved: follow it (or leave it).
         const mine = this.slug === data.slug || this.slug === data.renamed_from;

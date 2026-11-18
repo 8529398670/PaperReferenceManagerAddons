@@ -21,7 +21,7 @@ from app.apidocs import PATH, QUERY, Reply, route
 from app.apidocs import Request as RequestType
 from app.boards import cite, gsheet, ops, refparse
 from app.boards import store as boards
-from app.boards.service import BoardService
+from app.boards.service import LIBRARY, BoardService
 from app.core import sse
 from app.core.logs import KIND_ADMIN
 from app.core.security import actor_from
@@ -47,7 +47,7 @@ def board_refused(refusal: boards.BoardError) -> Refused:
     return Refused(refusal.status, str(refusal), **refusal.extra)
 
 
-Slug = Annotated[str, PATH, Meta(description='The list\'s slug, from GET /api/lists (the main list is "main").')]
+Slug = Annotated[str, PATH, Meta(description='The list\'s slug, from GET /api/lists (the main list is "main"; "library" is every paper in Zotero, read-only).')]
 
 
 class SlugPath(RequestType):
@@ -92,7 +92,7 @@ def create_list(request: Request, body: CreateList) -> ListReply:
         doc = None
         source = ""
         if body.from_:
-            original = boards.find_board(store, body.from_)
+            original = get_service(request).find(body.from_)
             source = original["slug"]
             doc = boards.copy_doc(original["doc"], body.keys)
         elif body.keys is not None:
@@ -192,7 +192,7 @@ def undelete_list(request: Request, body: SlugPath) -> ListReply:
 def get_list(request: Request, body: SlugPath) -> ListReply:
     service = get_service(request)
     try:
-        record = boards.find_board(service.store, body.slug)
+        record = service.find(body.slug)
     except boards.BoardError as refusal:
         raise board_refused(refusal) from None
     return ListReply(list=service.view(record))
@@ -200,6 +200,8 @@ def get_list(request: Request, body: SlugPath) -> ListReply:
 
 def run_ops(service: BoardService, slug: str, batch: Any, user_name: str, if_rev: int | None, dry_run: bool) -> dict[str, Any]:
     """Raises BoardError."""
+    if slug == LIBRARY:
+        raise boards.BoardError("the Library is read-only: add its papers to a list instead", 403)
     slug = boards.find_board(service.store, slug)["slug"]
     applied = boards.apply_ops(service.store, slug, batch, service.ctx(), user_name, if_rev=if_rev, dry_run=dry_run)
     mirrored: list[dict[str, Any]] = []
@@ -409,7 +411,7 @@ def get_rows(request: Request, body: GetRows) -> RowsReply:
     tags = [t.strip() for t in body.tags.split(",") if t.strip()]
     service = get_service(request)
     try:
-        record = boards.find_board(service.store, body.slug)
+        record = service.find(body.slug)
     except boards.BoardError as refusal:
         raise board_refused(refusal) from None
     doc = record["doc"]
@@ -430,7 +432,7 @@ def export_csv(service: BoardService, record: dict[str, Any], default_style: str
 def csv_response(request: Request, slug: str, keep: set[str] | None) -> Response:
     service = get_service(request)
     try:
-        record = boards.find_board(service.store, slug)
+        record = service.find(slug)
     except boards.BoardError as refusal:
         raise board_refused(refusal) from None
     text = export_csv(service, record, get_config(request).library.cite_style, keep)

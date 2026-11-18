@@ -444,7 +444,8 @@ const ListTools = {
     const op = { op: "options" };
     op[ name ] = value;
     const back = { op: "options" };
-    back[ name ] = name === "auto_move" ? Boolean( options[ name ] ) : ( options[ name ] || "bottom" );
+    const unset = { auto_add: "off" , add_where: "bottom" };
+    back[ name ] = name === "auto_move" ? Boolean( options[ name ] ) : ( options[ name ] || unset[ name ] );
     return this.lists.change( "undo.list_options" , [ op ] , [ back ] );
   },
 

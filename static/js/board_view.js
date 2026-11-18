@@ -17,7 +17,9 @@
 // handlers: { move( key , position ) , moveNear( key , anchorKey , side ) ,
 //             remove( key ) , addTag( key , name ) , removeTag( key , name ) ,
 //             setCell( key , columnId , value , previous ) , rowClick( key , event ) ,
-//             anchor( key ) , copy( text ) , rename( key , title , previous ) }
+//             anchor( key ) , copy( text ) , rename( key , title , previous ) ,
+//             addTo( key ) , quickAdd( key , slug ) -- the Library list's Add
+//             column ( ctx.adds , ctx.recent: the lists last added to ) }
 const BoardView = {
   dragging: null,
   // container -> { rows: Map( key -> { li , sig } ) }
@@ -82,7 +84,7 @@ const BoardView = {
       const paper = ctx.papers[ key ] || {};
       const cite = ( ctx.cites && ctx.cites[ key ] ) || null;
       const tagColors = ( item.tags || [] ).map( ( name ) => TagColors.of( name , vocab ) ).join( "," );
-      const sig = JSON.stringify( [ item , paper , cite , tagColors , colSig , ctx.locked , ctx.anchor === key ,
+      const sig = JSON.stringify( [ item , paper , cite , tagColors , colSig , ctx.locked , Boolean( ctx.adds ) , ctx.recent || [] , ctx.anchor === key ,
         ctx.shelf ? ( ctx.matched && ctx.matched[ key ] ) || "" : "" , sectionSig ] );
       let entry = cache.rows.get( key );
       if ( !entry || entry.sig !== sig ) {
@@ -350,7 +352,29 @@ const BoardView = {
       on: { click: () => handlers.remove( item.key ) },
     } );
     remove.hidden = locked;
-    li.append( side , main , ...cells , Dom.el( "div" , { class: "board-cell-end" , children: [ remove ] } ) );
+    const end = [ remove ];
+    // The Library list: each paper goes onto another list from here -- one
+    // press for the lists last added to, the dialog for any other.
+    if ( ctx.adds ) {
+      const quick = ( ctx.recent || [] ).map( ( list ) => Dom.el( "button" , {
+        class: "btn btn-sm btn-outline-secondary board-row-quick",
+        attrs: { type: "button" , "data-focus": "add:" + list.slug , title: I18n.get( "lists.quick_title" ).replace( "{list}" , () => list.name ) ,
+          "aria-label": I18n.get( "lists.quick_label" ).replace( "{title}" , () => item.title || "" ).replace( "{list}" , () => list.name ) },
+        children: [ Dom.el( "i" , { class: "bi bi-plus-lg me-1" , attrs: { "aria-hidden": "true" } } ) , Dom.el( "span" , { text: list.name } ) ],
+        on: { click: () => handlers.quickAdd( item.key , list.slug ) },
+      } ) );
+      quick.push( Dom.el( "button" , {
+        class: "btn btn-sm btn-outline-primary board-row-add",
+        attrs: { type: "button" , "data-focus": "add" , title: I18n.get( "lists.add_to_title" ) , "aria-label": this.label( "lists.add_to_label" , item.title ) },
+        children: [ Dom.el( "i" , { class: "bi bi-three-dots me-1" , attrs: { "aria-hidden": "true" } } ) , Dom.el( "span" , { text: I18n.get( "lists.add_to" ) } ) ],
+        on: { click: () => handlers.addTo( item.key ) },
+      } ) );
+      end.push( Dom.el( "div" , { class: "d-flex flex-column gap-1 board-row-adds" , children: quick } ) );
+    }
+    const endCell = Dom.el( "div" , { class: "board-cell-end" , children: end } );
+    // On the Library list the Add column comes third, right after the paper.
+    if ( ctx.adds ) li.append( side , main , endCell , ...cells );
+    else li.append( side , main , ...cells , endCell );
     if ( li._position !== undefined ) {
       number.value = String( li._position );
       number._position = li._position;

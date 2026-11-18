@@ -1814,7 +1814,7 @@
         "additionalProperties": false,
         "properties": {
           "slug": {
-            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\"; \"library\" is every paper in Zotero, read-only).",
             "type": "string"
           }
         },
@@ -2221,7 +2221,7 @@
             "type": "integer"
           },
           "slug": {
-            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\"; \"library\" is every paper in Zotero, read-only).",
             "type": "string"
           }
         },
@@ -2327,7 +2327,7 @@
             "type": "array"
           },
           "slug": {
-            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\"; \"library\" is every paper in Zotero, read-only).",
             "type": "string"
           }
         },
@@ -2354,7 +2354,7 @@
         "additionalProperties": false,
         "properties": {
           "slug": {
-            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\"; \"library\" is every paper in Zotero, read-only).",
             "type": "string"
           }
         },
@@ -2464,7 +2464,7 @@
             "type": "string"
           },
           "slug": {
-            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\"; \"library\" is every paper in Zotero, read-only).",
             "type": "string"
           },
           "tags": {
@@ -2584,7 +2584,7 @@
             "type": "integer"
           },
           "slug": {
-            "description": "The list's slug, from GET /api/lists (the main list is \"main\").",
+            "description": "The list's slug, from GET /api/lists (the main list is \"main\"; \"library\" is every paper in Zotero, read-only).",
             "type": "string"
           }
         },

@@ -78,6 +78,8 @@ const ListPanels = {
   drawMenu() {
     const view = this.lists.view;
     const locked = view.locked;
+    // The built-in Library list: read-only, not stored, so only what reads it.
+    const builtin = Boolean( view.builtin );
     const item = ( icon , key , run , options ) => {
       const settings = options || {};
       const button = Dom.el( "button" , {
@@ -93,9 +95,16 @@ const ListPanels = {
       button.disabled = Boolean( settings.disabled );
       return Dom.el( "li" , { children: [ button ] } );
     };
-    const rule = () => Dom.el( "li" , { children: [ Dom.el( "hr" , { class: "dropdown-divider" } ) ] } );
+    const header = ( key ) => Dom.el( "li" , { children: [ Dom.el( "h3" , { class: "dropdown-header" , text: I18n.get( key ) } ) ] } );
+    // The menu's groups side by side on a wide screen, one under another on a phone.
+    const groups = ( ...lists ) => menu.replaceChildren( Dom.el( "div" , {
+      class: "row g-0 row-cols-1 row-cols-md-2 row-cols-xl-4",
+      children: lists.map( ( entries ) => Dom.el( "div" , { class: "col list-menu-group" ,
+        children: [ Dom.el( "ul" , { class: "list-unstyled mb-0" , children: entries } ) ] } ) ),
+    } ) );
     const sync = ListManage.syncMode();
-    const sig = JSON.stringify( [ view.slug , view.name , locked , sync , ( view.doc.sections || [] ).length > 0 ] );
+    const autoAdd = ( view.doc.options && view.doc.options.auto_add ) || "off";
+    const sig = JSON.stringify( [ view.slug , view.name , locked , sync , autoAdd , ( view.doc.sections || [] ).length > 0 ] );
     const menu = Dom.get( "list-menu-items" );
     if ( menu._sig === sig ) return;
     menu._sig = sig;
@@ -105,33 +114,49 @@ const ListPanels = {
       entry.firstChild.setAttribute( "role" , "menuitemradio" );
       return entry;
     };
-    menu.replaceChildren(
-      item( "bi-copy" , "lists.menu_duplicate" , () => manage.duplicate() ),
-      item( "bi-pencil" , "lists.menu_rename" , () => manage.rename() ),
-      item( "bi-link-45deg" , "lists.menu_link" , () => manage.link() ),
-      item( "bi-trash" , "lists.menu_delete" , () => manage.remove() , { disabled: view.slug === "main" } ),
-      rule(),
-      Dom.el( "li" , { children: [ Dom.el( "h3" , { class: "dropdown-header" , text: I18n.get( "lists.menu_shared" ) } ) ] } ),
-      shared( "two-way" , "lists.shared_two_way" ),
-      shared( "one-way" , "lists.shared_one_way" ),
-      shared( "off" , "lists.shared_off" ),
-      rule(),
-      item( "bi-bar-chart-steps" , "lists.menu_tiers" , () => manage.tiers() , { check: Boolean( ( view.doc.sections || [] ).length ) } ),
-      item( "bi-palette" , "lists.menu_colours" , () => this.colours() , { disabled: locked } ),
-      item( "bi-quote" , "lists.menu_cite" , () => this.citeStyle() , { disabled: locked } ),
-      rule(),
-      item( "bi-box-arrow-in-down" , "lists.menu_import" , () => manage.importFrom() , { disabled: locked } ),
-      item( "bi-journal-arrow-down" , "lists.menu_refs" , () => this.importRefs() , { disabled: locked } ),
-      item( "bi-filetype-csv" , "lists.menu_csv_import" , () => this.importCsv() , { disabled: locked } ),
-      item( "bi-table" , "lists.menu_sheet" , () => ListSheet.open() , { disabled: locked } ),
-      item( "bi-google" , "lists.menu_gsheet" , () => ListGSheet.open( view.slug ) ),
-      item( "bi-download" , "lists.menu_csv_export" , () => this.exportCsv( false ) ),
-      item( "bi-funnel" , "lists.menu_csv_export_shown" , () => this.exportCsv( true ) ),
-      rule(),
-      item( "bi-clock-history" , "lists.menu_history" , () => this.history() ),
-      item( "bi-lock" , "lists.menu_lock" , () => this.lock( !locked ) , { check: locked } ),
-      rule(),
-      item( "bi-trash3" , "lists.menu_deleted" , () => manage.deleted() ),
+    // Papers newly saved to Zotero joining this list on their own.
+    const auto = ( mode , icon , key ) => {
+      const entry = item( icon , key , () => { if ( mode !== autoAdd ) ListTools.option( "auto_add" , mode ); } , { check: autoAdd === mode , disabled: locked } );
+      entry.firstChild.setAttribute( "role" , "menuitemradio" );
+      return entry;
+    };
+    if ( builtin ) {
+      groups(
+        [ item( "bi-copy" , "lists.menu_duplicate" , () => manage.duplicate() ),
+          item( "bi-link-45deg" , "lists.menu_link" , () => manage.link() ) ],
+        [ item( "bi-download" , "lists.menu_csv_export" , () => this.exportCsv( false ) ),
+          item( "bi-funnel" , "lists.menu_csv_export_shown" , () => this.exportCsv( true ) ) ],
+        [ item( "bi-trash3" , "lists.menu_deleted" , () => manage.deleted() ) ],
+      );
+      ListModal.redraw();
+      return;
+    }
+    groups(
+      [ item( "bi-copy" , "lists.menu_duplicate" , () => manage.duplicate() ),
+        item( "bi-pencil" , "lists.menu_rename" , () => manage.rename() ),
+        item( "bi-link-45deg" , "lists.menu_link" , () => manage.link() ),
+        item( "bi-trash" , "lists.menu_delete" , () => manage.remove() , { disabled: view.slug === "main" } ),
+        item( "bi-clock-history" , "lists.menu_history" , () => this.history() ),
+        item( "bi-lock" , "lists.menu_lock" , () => this.lock( !locked ) , { check: locked } ),
+        item( "bi-trash3" , "lists.menu_deleted" , () => manage.deleted() ) ],
+      [ header( "lists.menu_shared" ),
+        shared( "two-way" , "lists.shared_two_way" ),
+        shared( "one-way" , "lists.shared_one_way" ),
+        shared( "off" , "lists.shared_off" ),
+        header( "lists.menu_auto_add" ),
+        auto( "top" , "bi-arrow-bar-up" , "lists.auto_add_top" ),
+        auto( "bottom" , "bi-arrow-bar-down" , "lists.auto_add_bottom" ),
+        auto( "off" , "bi-slash-circle" , "lists.auto_add_off" ) ],
+      [ item( "bi-bar-chart-steps" , "lists.menu_tiers" , () => manage.tiers() , { check: Boolean( ( view.doc.sections || [] ).length ) } ),
+        item( "bi-palette" , "lists.menu_colours" , () => this.colours() , { disabled: locked } ),
+        item( "bi-quote" , "lists.menu_cite" , () => this.citeStyle() , { disabled: locked } ) ],
+      [ item( "bi-box-arrow-in-down" , "lists.menu_import" , () => manage.importFrom() , { disabled: locked } ),
+        item( "bi-journal-arrow-down" , "lists.menu_refs" , () => this.importRefs() , { disabled: locked } ),
+        item( "bi-filetype-csv" , "lists.menu_csv_import" , () => this.importCsv() , { disabled: locked } ),
+        item( "bi-table" , "lists.menu_sheet" , () => ListSheet.open() , { disabled: locked } ),
+        item( "bi-google" , "lists.menu_gsheet" , () => ListGSheet.open( view.slug ) ),
+        item( "bi-download" , "lists.menu_csv_export" , () => this.exportCsv( false ) ),
+        item( "bi-funnel" , "lists.menu_csv_export_shown" , () => this.exportCsv( true ) ) ],
     );
     ListModal.redraw();
   },

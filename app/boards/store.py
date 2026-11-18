@@ -61,7 +61,8 @@ def clean_name(name: str) -> str:
 
 
 # Words the routes use after /api/lists/, which no list may be called.
-RESERVED = {"schema", "stream", "deleted"}
+# "library" is the Lists picker's built-in Library entry (static/js/lists.js).
+RESERVED = {"schema", "stream", "deleted", "library"}
 
 
 def _free_slug(tx: db.Transaction, base: str) -> str:
@@ -103,6 +104,8 @@ def summary(record: dict[str, Any]) -> dict[str, Any]:
         "copied_from": record.get("copied_from") or "",
         "sync": ((doc.get("options") or {}).get("sync")) or "two-way",
         "sections": bool(doc.get("sections")),
+        # The built-in Library (app/boards/service.py): read-only, never stored.
+        **({"builtin": True} if record.get("builtin") else {}),
         **({"deleted_at": record.get("deleted_at"), "deleted_by": record.get("deleted_by") or ""} if record.get("deleted") else {}),
     }
 
@@ -282,8 +285,11 @@ def apply_ops(
     user_name: str,
     if_rev: int | None = None,
     dry_run: bool = False,
+    set_options: dict[str, Any] | None = None,
 ) -> Applied:
-    """Run a batch of ops against a list, atomically. Raises BoardError."""
+    """Run a batch of ops against a list, atomically. Raises BoardError.
+    set_options: options the server sets itself (auto_add_since), written in
+    the same rev as the ops."""
     if not isinstance(batch, list):
         raise BoardError("`ops` must be a list")
     with store.transaction() as tx:
@@ -303,6 +309,8 @@ def apply_ops(
             results = ops.apply_ops(doc, ctx, batch)
         except ops.OpFailure as failure:
             raise BoardError(failure.msg, 400, index=failure.index, op=failure.op) from None
+        if set_options:
+            doc.setdefault("options", {}).update(set_options)
         doc = board.normalize(doc)
         changed = doc != before
         if dry_run or not changed:
