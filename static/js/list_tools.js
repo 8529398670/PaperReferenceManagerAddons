@@ -263,6 +263,7 @@ const ListTools = {
     Dom.show( selection , selected.length > 0 );
     Dom.text( selection , I18n.get( "lists.selected" ).replace( "{count}" , selected.length ) );
     Dom.show( Dom.get( "list-copy-to" ) , selected.length > 0 );
+    Dom.show( Dom.get( "list-summarize" ) , selected.length > 0 );
   },
 
   chipHelp( selected ) {

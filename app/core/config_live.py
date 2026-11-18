@@ -78,6 +78,7 @@ FILE_ONLY_KEYS = frozenset({
     "server.language_file",
     "docker.data_dir",
     "library.zotero_dir",
+    "docker.zotero_dir",
 })
 
 

@@ -195,6 +195,16 @@ class Client:
                 return out, False
         return out, True
 
+    def work_with_refs(self, wid: str) -> tuple[dict[str, Any], list[str]]:
+        """One work, compact, and the ids of the works it cites (the crawl)."""
+        work = self._get(f"{BASE}/{wid}", {"select": COMPACT_FIELDS + ",referenced_works"})
+        return compact(work), [wid_of(w) for w in work.get("referenced_works") or []]
+
+    def citing_top(self, wid: str, limit: int = PAGE) -> list[dict[str, Any]]:
+        """The most-cited works citing wid, one page, compact (the crawl)."""
+        data = self._get(BASE, {"filter": f"cites:{wid}", "per-page": min(limit, PAGE), "sort": "cited_by_count:desc", "select": COMPACT_FIELDS})
+        return [compact(work) for work in data.get("results") or []]
+
     def fetch(self, doi: str, title: str) -> Fetched:
         """A library paper's whole OpenAlex stage. NotFound, Unavailable."""
         via_title = False

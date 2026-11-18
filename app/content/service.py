@@ -513,6 +513,10 @@ class ContentService:
             for path in held[REVIEW_KEPT_MAX:]:
                 path.unlink(missing_ok=True)
 
+    def oa_abstract(self, key: str) -> str:
+        """A library paper's abstract as OpenAlex has it, or ""."""
+        return self._oa_abstract(key)
+
     def _oa_abstract(self, key: str) -> str:
         work = self.files.read(key, "openalex.json") or {}
         return links.abstract_from_inverted(work.get("abstract_inverted_index"))
@@ -690,6 +694,10 @@ class ContentService:
             "openalex_enabled": library.openalex_enabled,
             "openalex_key": bool(library.openalex_api_key),
         }
+
+    def wid_of(self, key: str) -> str:
+        """A library paper's OpenAlex id, once its OpenAlex stage is done."""
+        return self._wids.get(key, "")
 
     # -- skips -------------------------------------------------------------------
 

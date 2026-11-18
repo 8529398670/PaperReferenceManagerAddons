@@ -28,6 +28,9 @@ class BoardService:
         self.content: Any = None
         # Told after any list changed (the review screener's candidates).
         self.on_changed: Any = None
+        # Told what changed, from whichever thread changed it: {slug, rev, by,
+        # locked?, deleted?, renamed_from?} (the Google Sheets mirror).
+        self.listeners: list[Callable[[dict[str, Any]], None]] = []
 
     def start(self) -> None:
         self._loop = asyncio.get_running_loop()
@@ -49,6 +52,11 @@ class BoardService:
         message = sse.event("list", json.dumps(data))
         if self.on_changed is not None:
             self.on_changed()
+        for listener in self.listeners:
+            try:
+                listener(dict(data))
+            except Exception as error:  # noqa: BLE001 -- a listener never fails the write that told it
+                print(f"[lists] a listener failed: {error!r}", flush=True)
         if self._loop is None:
             return
         try:

@@ -1151,3 +1151,12 @@ body.data-table-dragging, body.data-table-dragging * { cursor: col-resize !impor
 .review-borderline { border-left: 4px solid var(--bs-warning) !important; }
 .review-evidence blockquote { font-size: inherit; overflow-wrap: anywhere; }
 .review-value { font-size: inherit; text-decoration: underline dotted; }
+
+/* Phase 7. The rollup's cells hold whole subsections: a few lines show, the
+   rest scrolls inside the cell so a row stays a row. */
+.rollup-cell { white-space: pre-line; max-height: 9rem; overflow-y: auto; overflow-wrap: anywhere; }
+.summary-text { overflow-wrap: anywhere; }
+.summary-text ul { padding-left: 1.25rem; }
+/* The saved searches scroll in their own box, so the editor stays near. */
+.searches-list { max-height: 16rem; overflow-y: auto; }
+@media (min-width: 992px) { .searches-list { max-height: calc(100dvh - var(--app-navbar-height) - 8rem); } }

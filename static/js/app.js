@@ -189,6 +189,9 @@ const App = {
     DatasetsView.init();
     ReviewRules.init( me );
     ReviewView.init();
+    Searches.init();
+    ResearchLog.init();
+    SummariesView.init();
     loading.push( Keys.init( me ) );
     Mcp.init( me );
     loading.push( Sessions.init() );

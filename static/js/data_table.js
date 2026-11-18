@@ -31,8 +31,13 @@
 // width then its least); hide to start hidden; lock to keep it from being
 // hidden (the title); when() to show it only sometimes (a match score while
 // searching); cell( row ) answers a Node, a string or null; value( row ) is
-// what a local sort compares.
+// what a local sort compares. text, instead of label, is a header that is
+// not in language.yaml (the rollup's columns come from the summaries).
 class DataTable {
+  static labelOf( column ) {
+    return column.text != null ? String( column.text ) : I18n.get( column.label );
+  }
+
   constructor( options ) {
     this.options = options;
     this.name = options.name;
@@ -206,7 +211,7 @@ class DataTable {
 
   headCell( column ) {
     const th = Dom.el( "th" , { class: "data-table-th" + ( column.align === "end" ? " text-end" : "" ) , attrs: { scope: "col" , "data-col": column.id } } );
-    const label = Dom.el( "span" , { text: I18n.get( column.label ) } );
+    const label = Dom.el( "span" , { text: DataTable.labelOf( column ) } );
     if ( column.title ) th.setAttribute( "title" , I18n.get( column.title ) );
     if ( column.sort ) {
       th.appendChild( Dom.el( "button" , {
@@ -426,7 +431,7 @@ class DataTable {
     const tr = Dom.el( "tr" );
     columns.forEach( ( column ) => {
       const td = Dom.el( "td" , { class: [ column.align === "end" ? "text-end" : "" , column.cellClass || "" ].join( " " ).trim() } );
-      td.setAttribute( "data-label" , I18n.get( column.label ) );
+      td.setAttribute( "data-label" , DataTable.labelOf( column ) );
       const value = column.cell ? column.cell( row ) : row[ column.id ];
       if ( value instanceof Node ) td.appendChild( value );
       else if ( value != null ) td.textContent = String( value );
@@ -467,7 +472,7 @@ class DataTable {
       } );
       const move = ( step , icon , key ) => Dom.el( "button" , {
         class: "btn btn-sm btn-link data-table-move",
-        attrs: { type: "button" , title: I18n.get( key ) , "aria-label": I18n.get( key ) + ": " + I18n.get( column.label ) },
+        attrs: { type: "button" , title: I18n.get( key ) , "aria-label": I18n.get( key ) + ": " + DataTable.labelOf( column ) },
         children: [ Dom.el( "i" , { class: "bi bi-" + icon , attrs: { "aria-hidden": "true" } } ) ],
         on: { click: () => this.move( column , step ) },
       } );
@@ -479,7 +484,7 @@ class DataTable {
         class: "dropdown-item-text d-flex align-items-center gap-2 data-table-menu-item",
         children: [
           box,
-          Dom.el( "label" , { class: "form-check-label flex-grow-1 text-nowrap" , text: I18n.get( column.label ) , attrs: { for: id } } ),
+          Dom.el( "label" , { class: "form-check-label flex-grow-1 text-nowrap" , text: DataTable.labelOf( column ) , attrs: { for: id } } ),
           up, down,
         ],
       } ) ] } ) );

@@ -45,6 +45,11 @@ COPY config/api.json ./config/
 # The review screener's default rules (edits live in the database).
 COPY config/review.yaml ./config/
 COPY config/citation-styles ./config/citation-styles
+# The LLM summaries' prompts and the rollup's extra columns.
+COPY config/llm-prompts ./config/llm-prompts
+COPY config/rollup-extra-columns.yaml ./config/
+# The modality vocabulary and the method-figure terms (phases 4 and 5).
+COPY config/modalities.yaml config/method-images.txt ./config/
 
 # Version metadata, passed by docker/lib.sh so that
 # `docker exec <name> python -m app version` says which build is running.

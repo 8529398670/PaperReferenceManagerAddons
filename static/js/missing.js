@@ -148,6 +148,19 @@ const Missing = {
     this.dirty = false;
     this.loaded = true;
     const ticket = ++this.ticket;
+    // The Crawl tab is crawl.js's; the search box and table step aside.
+    const crawling = this.tab === "crawl";
+    CrawlView.showing( crawling );
+    Dom.show( Dom.get( "missing-search" ).closest( ".card-body" ) , !crawling );
+    if ( crawling ) {
+      this.counts( { counts: {} , skipped: 0 } , null );
+      Dom.show( Dom.get( "missing-works" ) , false );
+      Dom.show( Dom.get( "missing-authors" ) , false );
+      Dom.show( Dom.get( "missing-more" ) , false );
+      Dom.show( Dom.get( "missing-empty" ) , false );
+      Dom.text( Dom.get( "missing-total" ) , "" );
+      return;
+    }
     const authors = this.tab === "authors";
     let answer;
     let people = null;
@@ -216,7 +229,7 @@ const Missing = {
       else tab.removeAttribute( "aria-current" );
       const badge = tab.querySelector( ".badge" );
       if ( !badge ) return;
-      const n = name === "authors" ? ( people ? people.authors.length : null ) : counts[ name ];
+      const n = name === "authors" ? ( people ? people.authors.length : null ) : name === "crawl" ? CrawlView.count() : counts[ name ];
       Dom.text( badge , n == null ? "" : n.toLocaleString() );
       Dom.show( badge , n != null );
     } );
@@ -273,6 +286,24 @@ const Missing = {
   // "Add to list…": the work goes onto a list as a paper object, with its
   // OpenAlex id, DOI and open-access PDF.
   async addToList( work ) {
+    await this.pickList( work.title || work.wid || work.doi );
+    this.adding = work;
+  },
+
+  // A missing work as the paper object an add op takes.
+  paperOf( work ) {
+    return { title: work.title , doi: work.doi || "" , year: work.year , journal: work.journal || "" , authors: ( work.authors || [] ).join( ", " ) , wid: work.wid || "" , pdf: work.oa_pdf || "" };
+  },
+
+  // Many papers onto one list (Searches' "Add all", the research log): each
+  // a library key or a paper object, in one batch, skipping any already on.
+  async addManyToList( papers , label ) {
+    if ( !papers.length ) return;
+    await this.pickList( label );
+    this.adding = papers;
+  },
+
+  async pickList( label ) {
     if ( !this.lists ) {
       const answer = await Api.request( "/api/lists?limit=200" );
       this.lists = answer.lists;
@@ -281,19 +312,22 @@ const Missing = {
     Dom.clear( picker );
     this.lists.forEach( ( list ) => picker.appendChild( Dom.el( "option" , { text: list.name , attrs: { value: list.slug } } ) ) );
     if ( Lists.slug ) picker.value = Lists.slug;
-    Dom.text( Dom.get( "missing-add-title" ) , work.title || work.wid );
-    this.adding = work;
+    Dom.text( Dom.get( "missing-add-title" ) , label );
     bootstrap.Modal.getOrCreateInstance( Dom.get( "missing-add-dialog" ) ).show();
   },
 
   async confirmAdd() {
-    const work = this.adding;
+    const adding = this.adding;
     const slug = Dom.get( "missing-add-list" ).value;
-    if ( !work || !slug ) return;
-    const paper = { title: work.title , doi: work.doi , year: work.year , journal: work.journal , authors: ( work.authors || [] ).join( ", " ) , wid: work.wid , pdf: work.oa_pdf || "" };
-    await Api.post( "/api/lists/" + encodeURIComponent( slug ) + "/ops" , { ops: [ { op: "add" , paper: paper , if_absent: true } ] } );
+    if ( !adding || !slug ) return;
+    const papers = Array.isArray( adding ) ? adding : [ this.paperOf( adding ) ];
+    const ops = papers.map( ( paper ) => ( { op: "add" , paper: paper , if_absent: true } ) );
+    for ( let start = 0 ; start < ops.length ; start += 2000 ) {
+      await Api.post( "/api/lists/" + encodeURIComponent( slug ) + "/ops" , { ops: ops.slice( start , start + 2000 ) } );
+    }
     bootstrap.Modal.getOrCreateInstance( Dom.get( "missing-add-dialog" ) ).hide();
     const name = ( this.lists.find( ( list ) => list.slug === slug ) || {} ).name || slug;
-    Dom.toast( I18n.get( "missing.added" ).replace( "{list}" , () => name ) , "success" );
+    const text = papers.length > 1 ? I18n.get( "missing.added_many" ).replace( "{n}" , papers.length.toLocaleString() ) : I18n.get( "missing.added" );
+    Dom.toast( text.replace( "{list}" , () => name ) , "success" );
   },
 };

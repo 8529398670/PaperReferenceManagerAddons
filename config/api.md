@@ -16,12 +16,18 @@ This file is generated: do not edit it. Change the docs next to the handlers and
 - [Monitoring](#monitoring)
 - [Code and datasets](#code-and-datasets)
 - [Content](#content)
+- [Crawl](#crawl)
 - [Figures](#figures)
+- [Google Sheets](#google-sheets)
 - [Library](#library)
 - [Lists](#lists)
 - [Missing papers](#missing-papers)
+- [Missing pool](#missing-pool)
+- [Research log](#research-log)
 - [Review](#review)
+- [Saved searches](#saved-searches)
 - [Screener](#screener)
+- [Summaries](#summaries)
 - [Schemas](#schemas)
 
 ## Calling the API
@@ -2267,6 +2273,132 @@ Put failed (and not-found) stages back in the queue at once: one paper's, one st
 |---|---|---|---|---|
 | `queued` | integer | yes |  | How many stages were put back in the queue. |
 
+## Crawl
+
+| Method | Path | Summary | Who may call |
+|---|---|---|---|
+| GET | [`/api/crawl`](#get-apicrawl) | The crawl's progress and past runs | browser session or API key, anyone signed in |
+| POST | [`/api/crawl`](#post-apicrawl) | Start a crawl | browser session or API key, anyone signed in |
+| POST | [`/api/crawl/stop`](#post-apicrawlstop) | Stop the crawl | browser session or API key, anyone signed in |
+| GET | [`/api/crawl/{search}`](#get-apicrawlsearch) | A saved search's last crawl | browser session or API key, anyone signed in |
+| GET | [`/api/crawl/{search}/export.xlsx`](#get-apicrawlsearchexportxlsx) | A crawl as a workbook | browser session or API key, anyone signed in |
+
+### GET /api/crawl
+
+The crawl's progress and past runs
+
+Whether a crawl is running and how far it has got, and the last crawl of each saved search.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`crawl_status`](mcp.md#crawl_status) |
+| Errors | 401, 429, 503 |
+
+**Reply 200**: Success
+
+[`CrawlStatus`](#crawlstatus).
+
+### POST /api/crawl
+
+Start a crawl
+
+A best-first walk over OpenAlex from the library papers matching a saved search: score = keyword_weight x terms matched + cite_weight x log10(citations + 1) + link_weight x times reached. Runs in the background; GET /api/crawl says how far it has got, and the result replaces that search's last one.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`start_crawl`](mcp.md#start_crawl) |
+| Errors | 400, 401, 403, 404, 409, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `api_budget` | integer | no | 0 to 20000; default `1000` | OpenAlex requests at most; 0 uses only what is cached. |
+| `cite_weight` | number | no | 0 to 10; default `0.4` |  |
+| `cited_by` | boolean | no | default `true` | Also walk forward, to the works citing each one. |
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `keyword_weight` | number | no | 0 to 10; default `1` |  |
+| `link_weight` | number | no | 0 to 10; default `0.5` |  |
+| `max_depth` | integer | no | 0 to 4; default `2` |  |
+| `max_visits` | integer | no | 1 to 5000; default `500` |  |
+| `min_novel_hits` | integer | no | 0 to 50; default `2` | Terms a work needs to be reported. |
+| `min_seed_hits` | integer | no | 0 to 50; default `1` | Terms a library paper needs to be a seed. |
+| `search` | string | yes | at least 1 characters | The saved search whose terms score the works (id or name). |
+
+**Reply 202**: Success
+
+[`CrawlStatus`](#crawlstatus).
+
+### POST /api/crawl/stop
+
+Stop the crawl
+
+Stop the crawl under way; what it found so far is kept as its result.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`stop_crawl`](mcp.md#stop_crawl) |
+| Errors | 400, 401, 403, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+
+**Reply 200**: Success
+
+[`CrawlStatus`](#crawlstatus).
+
+### GET /api/crawl/{search}
+
+A saved search's last crawl
+
+The works the last crawl for a saved search found, best score first.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`get_crawl`](mcp.md#get_crawl) |
+| Errors | 400, 401, 404, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `search` | path | string | yes | 1 to 120 characters | The search's id, or its name. |
+| `view` | query | string | no | one of `novel`, `visited`; default `novel` | "novel" (default): works you lack. "visited": every work walked. |
+| `limit` | query | integer | no | 1 to 2000; default `500` |  |
+
+**Reply 200**: Success
+
+[`CrawlResult`](#crawlresult).
+
+### GET /api/crawl/{search}/export.xlsx
+
+A crawl as a workbook
+
+The last crawl for a saved search: Novel and Visited sheets, with score, terms matched, links, depth and where each was reached from.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | None, HTTP only: A file to download. |
+| Errors | 400, 401, 404, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `search` | path | string | yes | 1 to 120 characters | The search's id, or its name. |
+
+**Reply 200**: Success
+
+Text, as `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
+
 ## Figures
 
 | Method | Path | Summary | Who may call |
@@ -2475,6 +2607,66 @@ Every picked figure (in pick order) and every skipped paper of one view.
 |---|---|---|---|---|
 | `selected` | array of string | yes |  | The picked figures' ids, in pick order. |
 | `skipped` | array of string | yes |  | The skipped papers' keys. |
+
+## Google Sheets
+
+| Method | Path | Summary | Who may call |
+|---|---|---|---|
+| GET | [`/api/lists/{slug}/sheet`](#get-apilistsslugsheet) | A list's Google Sheet mirror | browser session or API key, anyone signed in |
+| POST | [`/api/lists/{slug}/sheet`](#post-apilistsslugsheet) | Mirror a list to a Google Sheet | browser session or API key, anyone signed in |
+
+### GET /api/lists/{slug}/sheet
+
+A list's Google Sheet mirror
+
+Whether the list is mirrored to a Google Sheet, how, and how the last push and read-back went.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`get_list_sheet`](mcp.md#get_list_sheet) |
+| Errors | 400, 401, 404, 410, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `slug` | path | string | yes | 1 to 200 characters | The list's slug. |
+
+**Reply 200**: Success
+
+[`SheetMirror`](#sheetmirror).
+
+### POST /api/lists/{slug}/sheet
+
+Mirror a list to a Google Sheet
+
+Switch a list's Google Sheet mirror off, one-way or two-way; sync now; or overwrite the sheet with the list.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`set_list_sheet`](mcp.md#set_list_sheet) |
+| Errors | 400, 401, 403, 404, 409, 410, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `slug` | path | string | yes | 1 to 200 characters | The list's slug. |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `mode` | string or null | no | one of `off`, `one-way`, `two-way` | off; one-way (the list is pushed to its sheet after each change); two-way (also read back every poll_seconds). The first switch on makes the spreadsheet. |
+| `overwrite` | boolean | no |  | Write the list over the sheet now, dropping anything typed there since the last read. |
+| `sync_now` | boolean | no |  | Push (and read back, two-way) now. |
+
+**Reply 200**: Success
+
+[`SheetMirror`](#sheetmirror).
 
 ## Library
 
@@ -3423,6 +3615,66 @@ Hide works from the Missing screen (a soft hide, undone by skip false), or bring
 |---|---|---|---|---|
 | `changed` | integer | yes |  |  |
 
+## Missing pool
+
+| Method | Path | Summary | Who may call |
+|---|---|---|---|
+| GET | [`/api/missing/export.xlsx`](#get-apimissingexportxlsx) | The missing pool as a workbook | browser session or API key, anyone signed in |
+
+### GET /api/missing/export.xlsx
+
+The missing pool as a workbook
+
+The old missing.xlsx, from the live pool: the top works by connections, the newest, the most cited, the top authors, and one sheet per saved search. Each row has its DOI, proxy and open-access links, year, journal and connections. Skipped works are left out.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | None, HTTP only: A file to download. |
+| Errors | 400, 401, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `top` | query | integer | no | 10 to 5000; default `1000` | Rows per sheet. Default 1000. |
+| `searches` | query | boolean | no | default `true` | Also a sheet per saved search (default true). |
+
+**Reply 200**: Success
+
+Text, as `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
+
+## Research log
+
+| Method | Path | Summary | Who may call |
+|---|---|---|---|
+| POST | [`/api/research-log/check`](#post-apiresearch-logcheck) | Which papers in a research log you lack | browser session or API key, anyone signed in |
+
+### POST /api/research-log/check
+
+Which papers in a research log you lack
+
+Reads a Markdown research log (# 03SEP2026 date headings, &nbsp;-separated blocks of a title line and its links), lifts each paper's DOI out of its links, and checks each the way /api/exists does: a DOI settles it, else the title. A DOI miss is retried by title and marked recovered.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`check_research_log`](mcp.md#check_research_log) |
+| Errors | 400, 401, 403, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `list_only` | boolean | no |  | Only what the parser extracted, unchecked: for a log whose layout drifted. |
+| `name` | string | no | at most 200 characters; default `research log` | The file's name, for the report. |
+| `text` | string | yes | at most 8388608 characters | The log's Markdown. |
+
+**Reply 200**: Success
+
+[`ResearchLogCheck`](#researchlogcheck).
+
 ## Review
 
 | Method | Path | Summary | Who may call |
@@ -3507,6 +3759,219 @@ One candidate paper's review in full: every extracted value with the sentence it
 **Reply 200**: Success
 
 [`ReviewPaper`](#reviewpaper).
+
+## Saved searches
+
+| Method | Path | Summary | Who may call |
+|---|---|---|---|
+| GET | [`/api/searches`](#get-apisearches) | The saved searches | browser session or API key, anyone signed in |
+| POST | [`/api/searches`](#post-apisearches) | Save a search | browser session or API key, anyone signed in |
+| POST | [`/api/searches/restore`](#post-apisearchesrestore) | Put a deleted search back | browser session or API key, anyone signed in |
+| POST | [`/api/searches/try`](#post-apisearchestry) | Try a search before saving it | browser session or API key, anyone signed in |
+| POST | [`/api/searches/{search}`](#post-apisearchessearch) | Change a saved search | browser session or API key, anyone signed in |
+| POST | [`/api/searches/{search}/delete`](#post-apisearchessearchdelete) | Delete a saved search | browser session or API key, anyone signed in |
+| GET | [`/api/searches/{search}/export`](#get-apisearchessearchexport) | A saved search's matches as a file | browser session or API key, anyone signed in |
+| GET | [`/api/searches/{search}/run`](#get-apisearchessearchrun) | Run a saved search | browser session or API key, anyone signed in |
+
+### GET /api/searches
+
+The saved searches
+
+Every saved search: a name, a boolean query and named groups of terms. The crawl and missing.xlsx use them.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`list_saved_searches`](mcp.md#list_saved_searches) |
+| Errors | 401, 429, 503 |
+
+**Reply 200**: Success
+
+[`SavedSearches`](#savedsearches).
+
+### POST /api/searches
+
+Save a search
+
+A new saved search. A search that does not hold together is a 400 listing each problem with where it is.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`create_saved_search`](mcp.md#create_saved_search) |
+| Errors | 400, 401, 403, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `description` | string | no | at most 2000 characters |  |
+| `groups` | array of object | no |  | Named groups of terms: {name (letters, digits, _), mode: any \| all \| none \| at_least, terms: [phrases] (any / all / none), n and of: [group names] (at_least), required (default true: the paper must match it)}. A term is matched as one word of the search box is: folded, its last word a prefix, in the title, authors, journal, tags, abstract or full text. |
+| `name` | string | yes | 1 to 120 characters | Its name, unique. |
+| `query` | string | no | at most 2000 characters | A boolean query in the search box's grammar (AND, OR, NOT, -term, "phrase"). May be empty. |
+
+**Reply 201**: Success
+
+[`SavedSearch`](#savedsearch).
+
+### POST /api/searches/restore
+
+Put a deleted search back
+
+Undo a delete: the search as it was, with its id.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | None, HTTP only: The page's undo; an agent makes the search again with create_saved_search. |
+| Errors | 400, 401, 403, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `search` | object | yes |  | The search as delete_saved_search answered it. |
+
+**Reply 200**: Success
+
+[`SavedSearch`](#savedsearch).
+
+### POST /api/searches/try
+
+Try a search before saving it
+
+Run a search as sent, without saving it: what the editor shows as you type.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`try_saved_search`](mcp.md#try_saved_search) |
+| Errors | 400, 401, 403, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `description` | string | no | at most 2000 characters |  |
+| `groups` | array of object | no |  | Named groups of terms: {name (letters, digits, _), mode: any \| all \| none \| at_least, terms: [phrases] (any / all / none), n and of: [group names] (at_least), required (default true: the paper must match it)}. A term is matched as one word of the search box is: folded, its last word a prefix, in the title, authors, journal, tags, abstract or full text. |
+| `limit` | integer | no | 1 to 2000; default `200` |  |
+| `name` | string | no | at most 120 characters; default `Unsaved` |  |
+| `pool` | string | no | one of `library`, `missing`, `both`; default `both` | "both" (default), "library" or "missing". |
+| `query` | string | no | at most 2000 characters | A boolean query in the search box's grammar (AND, OR, NOT, -term, "phrase"). May be empty. |
+
+**Reply 200**: Success
+
+[`SavedSearchRun`](#savedsearchrun).
+
+### POST /api/searches/{search}
+
+Change a saved search
+
+Replace a saved search's name, query, groups and description.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`update_saved_search`](mcp.md#update_saved_search) |
+| Errors | 400, 401, 403, 404, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `search` | path | string | yes | 1 to 120 characters | The search's id, or its name. |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `description` | string | no | at most 2000 characters |  |
+| `groups` | array of object | no |  | Named groups of terms: {name (letters, digits, _), mode: any \| all \| none \| at_least, terms: [phrases] (any / all / none), n and of: [group names] (at_least), required (default true: the paper must match it)}. A term is matched as one word of the search box is: folded, its last word a prefix, in the title, authors, journal, tags, abstract or full text. |
+| `name` | string | yes | 1 to 120 characters | Its name, unique. |
+| `query` | string | no | at most 2000 characters | A boolean query in the search box's grammar (AND, OR, NOT, -term, "phrase"). May be empty. |
+
+**Reply 200**: Success
+
+[`SavedSearch`](#savedsearch).
+
+### POST /api/searches/{search}/delete
+
+Delete a saved search
+
+Delete a saved search. The answer is the search as it was, which POST /api/searches/restore puts back.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`delete_saved_search`](mcp.md#delete_saved_search) |
+| Errors | 400, 401, 403, 404, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `search` | path | string | yes | 1 to 120 characters | The search's id, or its name. |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+
+**Reply 200**: Success
+
+[`SavedSearch`](#savedsearch).
+
+### GET /api/searches/{search}/export
+
+A saved search's matches as a file
+
+Every match, library and missing, as an .xlsx (a sheet each) or a Markdown list.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | None, HTTP only: A file to download. |
+| Errors | 400, 401, 404, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `search` | path | string | yes | 1 to 120 characters | The search's id, or its name. |
+| `format` | query | string | no | one of `xlsx`, `md`; default `xlsx` | "xlsx" (default) or "md". |
+
+**Reply 200**: Success
+
+Text, as `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
+
+### GET /api/searches/{search}/run
+
+Run a saved search
+
+The library papers and missing works a saved search matches, and how many each of its groups matches alone.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`run_saved_search`](mcp.md#run_saved_search) |
+| Errors | 400, 401, 404, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `search` | path | string | yes | 1 to 120 characters | The search's id, or its name. |
+| `pool` | query | string | no | one of `library`, `missing`, `both`; default `both` | "both" (default), "library" or "missing". |
+| `limit` | query | integer | no | 1 to 2000; default `500` | Rows of each pool to return. Default 500, at most 2000. |
+
+**Reply 200**: Success
+
+[`SavedSearchRun`](#savedsearchrun).
 
 ## Screener
 
@@ -3859,6 +4324,197 @@ Screens one library paper (key) or pasted text with the rules sent (unsaved), a 
 
 [`ReviewTest`](#reviewtest).
 
+## Summaries
+
+| Method | Path | Summary | Who may call |
+|---|---|---|---|
+| POST | [`/api/summaries`](#post-apisummaries) | Summarise papers | browser session or API key, anyone signed in |
+| POST | [`/api/summaries/cancel`](#post-apisummariescancel) | Empty the summaries queue | browser session or API key, anyone signed in |
+| POST | [`/api/summaries/delete`](#post-apisummariesdelete) | Delete a summary | browser session or API key, anyone signed in |
+| GET | [`/api/summaries/paper`](#get-apisummariespaper) | One paper's summaries | browser session or API key, anyone signed in |
+| POST | [`/api/summaries/put`](#post-apisummariesput) | Put a summary back | browser session or API key, anyone signed in |
+| GET | [`/api/summaries/rollup`](#get-apisummariesrollup) | One section's summaries as a table | browser session or API key, anyone signed in |
+| GET | [`/api/summaries/rollup.xlsx`](#get-apisummariesrollupxlsx) | The rollup as a workbook | browser session or API key, anyone signed in |
+| GET | [`/api/summaries/status`](#get-apisummariesstatus) | The summaries queue | browser session or API key, anyone signed in |
+
+### POST /api/summaries
+
+Summarise papers
+
+Queue LLM summaries of these papers' sections. One call each, in the background, with config.yaml's llm: provider; each one costs money, so a section already summarised is skipped unless force. Progress arrives on the library stream as "summary" events.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`summarize_papers`](mcp.md#summarize_papers) |
+| Errors | 400, 401, 403, 409, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `force` | boolean | no |  | Summarise again a section already summarised. |
+| `keys` | array of string | yes |  | Paper keys, at most 2000. |
+| `sections` | array of string | yes |  | Sections to summarise: all (the whole text), abstract, introduction, background, methods, results, conclusions or future. |
+
+**Reply 202**: Success
+
+[`SummariesQueued`](#summariesqueued).
+
+### POST /api/summaries/cancel
+
+Empty the summaries queue
+
+Drop every queued summary; the one being written finishes.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`cancel_summaries`](mcp.md#cancel_summaries) |
+| Errors | 400, 401, 403, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+
+**Reply 200**: Success
+
+[`SummariesQueued`](#summariesqueued).
+
+### POST /api/summaries/delete
+
+Delete a summary
+
+Forget one paper's summary of one section.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`delete_summary`](mcp.md#delete_summary) |
+| Errors | 400, 401, 403, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `key` | string | yes | at least 1 characters |  |
+| `section` | string | yes | one of `all`, `abstract`, `introduction`, `background`, `methods`, `results`, `conclusions`, `future` |  |
+
+**Reply 200**: Success
+
+[`SummaryDeleted`](#summarydeleted).
+
+### GET /api/summaries/paper
+
+One paper's summaries
+
+Every summary kept for a paper, and those queued or failed.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`get_paper_summaries`](mcp.md#get_paper_summaries) |
+| Errors | 400, 401, 404, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `key` | query | string | no |  | The paper's key. |
+
+**Reply 200**: Success
+
+[`PaperSummaries`](#papersummaries).
+
+### POST /api/summaries/put
+
+Put a summary back
+
+Undo a delete: the summary as it was.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | None, HTTP only: The page's undo; an agent asks for the summary again with summarize_papers. |
+| Errors | 400, 401, 403, 404, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `key` | string | yes | at least 1 characters |  |
+| `section` | string | yes | one of `all`, `abstract`, `introduction`, `background`, `methods`, `results`, `conclusions`, `future` |  |
+| `summary` | object | yes |  | {hashtags, summary, provider, model, at, by}: what delete answered. |
+
+**Reply 200**: Success
+
+[`SummaryDeleted`](#summarydeleted).
+
+### GET /api/summaries/rollup
+
+One section's summaries as a table
+
+Every summary of a section: their subsection headers as columns, the hashtags and a histogram of them, and the extra keyword / regex columns config/rollup-extra-columns.yaml declares.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`summaries_rollup`](mcp.md#summaries_rollup) |
+| Errors | 400, 401, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `section` | query | string | no | one of `all`, `abstract`, `introduction`, `background`, `methods`, `results`, `conclusions`, `future`; default `methods` | The section to roll up: all (the whole text), abstract, introduction, background, methods, results, conclusions or future. |
+
+**Reply 200**: Success
+
+[`SummariesRollup`](#summariesrollup).
+
+### GET /api/summaries/rollup.xlsx
+
+The rollup as a workbook
+
+The rollup's Summaries sheet (a column per subsection and extra column) and its Hashtag counts.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | None, HTTP only: A file to download. |
+| Errors | 400, 401, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `section` | query | string | no | one of `all`, `abstract`, `introduction`, `background`, `methods`, `results`, `conclusions`, `future`; default `methods` | The section to roll up: all (the whole text), abstract, introduction, background, methods, results, conclusions or future. |
+
+**Reply 200**: Success
+
+Text, as `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
+
+### GET /api/summaries/status
+
+The summaries queue
+
+Which language model writes the summaries, what is queued, and how many are kept per section.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | [`summaries_status`](mcp.md#summaries_status) |
+| Errors | 401, 429, 503 |
+
+**Reply 200**: Success
+
+[`SummariesStatus`](#summariesstatus).
+
 ## Schemas
 
 The shapes the routes above refer to by name.
@@ -3901,6 +4557,22 @@ The shapes the routes above refer to by name.
 | `reply` | object | no |  | When it worked: the route's own reply, if it has one. |
 | `request_id` | string | no |  | On a 5xx: the reference that finds this failure in the log. |
 | `status` | integer | no |  | When it failed: the status the route would have answered. |
+
+### CrawlResult
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `run` | object or null | yes |  | The run's settings and counts, null when it never ran. |
+| `total` | integer | yes |  |  |
+| `works` | array of object | yes |  | wid, doi, title, journal, year, cited_by, oa_pdf, authors, score, hits (terms matched), links (times reached), depth, from / from_title / from_key (the work it was reached from, and its library key when a seed), how (cites / cited by), in_library (it has been added since). |
+
+### CrawlStatus
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `defaults` | object | yes |  | The crawl's default settings. |
+| `runs` | array of object | yes |  | Each saved search's last crawl: settings, terms, seeds, visited, novel, api_used, errors, when. |
+| `status` | object | yes |  | running, search_id, search, visited, novel, api_used, max_visits, started_at / finished_at, error. |
 
 ### Error
 
@@ -4033,6 +4705,12 @@ The shapes the routes above refer to by name.
 | `role` | string | yes | one of `admin`, `user` |  |
 | `user_id` | integer | yes |  |  |
 
+### PaperSummaries
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `summaries` | map of object | yes |  | By section: hashtags, summary (Markdown), provider, model, at, by, cut (the text was too long and was cut), and state (done, queued, running, failed) with error. |
+
 ### PruneResult
 
 | Field | Type | Required | Limits | Description |
@@ -4041,6 +4719,19 @@ The shapes the routes above refer to by name.
 | `bytes_before` | integer | yes |  |  |
 | `compressed` | integer | yes |  |  |
 | `deleted` | integer | yes |  |  |
+
+### ResearchLogCheck
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `extracted` | integer | yes |  | Paper blocks found. |
+| `lines` | integer | yes |  |  |
+| `missing` | integer | no |  |  |
+| `papers` | array of object | yes |  | Each paper: title, line, date (the heading above it), url, doi, occurrences (lines), mentions, and when checked: found ("doi", "title" or "" for missing), recovered (its DOI is not in the library but its title is), key. |
+| `recovered` | integer | no |  |  |
+| `report` | string | no |  | The Markdown report, as the old command wrote it. |
+| `source` | string | yes |  |  |
+| `unique` | integer | yes |  | After merging repeats by title. |
 
 ### ReviewCheck
 
@@ -4127,6 +4818,30 @@ The shapes the routes above refer to by name.
 | `api_keys` | integer | yes |  |  |
 | `login_links` | integer | yes |  |  |
 | `sessions` | integer | yes |  |  |
+
+### SavedSearch
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `search` | object | yes |  |  |
+
+### SavedSearchRun
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `library` | array of object | yes |  | Library papers matched, newest first: key, title, doi, year, journal, authors, added, tags. |
+| `library_groups` | map of integer | yes |  | How many library papers each group matches on its own. |
+| `library_total` | integer | yes |  |  |
+| `missing` | array of object | yes |  | Missing works matched, by connections: wid, doi, title, journal, year, cited_by, oa_pdf, authors, conn. |
+| `missing_groups` | map of integer | yes |  |  |
+| `missing_total` | integer | yes |  |  |
+| `search` | object | yes |  |  |
+
+### SavedSearches
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `searches` | array of object | yes |  | Each search: id, name, description, query, groups, created / updated at and by. |
 
 ### ScreenerGuide
 
@@ -4224,6 +4939,12 @@ The shapes the routes above refer to by name.
 | `version` | string | yes |  | Send it back when saving: a changed file is refused with a 409. |
 | `writable` | boolean | yes |  |  |
 
+### SheetMirror
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `sheet` | object | yes |  | available (google_sheets is on and has credentials), mode (off, one-way, two-way), spreadsheet_id, url, last_push, last_pull, error, refused (the last read-back was refused), note, pending, poll_seconds, default_mode. |
+
 ### SignIn
 
 One of these:
@@ -4240,6 +4961,43 @@ One of these:
 |---|---|---|---|---|
 | `challenge` | string | yes |  |  |
 | `two_factor` | boolean | yes |  |  |
+
+### SummariesQueued
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `kept` | integer | yes |  | Already summarised, left alone (send force to redo). |
+| `queued` | integer | yes |  |  |
+| `unknown` | integer | yes |  | Keys that are not library papers. |
+
+### SummariesRollup
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `columns` | array of string | yes |  | The "**Subsection.**" headers the summaries carry, in first-seen order. |
+| `extra` | array of string | yes |  | The extra columns from config/rollup-extra-columns.yaml. |
+| `hashtags` | array of array of any | yes |  | [hashtag, papers] most used first. |
+| `rows` | array of object | yes |  | One per paper: key, title, doi, year, journal, hashtags, parts {header: text} (the whole summary, in its parts), extra {name: snippets}, model, at. |
+| `section` | string | yes |  |  |
+
+### SummariesStatus
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `counts` | map of integer | yes |  | Summaries kept, by section. |
+| `done` | integer | yes |  | Summaries made since the server started. |
+| `failed` | integer | yes |  |  |
+| `model` | string | yes |  |  |
+| `provider` | string | yes |  | The provider config.yaml picks: claude, openai or gemini; "" when no key is set. |
+| `queued` | integer | yes |  |  |
+| `running` | array of string or null | yes |  | [paper key, section] being summarised now. |
+| `sections` | array of array of string | yes |  | [key, display name] of each section. |
+
+### SummaryDeleted
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `summary` | object or null | yes |  | The summary as it was, for undo (POST /api/summaries/put). |
 
 ### Theme
 

@@ -288,6 +288,10 @@ def command_shell(args: argparse.Namespace) -> None:
             ("docker_cpus", docker.cpus),
             ("docker_pids_limit", str(docker.pids_limit)),
             ("docker_tmpfs_size", docker.tmpfs_size),
+            # The host folder mounted read-only at /zotero: docker.zotero_dir,
+            # else library.zotero_dir. run.sh expands ~ and relative paths on
+            # the host, since this may run in a container.
+            ("docker_zotero_dir", docker.zotero_dir or file.library.zotero_dir),
             ("server_port", str(file.server.port)),
             ("server_secure_cookies", _flag(file.server.secure_cookies)),
             ("server_trust_proxy", _flag(file.server.trust_proxy)),

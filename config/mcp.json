@@ -8,6 +8,10 @@
       "route": "GET /api/api.json"
     },
     {
+      "reason": "A file to download.",
+      "route": "GET /api/crawl/{search}/export.xlsx"
+    },
+    {
       "reason": "A file to download; figure_picks gives the ids as data.",
       "route": "GET /api/figures/export"
     },
@@ -40,12 +44,24 @@
       "route": "GET /api/mcp.json"
     },
     {
+      "reason": "A file to download.",
+      "route": "GET /api/missing/export.xlsx"
+    },
+    {
       "reason": "The file itself, for a browser to show.",
       "route": "GET /api/paper/pdf"
     },
     {
       "reason": "A file to download; get_screener_setup gives the same rules as JSON.",
       "route": "GET /api/review/setups/{setup}/export"
+    },
+    {
+      "reason": "A file to download.",
+      "route": "GET /api/searches/{search}/export"
+    },
+    {
+      "reason": "A file to download.",
+      "route": "GET /api/summaries/rollup.xlsx"
     },
     {
       "reason": "A file to download, made from the rows sent.",
@@ -88,8 +104,16 @@
       "route": "POST /api/logs/events"
     },
     {
+      "reason": "The page's undo; an agent makes the search again with create_saved_search.",
+      "route": "POST /api/searches/restore"
+    },
+    {
       "reason": "It reads a sheet for the page's import dialog; list_ops imports rows.",
       "route": "POST /api/sheet/csv"
+    },
+    {
+      "reason": "The page's undo; an agent asks for the summary again with summarize_papers.",
+      "route": "POST /api/summaries/put"
     },
     {
       "reason": "The MCP endpoint itself.",
@@ -1149,6 +1173,61 @@
       "title": "Stop your own login link working"
     },
     {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Empty the summaries queue"
+      },
+      "description": "Drop every queued summary; the one being written finishes.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "cancel_summaries",
+      "route": "POST /api/summaries/cancel",
+      "title": "Empty the summaries queue"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Which papers in a research log you lack"
+      },
+      "description": "Reads a Markdown research log (# 03SEP2026 date headings, &nbsp;-separated blocks of a title line and its links), lifts each paper's DOI out of its links, and checks each the way /api/exists does: a DOI settles it, else the title. A DOI miss is retried by title and marked recovered.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "list_only": {
+            "description": "Only what the parser extracted, unchecked: for a log whose layout drifted.",
+            "type": "boolean"
+          },
+          "name": {
+            "default": "research log",
+            "description": "The file's name, for the report.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "text": {
+            "description": "The log's Markdown.",
+            "maxLength": 8388608,
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "name": "check_research_log",
+      "route": "POST /api/research-log/check",
+      "title": "Which papers in a research log you lack"
+    },
+    {
       "adminOnly": true,
       "annotations": {
         "destructiveHint": false,
@@ -1390,6 +1469,24 @@
       "annotations": {
         "destructiveHint": false,
         "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "The crawl's progress and past runs"
+      },
+      "description": "Whether a crawl is running and how far it has got, and the last crawl of each saved search.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "crawl_status",
+      "route": "GET /api/crawl",
+      "title": "The crawl's progress and past runs"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
         "readOnlyHint": false,
         "title": "A login link for yourself"
       },
@@ -1421,6 +1518,50 @@
       "name": "create_my_login_link",
       "route": "POST /api/account/login-link",
       "title": "A login link for yourself"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Save a search"
+      },
+      "description": "A new saved search. A search that does not hold together is a 400 listing each problem with where it is.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "groups": {
+            "description": "Named groups of terms: {name (letters, digits, _), mode: any | all | none | at_least, terms: [phrases] (any / all / none), n and of: [group names] (at_least), required (default true: the paper must match it)}. A term is matched as one word of the search box is: folded, its last word a prefix, in the title, authors, journal, tags, abstract or full text.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "name": {
+            "description": "Its name, unique.",
+            "maxLength": 120,
+            "minLength": 1,
+            "type": "string"
+          },
+          "query": {
+            "description": "A boolean query in the search box's grammar (AND, OR, NOT, -term, \"phrase\"). May be empty.",
+            "maxLength": 2000,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "name": "create_saved_search",
+      "route": "POST /api/searches",
+      "title": "Save a search"
     },
     {
       "adminOnly": true,
@@ -1490,6 +1631,34 @@
       "title": "Make a rule setup (admin)"
     },
     {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Delete a saved search"
+      },
+      "description": "Delete a saved search. The answer is the search as it was, which POST /api/searches/restore puts back.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "search": {
+            "description": "The search's id, or its name.",
+            "maxLength": 120,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "search"
+        ],
+        "type": "object"
+      },
+      "name": "delete_saved_search",
+      "route": "POST /api/searches/{search}/delete",
+      "title": "Delete a saved search"
+    },
+    {
       "adminOnly": true,
       "annotations": {
         "destructiveHint": true,
@@ -1516,6 +1685,46 @@
       "name": "delete_screener_setup",
       "route": "POST /api/review/setups/{setup}/delete",
       "title": "Delete a rule setup (admin)"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Delete a summary"
+      },
+      "description": "Forget one paper's summary of one section.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "section": {
+            "enum": [
+              "all",
+              "abstract",
+              "introduction",
+              "background",
+              "methods",
+              "results",
+              "conclusions",
+              "future"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "section"
+        ],
+        "type": "object"
+      },
+      "name": "delete_summary",
+      "route": "POST /api/summaries/delete",
+      "title": "Delete a summary"
     },
     {
       "adminOnly": false,
@@ -1551,6 +1760,49 @@
         "destructiveHint": false,
         "openWorldHint": false,
         "readOnlyHint": true,
+        "title": "A saved search's last crawl"
+      },
+      "description": "The works the last crawl for a saved search found, best score first.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "default": 500,
+            "maximum": 2000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "search": {
+            "description": "The search's id, or its name.",
+            "maxLength": 120,
+            "minLength": 1,
+            "type": "string"
+          },
+          "view": {
+            "default": "novel",
+            "description": "\"novel\" (default): works you lack. \"visited\": every work walked.",
+            "enum": [
+              "novel",
+              "visited"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "search"
+        ],
+        "type": "object"
+      },
+      "name": "get_crawl",
+      "route": "GET /api/crawl/{search}",
+      "title": "A saved search's last crawl"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
         "title": "Read a list"
       },
       "description": "One list in full (a slug it was renamed away from answers the list as it is now): its document (rows in order, each with key, title, year, tags and cells; columns; the tag vocabulary with colours), its rev, and what the library knows of each row.",
@@ -1570,6 +1822,34 @@
       "name": "get_list",
       "route": "GET /api/lists/{slug}",
       "title": "Read a list"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "A list's Google Sheet mirror"
+      },
+      "description": "Whether the list is mirrored to a Google Sheet, how, and how the last push and read-back went.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "slug": {
+            "description": "The list's slug.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug"
+        ],
+        "type": "object"
+      },
+      "name": "get_list_sheet",
+      "route": "GET /api/lists/{slug}/sheet",
+      "title": "A list's Google Sheet mirror"
     },
     {
       "adminOnly": false,
@@ -1616,6 +1896,29 @@
       "name": "get_paper_content",
       "route": "GET /api/paper/content",
       "title": "What is known about a paper"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "One paper's summaries"
+      },
+      "description": "Every summary kept for a paper, and those queued or failed.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "description": "The paper's key.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_paper_summaries",
+      "route": "GET /api/summaries/paper",
+      "title": "One paper's summaries"
     },
     {
       "adminOnly": false,
@@ -2180,6 +2483,24 @@
         "destructiveHint": false,
         "openWorldHint": false,
         "readOnlyHint": true,
+        "title": "The saved searches"
+      },
+      "description": "Every saved search: a name, a boolean query and named groups of terms. The crawl and missing.xlsx use them.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "list_saved_searches",
+      "route": "GET /api/searches",
+      "title": "The saved searches"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
         "title": "List ops reference"
       },
       "description": "Every op POST /api/lists/{slug}/ops takes, with its parameters, plus how rows and positions are named. Read it before a first list_ops call.",
@@ -2612,6 +2933,51 @@
       "title": "Sign out one of your devices, for many at once"
     },
     {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Run a saved search"
+      },
+      "description": "The library papers and missing works a saved search matches, and how many each of its groups matches alone.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "default": 500,
+            "description": "Rows of each pool to return. Default 500, at most 2000.",
+            "maximum": 2000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "pool": {
+            "default": "both",
+            "description": "\"both\" (default), \"library\" or \"missing\".",
+            "enum": [
+              "library",
+              "missing",
+              "both"
+            ],
+            "type": "string"
+          },
+          "search": {
+            "description": "The search's id, or its name.",
+            "maxLength": 120,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "search"
+        ],
+        "type": "object"
+      },
+      "name": "run_saved_search",
+      "route": "GET /api/searches/{search}/run",
+      "title": "Run a saved search"
+    },
+    {
       "adminOnly": true,
       "annotations": {
         "destructiveHint": false,
@@ -2895,6 +3261,54 @@
       "name": "set_figure_picks",
       "route": "POST /api/figures/replace",
       "title": "Replace a view's picks"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Mirror a list to a Google Sheet"
+      },
+      "description": "Switch a list's Google Sheet mirror off, one-way or two-way; sync now; or overwrite the sheet with the list.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "description": "off; one-way (the list is pushed to its sheet after each change); two-way (also read back every poll_seconds). The first switch on makes the spreadsheet.",
+            "enum": [
+              "off",
+              "one-way",
+              "two-way"
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "overwrite": {
+            "description": "Write the list over the sheet now, dropping anything typed there since the last read.",
+            "type": "boolean"
+          },
+          "slug": {
+            "description": "The list's slug.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "sync_now": {
+            "description": "Push (and read back, two-way) now.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "slug"
+        ],
+        "type": "object"
+      },
+      "name": "set_list_sheet",
+      "route": "POST /api/lists/{slug}/sheet",
+      "title": "Mirror a list to a Google Sheet"
     },
     {
       "adminOnly": true,
@@ -3308,6 +3722,210 @@
       "title": "Skip or unskip missing papers"
     },
     {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Start a crawl"
+      },
+      "description": "A best-first walk over OpenAlex from the library papers matching a saved search: score = keyword_weight x terms matched + cite_weight x log10(citations + 1) + link_weight x times reached. Runs in the background; GET /api/crawl says how far it has got, and the result replaces that search's last one.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "api_budget": {
+            "default": 1000,
+            "description": "OpenAlex requests at most; 0 uses only what is cached.",
+            "maximum": 20000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "cite_weight": {
+            "default": 0.4,
+            "maximum": 10,
+            "minimum": 0,
+            "type": "number"
+          },
+          "cited_by": {
+            "default": true,
+            "description": "Also walk forward, to the works citing each one.",
+            "type": "boolean"
+          },
+          "keyword_weight": {
+            "default": 1.0,
+            "maximum": 10,
+            "minimum": 0,
+            "type": "number"
+          },
+          "link_weight": {
+            "default": 0.5,
+            "maximum": 10,
+            "minimum": 0,
+            "type": "number"
+          },
+          "max_depth": {
+            "default": 2,
+            "maximum": 4,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "max_visits": {
+            "default": 500,
+            "maximum": 5000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "min_novel_hits": {
+            "default": 2,
+            "description": "Terms a work needs to be reported.",
+            "maximum": 50,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "min_seed_hits": {
+            "default": 1,
+            "description": "Terms a library paper needs to be a seed.",
+            "maximum": 50,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "search": {
+            "description": "The saved search whose terms score the works (id or name).",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "search"
+        ],
+        "type": "object"
+      },
+      "name": "start_crawl",
+      "route": "POST /api/crawl",
+      "title": "Start a crawl"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Stop the crawl"
+      },
+      "description": "Stop the crawl under way; what it found so far is kept as its result.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "stop_crawl",
+      "route": "POST /api/crawl/stop",
+      "title": "Stop the crawl"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "One section's summaries as a table"
+      },
+      "description": "Every summary of a section: their subsection headers as columns, the hashtags and a histogram of them, and the extra keyword / regex columns config/rollup-extra-columns.yaml declares.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "section": {
+            "default": "methods",
+            "description": "The section to roll up: all (the whole text), abstract, introduction, background, methods, results, conclusions or future.",
+            "enum": [
+              "all",
+              "abstract",
+              "introduction",
+              "background",
+              "methods",
+              "results",
+              "conclusions",
+              "future"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "summaries_rollup",
+      "route": "GET /api/summaries/rollup",
+      "title": "One section's summaries as a table"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "The summaries queue"
+      },
+      "description": "Which language model writes the summaries, what is queued, and how many are kept per section.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "summaries_status",
+      "route": "GET /api/summaries/status",
+      "title": "The summaries queue"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Summarise papers"
+      },
+      "description": "Queue LLM summaries of these papers' sections. One call each, in the background, with config.yaml's llm: provider; each one costs money, so a section already summarised is skipped unless force. Progress arrives on the library stream as \"summary\" events.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "force": {
+            "description": "Summarise again a section already summarised.",
+            "type": "boolean"
+          },
+          "keys": {
+            "description": "Paper keys, at most 2000.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "sections": {
+            "description": "Sections to summarise: all (the whole text), abstract, introduction, background, methods, results, conclusions or future.",
+            "items": {
+              "enum": [
+                "abstract",
+                "all",
+                "background",
+                "conclusions",
+                "future",
+                "introduction",
+                "methods",
+                "results"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "keys",
+          "sections"
+        ],
+        "type": "object"
+      },
+      "name": "summarize_papers",
+      "route": "POST /api/summaries",
+      "title": "Summarise papers"
+    },
+    {
       "adminOnly": true,
       "annotations": {
         "destructiveHint": false,
@@ -3376,6 +3994,113 @@
       "name": "test_screener",
       "route": "POST /api/review/test",
       "title": "Try the screener on one paper (admin)"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Try a search before saving it"
+      },
+      "description": "Run a search as sent, without saving it: what the editor shows as you type.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "groups": {
+            "description": "Named groups of terms: {name (letters, digits, _), mode: any | all | none | at_least, terms: [phrases] (any / all / none), n and of: [group names] (at_least), required (default true: the paper must match it)}. A term is matched as one word of the search box is: folded, its last word a prefix, in the title, authors, journal, tags, abstract or full text.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "default": 200,
+            "maximum": 2000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "name": {
+            "default": "Unsaved",
+            "maxLength": 120,
+            "type": "string"
+          },
+          "pool": {
+            "default": "both",
+            "description": "\"both\" (default), \"library\" or \"missing\".",
+            "enum": [
+              "library",
+              "missing",
+              "both"
+            ],
+            "type": "string"
+          },
+          "query": {
+            "description": "A boolean query in the search box's grammar (AND, OR, NOT, -term, \"phrase\"). May be empty.",
+            "maxLength": 2000,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "try_saved_search",
+      "route": "POST /api/searches/try",
+      "title": "Try a search before saving it"
+    },
+    {
+      "adminOnly": false,
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Change a saved search"
+      },
+      "description": "Replace a saved search's name, query, groups and description.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "groups": {
+            "description": "Named groups of terms: {name (letters, digits, _), mode: any | all | none | at_least, terms: [phrases] (any / all / none), n and of: [group names] (at_least), required (default true: the paper must match it)}. A term is matched as one word of the search box is: folded, its last word a prefix, in the title, authors, journal, tags, abstract or full text.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "name": {
+            "description": "Its name, unique.",
+            "maxLength": 120,
+            "minLength": 1,
+            "type": "string"
+          },
+          "query": {
+            "description": "A boolean query in the search box's grammar (AND, OR, NOT, -term, \"phrase\"). May be empty.",
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "search": {
+            "description": "The search's id, or its name.",
+            "maxLength": 120,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "search"
+        ],
+        "type": "object"
+      },
+      "name": "update_saved_search",
+      "route": "POST /api/searches/{search}",
+      "title": "Change a saved search"
     },
     {
       "adminOnly": true,

@@ -433,6 +433,112 @@ class Pool:
             })
         return {"rows": rows, "counts": counts, "skipped": skipped_count, "total": counts.get(pool, counts["all"])}
 
+    # Saved searches (app/extras/searches.py) work on row ids: an FTS hit is
+    # a rowid already, and sets of ints are cheap to intersect.
+
+    def term_ids(self, term: str) -> set[int]:
+        """The works holding one folded term (its last word a prefix) in their
+        title, abstract, journal, authors or DOI. Library works included:
+        intersect with universe_ids()."""
+        folded = q.fold(term)
+        if not folded:
+            return set()
+        with self._lock:
+            found = self._db.execute("SELECT rowid FROM works_fts WHERE works_fts MATCH ?", (fts_phrase(folded, prefix=True),)).fetchall()
+        return {row[0] for row in found}
+
+    def query_ids(self, text: str) -> set[int]:
+        """The works a boolean query matches (the Missing screen's grammar)."""
+        clauses = q.parse(text)
+        everything = self.universe_ids()
+        if not clauses:
+            return set(everything)
+        hits: set[int] = set()
+        cache: dict[str, set[int]] = {}
+        for clause in clauses:
+            chosen = set(everything)
+            for term in clause.pos:
+                chosen &= cache.setdefault(term, self.term_ids(term))
+            for term in clause.neg:
+                chosen -= cache.setdefault(term, self.term_ids(term))
+            hits |= chosen
+        return hits
+
+    def universe_ids(self) -> frozenset[int]:
+        """Every work not in the library, kept until the pool moves."""
+        cached = getattr(self, "_universe", None)
+        if cached is not None and cached[0] == self.rev:
+            return cached[1]
+        with self._lock:
+            ids = frozenset(row[0] for row in self._db.execute("SELECT id FROM works WHERE in_lib = 0").fetchall())
+        self._universe = (self.rev, ids)
+        return ids
+
+    def ids_of(self, wids: Iterable[str]) -> set[int]:
+        wanted = list(wids)
+        out: set[int] = set()
+        with self._lock:
+            for start in range(0, len(wanted), 500):
+                chunk = wanted[start:start + 500]
+                out.update(row[0] for row in self._db.execute(f"SELECT id FROM works WHERE wid IN ({','.join('?' * len(chunk))})", chunk))
+        return out
+
+    def top_of(self, ids: Iterable[int], limit: int) -> list[str]:
+        """The wids of these works, nearest your library first (connections,
+        then citations, then newest), at most limit."""
+        with self._lock:
+            self._db.execute("CREATE TEMP TABLE IF NOT EXISTS pick (id INTEGER PRIMARY KEY)")
+            self._db.execute("DELETE FROM temp.pick")
+            self._db.executemany("INSERT OR IGNORE INTO temp.pick (id) VALUES (?)", ((i,) for i in ids))
+            found = self._db.execute(
+                "SELECT w.wid FROM works w JOIN temp.pick p ON p.id = w.id "
+                "ORDER BY (w.lib_cites + w.cites_lib) DESC, w.cited_by DESC, coalesce(w.year, 0) DESC, w.id ASC LIMIT ?", (limit,),
+            ).fetchall()
+            self._db.execute("DELETE FROM temp.pick")
+        return [row[0] for row in found]
+
+    def all_wids(self) -> set[str]:
+        with self._lock:
+            return {row[0] for row in self._db.execute("SELECT wid FROM works WHERE in_lib = 0").fetchall()}
+
+    def works_by_wid(self, wids: Iterable[str]) -> list[dict[str, Any]]:
+        """Rows for these works, as search() makes them (no score)."""
+        wanted = list(dict.fromkeys(wids))
+        out: list[dict[str, Any]] = []
+        with self._lock:
+            for start in range(0, len(wanted), 500):
+                chunk = wanted[start:start + 500]
+                out.extend(self._db.execute(
+                    "SELECT wid, doi, title, journal, year, pubdate, cited_by, oa_pdf, authors, lib_cites, cites_lib FROM works "
+                    f"WHERE wid IN ({','.join('?' * len(chunk))})", chunk,
+                ).fetchall())
+        rows = []
+        for wid, doi, title, journal, year, pubdate, cited_by, oa_pdf, authors, lib_cites, cites_lib in out:
+            rows.append({
+                "wid": wid, "doi": doi, "title": title, "journal": journal, "year": year, "pubdate": pubdate,
+                "cited_by": cited_by, "oa_pdf": oa_pdf, "authors": [a[1] for a in json.loads(authors or "[]") if len(a) > 1][:12],
+                "lib_cites": lib_cites, "cites_lib": cites_lib, "conn": lib_cites + cites_lib,
+            })
+        return rows
+
+    def ranked(self, order: str, limit: int, skipped: set[str] | None = None) -> list[dict[str, Any]]:
+        """The top works by one order: "conn" (connections, then citations),
+        "newest" (publication date) or "cited_by" (OpenAlex citations). Skipped
+        works are left out. For the missing.xlsx sheets."""
+        orders = {
+            "conn": "(lib_cites + cites_lib) DESC, cited_by DESC, coalesce(year, 0) DESC",
+            "newest": "pubdate DESC, coalesce(year, 0) DESC, (lib_cites + cites_lib) DESC",
+            "cited_by": "cited_by DESC, (lib_cites + cites_lib) DESC",
+        }
+        skipped = skipped or set()
+        with self._lock:
+            found = self._db.execute(
+                f"SELECT wid FROM works WHERE in_lib = 0 ORDER BY {orders[order]}, id ASC LIMIT ?", (limit + len(skipped),)
+            ).fetchall()
+        wids = [row[0] for row in found if row[0] not in skipped][:limit]
+        by_wid = {row["wid"]: row for row in self.works_by_wid(wids)}
+        return [by_wid[w] for w in wids if w in by_wid]
+
     def work(self, wid: str) -> dict[str, Any] | None:
         with self._lock:
             row = self._db.execute(

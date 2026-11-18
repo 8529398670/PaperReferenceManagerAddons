@@ -72,6 +72,17 @@ BUCKET_REVIEW_RULES = "review_rules"
 # Hand-checked review values, by paper key: {field: value, ...}. They win over
 # what the screener extracted and flag the paper. See app/review/service.py.
 BUCKET_REVIEW_OVERRIDES = "review_overrides"
+# Saved searches, by id: {id, name, description, query, groups, ...}. See
+# app/extras/searches.py.
+BUCKET_SAVED_SEARCHES = "saved_searches"
+# LLM summaries, by "<paper key>|<section>": {hashtags, summary, model, at,
+# by}. They cost money to make, so they are kept and backed up rather than
+# derived. See app/extras/summaries.py.
+BUCKET_SUMMARIES = "summaries"
+# Each list's Google Sheets mirror, by list id: {mode, spreadsheet_id, url,
+# pushed (the last grid written), last push / pull and error}. See
+# app/boards/sheetsync.py.
+BUCKET_SHEET_MIRRORS = "sheet_mirrors"
 
 BUCKETS = (
     BUCKET_USERS,
@@ -92,6 +103,9 @@ BUCKETS = (
     BUCKET_FIGURE_PICKS,
     BUCKET_REVIEW_RULES,
     BUCKET_REVIEW_OVERRIDES,
+    BUCKET_SAVED_SEARCHES,
+    BUCKET_SUMMARIES,
+    BUCKET_SHEET_MIRRORS,
 )
 
 # How long a writer waits for another writer before giving up. Without it a

@@ -6,8 +6,6 @@ that order: the page sends the table it drew to /api/export/xlsx.
 """
 from __future__ import annotations
 
-import io
-import re
 from typing import Annotated, Any
 
 from msgspec import Meta
@@ -17,13 +15,14 @@ from starlette.responses import Response
 from app.apidocs import Reply, route
 from app.apidocs import Request as RequestType
 from app.content.screens import Screens
+from app.extras import xlsx
 from app.routes.helpers import Refused
 
 TAG = "Code and datasets"
 MAX_SHEETS = 8
 MAX_ROWS = 50_000
 MAX_COLUMNS = 60
-XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+XLSX = xlsx.XLSX
 
 
 def get_screens(request: Request) -> Screens:
@@ -100,48 +99,10 @@ class XlsxBody(RequestType):
     mcp_http="A file to download, made from the rows sent.",
 )
 def export_xlsx(request: Request, body: XlsxBody) -> Response:
-    from openpyxl import Workbook
-    from openpyxl.styles import Font
-
     if not body.sheets or len(body.sheets) > MAX_SHEETS:
         raise Refused(400, f"send 1 to {MAX_SHEETS} sheets")
     if sum(len(s.rows) for s in body.sheets) > MAX_ROWS or any(len(s.columns) > MAX_COLUMNS for s in body.sheets):
         raise Refused(400, f"at most {MAX_ROWS} rows and {MAX_COLUMNS} columns")
-    book = Workbook()
-    book.remove(book.active)
-    used: set[str] = set()
-    for sheet in body.sheets:
-        title = re.sub(r"[\[\]:*?/\\]", " ", sheet.name or "Sheet")[:31].strip() or "Sheet"
-        while title in used:
-            title = (title[:28] + f" {len(used) + 1}")[:31]
-        used.add(title)
-        ws = book.create_sheet(title)
-        ws.append([str(c) for c in sheet.columns])
-        for cell in ws[1]:
-            cell.font = Font(bold=True)
-        ws.freeze_panes = "A2"
-        for row in sheet.rows:
-            ws.append([_cell(value) for value in row])
-            for cell in ws[ws.max_row]:
-                if isinstance(cell.value, str) and cell.value.startswith("="):
-                    # Text, never a formula: a title can start with "=".
-                    cell.data_type = "s"
-                if isinstance(cell.value, str) and cell.value.startswith(("http://", "https://")) and " " not in cell.value:
-                    cell.hyperlink = cell.value
-                    cell.style = "Hyperlink"
-        for index, name in enumerate(sheet.columns, start=1):
-            width = max([len(str(name))] + [len(str(r[index - 1])) for r in sheet.rows[:500] if index - 1 < len(r) and r[index - 1] is not None])
-            ws.column_dimensions[ws.cell(row=1, column=index).column_letter].width = min(max(width + 2, 6), 60)
-    out = io.BytesIO()
-    book.save(out)
-    name = re.sub(r"[^A-Za-z0-9._-]+", "-", body.filename).strip("-") or "export"
-    return Response(out.getvalue(), media_type=XLSX, headers={"Content-Disposition": f'attachment; filename="{name}.xlsx"'})
-
-
-def _cell(value: Any) -> Any:
-    """What a cell can hold: text (cut to Excel's limit), numbers, or nothing."""
-    if value is None or isinstance(value, bool):
-        return "" if value is None else ("yes" if value else "")
-    if isinstance(value, (int, float)):
-        return value
-    return str(value)[:32000]
+    data = xlsx.workbook([(sheet.name, sheet.columns, sheet.rows) for sheet in body.sheets])
+    name = xlsx.filename(body.filename)
+    return Response(data, media_type=XLSX, headers={"Content-Disposition": f'attachment; filename="{name}.xlsx"'})

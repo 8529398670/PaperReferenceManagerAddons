@@ -34,19 +34,28 @@ Every tool POST /mcp offers. Written by scripts/api_docs.sh from the registered 
 | [`admin_set_user_role`](#admin_set_user_role) | [`POST /api/admin/users/{user_id}/role`](api.md#post-apiadminusersuser_idrole) | admin keys | Change an account's role (admin) |
 | [`admin_set_user_role_bulk`](#admin_set_user_role_bulk) | [`POST /api/bulk/admin/users/role`](api.md#post-apibulkadminusersrole) | admin keys | Change an account's role, for many at once (admin) |
 | [`cancel_my_login_link`](#cancel_my_login_link) | [`POST /api/account/login-link/cancel`](api.md#post-apiaccountlogin-linkcancel) | any key | Stop your own login link working |
+| [`cancel_summaries`](#cancel_summaries) | [`POST /api/summaries/cancel`](api.md#post-apisummariescancel) | any key | Empty the summaries queue |
+| [`check_research_log`](#check_research_log) | [`POST /api/research-log/check`](api.md#post-apiresearch-logcheck) | any key | Which papers in a research log you lack |
 | [`check_screener_rules`](#check_screener_rules) | [`POST /api/review/check`](api.md#post-apireviewcheck) | admin keys | Check screener rules without saving (admin) |
 | [`cite_papers`](#cite_papers) | [`POST /api/cite`](api.md#post-apicite) | any key | Cite papers |
 | [`cite_styles`](#cite_styles) | [`GET /api/cite/styles`](api.md#get-apicitestyles) | any key | The citation styles |
 | [`content_badges`](#content_badges) | [`POST /api/papers/badges`](api.md#post-apipapersbadges) | any key | What is ready, for many papers |
 | [`content_papers`](#content_papers) | [`GET /api/content/papers`](api.md#get-apicontentpapers) | any key | The papers a stage has not finished |
 | [`content_status`](#content_status) | [`GET /api/content/status`](api.md#get-apicontentstatus) | any key | How far the content queue has got |
+| [`crawl_status`](#crawl_status) | [`GET /api/crawl`](api.md#get-apicrawl) | any key | The crawl's progress and past runs |
 | [`create_my_login_link`](#create_my_login_link) | [`POST /api/account/login-link`](api.md#post-apiaccountlogin-link) | any key | A login link for yourself |
+| [`create_saved_search`](#create_saved_search) | [`POST /api/searches`](api.md#post-apisearches) | any key | Save a search |
 | [`create_screener_setup`](#create_screener_setup) | [`POST /api/review/setups`](api.md#post-apireviewsetups) | admin keys | Make a rule setup (admin) |
+| [`delete_saved_search`](#delete_saved_search) | [`POST /api/searches/{search}/delete`](api.md#post-apisearchessearchdelete) | any key | Delete a saved search |
 | [`delete_screener_setup`](#delete_screener_setup) | [`POST /api/review/setups/{setup}/delete`](api.md#post-apireviewsetupssetupdelete) | admin keys | Delete a rule setup (admin) |
+| [`delete_summary`](#delete_summary) | [`POST /api/summaries/delete`](api.md#post-apisummariesdelete) | any key | Delete a summary |
 | [`figure_picks`](#figure_picks) | [`GET /api/figures/state`](api.md#get-apifiguresstate) | any key | A view's picks and skipped papers |
+| [`get_crawl`](#get_crawl) | [`GET /api/crawl/{search}`](api.md#get-apicrawlsearch) | any key | A saved search's last crawl |
 | [`get_list`](#get_list) | [`GET /api/lists/{slug}`](api.md#get-apilistsslug) | any key | Read a list |
+| [`get_list_sheet`](#get_list_sheet) | [`GET /api/lists/{slug}/sheet`](api.md#get-apilistsslugsheet) | any key | A list's Google Sheet mirror |
 | [`get_paper`](#get_paper) | [`GET /api/paper`](api.md#get-apipaper) | any key | One paper |
 | [`get_paper_content`](#get_paper_content) | [`GET /api/paper/content`](api.md#get-apipapercontent) | any key | What is known about a paper |
+| [`get_paper_summaries`](#get_paper_summaries) | [`GET /api/summaries/paper`](api.md#get-apisummariespaper) | any key | One paper's summaries |
 | [`get_review`](#get_review) | [`GET /api/review/paper`](api.md#get-apireviewpaper) | any key | One paper's review with its evidence |
 | [`get_review_missing_work`](#get_review_missing_work) | [`GET /api/review/missing/work`](api.md#get-apireviewmissingwork) | any key | One missing work's abstract screen |
 | [`get_screener_setup`](#get_screener_setup) | [`GET /api/review/setups/{setup}`](api.md#get-apireviewsetupssetup) | admin keys | One rule setup (admin) |
@@ -65,6 +74,7 @@ Every tool POST /mcp offers. Written by scripts/api_docs.sh from the registered 
 | [`list_review_missing`](#list_review_missing) | [`GET /api/review/missing`](api.md#get-apireviewmissing) | any key | The review of the papers you do not have |
 | [`list_review_overrides`](#list_review_overrides) | [`GET /api/review/overrides`](api.md#get-apireviewoverrides) | admin keys | Hand-checked review values (admin) |
 | [`list_rows`](#list_rows) | [`GET /api/lists/{slug}/rows`](api.md#get-apilistsslugrows) | any key | A list as flat rows |
+| [`list_saved_searches`](#list_saved_searches) | [`GET /api/searches`](api.md#get-apisearches) | any key | The saved searches |
 | [`list_schema`](#list_schema) | [`GET /api/lists/schema`](api.md#get-apilistsschema) | any key | List ops reference |
 | [`list_screener_setups`](#list_screener_setups) | [`GET /api/review/setups`](api.md#get-apireviewsetups) | admin keys | The screener's rule setups (admin) |
 | [`list_team`](#list_team) | [`GET /api/team`](api.md#get-apiteam) | any key | List team |
@@ -80,12 +90,14 @@ Every tool POST /mcp offers. Written by scripts/api_docs.sh from the registered 
 | [`revoke_my_other_sessions`](#revoke_my_other_sessions) | [`POST /api/account/sessions/revoke-others`](api.md#post-apiaccountsessionsrevoke-others) | any key | Sign out all your devices |
 | [`revoke_my_session`](#revoke_my_session) | [`POST /api/account/sessions/{session_id}/revoke`](api.md#post-apiaccountsessionssession_idrevoke) | any key | Sign out one of your devices |
 | [`revoke_my_session_bulk`](#revoke_my_session_bulk) | [`POST /api/bulk/account/sessions/revoke`](api.md#post-apibulkaccountsessionsrevoke) | any key | Sign out one of your devices, for many at once |
+| [`run_saved_search`](#run_saved_search) | [`GET /api/searches/{search}/run`](api.md#get-apisearchessearchrun) | any key | Run a saved search |
 | [`save_screener_setup`](#save_screener_setup) | [`POST /api/review/setups/{setup}`](api.md#post-apireviewsetupssetup) | admin keys | Save a rule setup (admin) |
 | [`screener_progress`](#screener_progress) | [`GET /api/review/progress`](api.md#get-apireviewprogress) | admin keys | How far the screener has got (admin) |
 | [`screener_rules_guide`](#screener_rules_guide) | [`GET /api/review/guide`](api.md#get-apireviewguide) | admin keys | How screener rules are written (admin) |
 | [`search_library`](#search_library) | [`GET /api/papers`](api.md#get-apipapers) | any key | Search the library |
 | [`search_missing`](#search_missing) | [`GET /api/missing`](api.md#get-apimissing) | any key | Search the papers you do not have |
 | [`set_figure_picks`](#set_figure_picks) | [`POST /api/figures/replace`](api.md#post-apifiguresreplace) | any key | Replace a view's picks |
+| [`set_list_sheet`](#set_list_sheet) | [`POST /api/lists/{slug}/sheet`](api.md#post-apilistsslugsheet) | any key | Mirror a list to a Google Sheet |
 | [`set_review_override`](#set_review_override) | [`POST /api/review/overrides`](api.md#post-apireviewoverrides) | admin keys | Set a paper's hand-checked values (admin) |
 | [`set_shortcuts`](#set_shortcuts) | [`POST /api/account/shortcuts`](api.md#post-apiaccountshortcuts) | any key | Change your keyboard shortcuts |
 | [`set_tag_colors`](#set_tag_colors) | [`POST /api/account/tag-colors`](api.md#post-apiaccounttag-colors) | any key | Choose where your tag colours come from |
@@ -93,7 +105,14 @@ Every tool POST /mcp offers. Written by scripts/api_docs.sh from the registered 
 | [`set_themes`](#set_themes) | [`POST /api/account/themes`](api.md#post-apiaccountthemes) | any key | Replace your own themes |
 | [`skip_figure_papers`](#skip_figure_papers) | [`POST /api/figures/skip`](api.md#post-apifiguresskip) | any key | Skip or unskip papers |
 | [`skip_missing`](#skip_missing) | [`POST /api/missing/skip`](api.md#post-apimissingskip) | any key | Skip or unskip missing papers |
+| [`start_crawl`](#start_crawl) | [`POST /api/crawl`](api.md#post-apicrawl) | any key | Start a crawl |
+| [`stop_crawl`](#stop_crawl) | [`POST /api/crawl/stop`](api.md#post-apicrawlstop) | any key | Stop the crawl |
+| [`summaries_rollup`](#summaries_rollup) | [`GET /api/summaries/rollup`](api.md#get-apisummariesrollup) | any key | One section's summaries as a table |
+| [`summaries_status`](#summaries_status) | [`GET /api/summaries/status`](api.md#get-apisummariesstatus) | any key | The summaries queue |
+| [`summarize_papers`](#summarize_papers) | [`POST /api/summaries`](api.md#post-apisummaries) | any key | Summarise papers |
 | [`test_screener`](#test_screener) | [`POST /api/review/test`](api.md#post-apireviewtest) | admin keys | Try the screener on one paper (admin) |
+| [`try_saved_search`](#try_saved_search) | [`POST /api/searches/try`](api.md#post-apisearchestry) | any key | Try a search before saving it |
+| [`update_saved_search`](#update_saved_search) | [`POST /api/searches/{search}`](api.md#post-apisearchessearch) | any key | Change a saved search |
 | [`use_screener_setup`](#use_screener_setup) | [`POST /api/review/setups/{setup}/activate`](api.md#post-apireviewsetupssetupactivate) | admin keys | Use a rule setup (admin) |
 | [`whoami`](#whoami) | [`GET /api/me`](api.md#get-apime) | any key | Who am I |
 
@@ -508,6 +527,39 @@ Void your account's live login link without making a new one. Devices it already
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
 
+## cancel_summaries
+
+Drop every queued summary; the one being written finishes.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/summaries/cancel`](api.md#post-apisummariescancel) |
+| Read only | no |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+
+## check_research_log
+
+Reads a Markdown research log (# 03SEP2026 date headings, &nbsp;-separated blocks of a title line and its links), lifts each paper's DOI out of its links, and checks each the way /api/exists does: a DOI settles it, else the title. A DOI miss is retried by title and marked recovered.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/research-log/check`](api.md#post-apiresearch-logcheck) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `list_only` | boolean | no |  | Only what the parser extracted, unchecked: for a log whose layout drifted. |
+| `name` | string | no | at most 200 characters; default `research log` | The file's name, for the report. |
+| `text` | string | yes | at most 8388608 characters | The log's Markdown. |
+
 ## check_screener_rules
 
 Whether rules load (every pattern compiles, every value has the right type): a whole document, a setup, or a setup with changes made. And how many papers using them would re-screen.
@@ -612,6 +664,21 @@ Per stage, how many papers are done, pending, running, failed or not found; the 
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
 
+## crawl_status
+
+Whether a crawl is running and how far it has got, and the last crawl of each saved search.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/crawl`](api.md#get-apicrawl) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+
 ## create_my_login_link
 
 A link that signs your own account in on a browser or another device. An API key may ask only if your account let it, from a browser session (POST /api/keys/{key_id}/sign-in); its link works once, for at most 15 minutes. Only works if this key was allowed to make sign-in links, on the API keys card. Answers with login_url (open it to sign in; it works once, for at most 15 minutes), expires_at and max_uses. Any older link the account could still use stops working; its signed-in devices stay signed in. Revoking or deleting this API key voids the link while it is unused, and signs out every device it signed in.
@@ -628,6 +695,25 @@ A link that signs your own account in on a browser or another device. An API key
 |---|---|---|---|---|
 | `expires_in_minutes` | integer or null | no | 0 to 525600 | 0 never expires. Default auth.login_token_ttl_seconds for a link that works once, auth.multi_use_login_token_ttl_seconds otherwise. |
 | `max_uses` | integer or null | no | 0 to 1000 | Sign-ins the link allows: 1-1000, or 0 for unlimited. Default 1. |
+
+## create_saved_search
+
+A new saved search. A search that does not hold together is a 400 listing each problem with where it is.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/searches`](api.md#post-apisearches) |
+| Read only | no |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `description` | string | no | at most 2000 characters |  |
+| `groups` | array of object | no |  | Named groups of terms: {name (letters, digits, _), mode: any \| all \| none \| at_least, terms: [phrases] (any / all / none), n and of: [group names] (at_least), required (default true: the paper must match it)}. A term is matched as one word of the search box is: folded, its last word a prefix, in the title, authors, journal, tags, abstract or full text. |
+| `name` | string | yes | 1 to 120 characters | Its name, unique. |
+| `query` | string | no | at most 2000 characters | A boolean query in the search box's grammar (AND, OR, NOT, -term, "phrase"). May be empty. |
 
 ## create_screener_setup
 
@@ -650,6 +736,22 @@ A new named setup: a copy of another (source), or a whole rules document (rules)
 | `rules` | object or null | no |  | A whole rules document to start from instead of a copy. |
 | `source` | string | no | default `default` | The setup to copy (default "default"). Ignored when rules are sent. |
 
+## delete_saved_search
+
+Delete a saved search. The answer is the search as it was, which POST /api/searches/restore puts back.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/searches/{search}/delete`](api.md#post-apisearchessearchdelete) |
+| Read only | no |
+| Destructive | yes |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `search` | string | yes | 1 to 120 characters | The search's id, or its name. |
+
 ## delete_screener_setup
 
 Deletes a setup for good. The default, and the setup in use, cannot be deleted.
@@ -665,6 +767,23 @@ Deletes a setup for good. The default, and the setup in use, cannot be deleted.
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
 | `setup` | string | yes | 1 to 64 characters | The setup's id, from list_screener_setups ("default" is config/review.yaml). |
+
+## delete_summary
+
+Forget one paper's summary of one section.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/summaries/delete`](api.md#post-apisummariesdelete) |
+| Read only | no |
+| Destructive | yes |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `key` | string | yes | at least 1 characters |  |
+| `section` | string | yes | one of `all`, `abstract`, `introduction`, `background`, `methods`, `results`, `conclusions`, `future` |  |
 
 ## figure_picks
 
@@ -682,6 +801,24 @@ Every picked figure (in pick order) and every skipped paper of one view.
 |---|---|---|---|---|
 | `view` | string | no | one of `all`, `method`; default `all` | "all" (default): every figure. "method": the figures whose caption reads as a model design. |
 
+## get_crawl
+
+The works the last crawl for a saved search found, best score first.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/crawl/{search}`](api.md#get-apicrawlsearch) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `limit` | integer | no | 1 to 2000; default `500` |  |
+| `search` | string | yes | 1 to 120 characters | The search's id, or its name. |
+| `view` | string | no | one of `novel`, `visited`; default `novel` | "novel" (default): works you lack. "visited": every work walked. |
+
 ## get_list
 
 One list in full (a slug it was renamed away from answers the list as it is now): its document (rows in order, each with key, title, year, tags and cells; columns; the tag vocabulary with colours), its rev, and what the library knows of each row.
@@ -697,6 +834,22 @@ One list in full (a slug it was renamed away from answers the list as it is now)
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
 | `slug` | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
+
+## get_list_sheet
+
+Whether the list is mirrored to a Google Sheet, how, and how the last push and read-back went.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/lists/{slug}/sheet`](api.md#get-apilistsslugsheet) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `slug` | string | yes | 1 to 200 characters | The list's slug. |
 
 ## get_paper
 
@@ -729,6 +882,22 @@ Everything derived about one paper so far: its sections (the methods split), cod
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
 | `key` | string | no |  | The paper's key, from search_library. |
+
+## get_paper_summaries
+
+Every summary kept for a paper, and those queued or failed.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/summaries/paper`](api.md#get-apisummariespaper) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `key` | string | no |  | The paper's key. |
 
 ## get_review
 
@@ -1034,6 +1203,21 @@ The list as flat rows, each with its position and its cells under their column l
 | `slug` | string | yes |  | The list's slug, from GET /api/lists (the main list is "main"). |
 | `tags` | string | no |  | Tags to filter by, comma-separated. |
 
+## list_saved_searches
+
+Every saved search: a name, a boolean query and named groups of terms. The crawl and missing.xlsx use them.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/searches`](api.md#get-apisearches) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+
 ## list_schema
 
 Every op POST /api/lists/{slug}/ops takes, with its parameters, plus how rows and positions are named. Read it before a first list_ops call.
@@ -1282,6 +1466,24 @@ Runs revoke_my_session once per item: items holds each call's arguments, shared 
 | `items[].session_id` | string | yes |  | The device's id, from GET /api/account/sessions or GET /api/admin/users/{user_id}/sessions (list_my_sessions or admin_list_user_sessions over MCP). |
 | `shared` | object | no |  | Fields every item gets, unless the item sets its own. |
 
+## run_saved_search
+
+The library papers and missing works a saved search matches, and how many each of its groups matches alone.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/searches/{search}/run`](api.md#get-apisearchessearchrun) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `limit` | integer | no | 1 to 2000; default `500` | Rows of each pool to return. Default 500, at most 2000. |
+| `pool` | string | no | one of `library`, `missing`, `both`; default `both` | "both" (default), "library" or "missing". |
+| `search` | string | yes | 1 to 120 characters | The search's id, or its name. |
+
 ## save_screener_setup
 
 Changes a setup's rules (whole, or by changes), name or description. A pattern that does not compile, or a missing or wrong-typed value, is a 400 listing each problem with where it is; nothing is saved. Saving the setup in use re-screens the candidate papers one at a time; saving another re-screens nothing.
@@ -1394,6 +1596,25 @@ Set a view's picks and skipped papers outright: Clear sends both empty, and its 
 | `selected` | array of string | no |  | The picks to keep, in order. |
 | `skipped` | array of string | no |  | The skipped papers to keep. |
 | `view` | string | yes | one of `all`, `method` | "all" or "method": each view has its own picks. |
+
+## set_list_sheet
+
+Switch a list's Google Sheet mirror off, one-way or two-way; sync now; or overwrite the sheet with the list.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/lists/{slug}/sheet`](api.md#post-apilistsslugsheet) |
+| Read only | no |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `mode` | string or null | no | one of `off`, `one-way`, `two-way` | off; one-way (the list is pushed to its sheet after each change); two-way (also read back every poll_seconds). The first switch on makes the spreadsheet. |
+| `overwrite` | boolean | no |  | Write the list over the sheet now, dropping anything typed there since the last read. |
+| `slug` | string | yes | 1 to 200 characters | The list's slug. |
+| `sync_now` | boolean | no |  | Push (and read back, two-way) now. |
 
 ## set_review_override
 
@@ -1538,6 +1759,95 @@ Hide works from the Missing screen (a soft hide, undone by skip false), or bring
 | `skip` | boolean | no | default `true` | true hides them (default); false shows them again. |
 | `wids` | array of string | yes |  | OpenAlex ids ("W123"). At most 1000. |
 
+## start_crawl
+
+A best-first walk over OpenAlex from the library papers matching a saved search: score = keyword_weight x terms matched + cite_weight x log10(citations + 1) + link_weight x times reached. Runs in the background; GET /api/crawl says how far it has got, and the result replaces that search's last one.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/crawl`](api.md#post-apicrawl) |
+| Read only | no |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `api_budget` | integer | no | 0 to 20000; default `1000` | OpenAlex requests at most; 0 uses only what is cached. |
+| `cite_weight` | number | no | 0 to 10; default `0.4` |  |
+| `cited_by` | boolean | no | default `true` | Also walk forward, to the works citing each one. |
+| `keyword_weight` | number | no | 0 to 10; default `1` |  |
+| `link_weight` | number | no | 0 to 10; default `0.5` |  |
+| `max_depth` | integer | no | 0 to 4; default `2` |  |
+| `max_visits` | integer | no | 1 to 5000; default `500` |  |
+| `min_novel_hits` | integer | no | 0 to 50; default `2` | Terms a work needs to be reported. |
+| `min_seed_hits` | integer | no | 0 to 50; default `1` | Terms a library paper needs to be a seed. |
+| `search` | string | yes | at least 1 characters | The saved search whose terms score the works (id or name). |
+
+## stop_crawl
+
+Stop the crawl under way; what it found so far is kept as its result.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/crawl/stop`](api.md#post-apicrawlstop) |
+| Read only | no |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+
+## summaries_rollup
+
+Every summary of a section: their subsection headers as columns, the hashtags and a histogram of them, and the extra keyword / regex columns config/rollup-extra-columns.yaml declares.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/summaries/rollup`](api.md#get-apisummariesrollup) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `section` | string | no | one of `all`, `abstract`, `introduction`, `background`, `methods`, `results`, `conclusions`, `future`; default `methods` | The section to roll up: all (the whole text), abstract, introduction, background, methods, results, conclusions or future. |
+
+## summaries_status
+
+Which language model writes the summaries, what is queued, and how many are kept per section.
+
+|  |  |
+|---|---|
+| Route | [`GET /api/summaries/status`](api.md#get-apisummariesstatus) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+
+## summarize_papers
+
+Queue LLM summaries of these papers' sections. One call each, in the background, with config.yaml's llm: provider; each one costs money, so a section already summarised is skipped unless force. Progress arrives on the library stream as "summary" events.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/summaries`](api.md#post-apisummaries) |
+| Read only | no |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `force` | boolean | no |  | Summarise again a section already summarised. |
+| `keys` | array of string | yes |  | Paper keys, at most 2000. |
+| `sections` | array of string | yes |  | Sections to summarise: all (the whole text), abstract, introduction, background, methods, results, conclusions or future. |
+
 ## test_screener
 
 Screens one library paper (key) or pasted text with the rules sent (unsaved), a setup, or the setup in use -- with changes made first, if sent -- and returns the verdict, why, and every extracted field with its quote. Nothing is stored.
@@ -1560,6 +1870,47 @@ Screens one library paper (key) or pasted text with the rules sent (unsaved), a 
 | `setup` | string | no |  | A setup to test with (when no rules are sent); none means the one in use. |
 | `text` | string | no |  | Pasted text to screen as the paper's body (and methods). |
 | `title` | string | no |  |  |
+
+## try_saved_search
+
+Run a search as sent, without saving it: what the editor shows as you type.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/searches/try`](api.md#post-apisearchestry) |
+| Read only | yes |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `description` | string | no | at most 2000 characters |  |
+| `groups` | array of object | no |  | Named groups of terms: {name (letters, digits, _), mode: any \| all \| none \| at_least, terms: [phrases] (any / all / none), n and of: [group names] (at_least), required (default true: the paper must match it)}. A term is matched as one word of the search box is: folded, its last word a prefix, in the title, authors, journal, tags, abstract or full text. |
+| `limit` | integer | no | 1 to 2000; default `200` |  |
+| `name` | string | no | at most 120 characters; default `Unsaved` |  |
+| `pool` | string | no | one of `library`, `missing`, `both`; default `both` | "both" (default), "library" or "missing". |
+| `query` | string | no | at most 2000 characters | A boolean query in the search box's grammar (AND, OR, NOT, -term, "phrase"). May be empty. |
+
+## update_saved_search
+
+Replace a saved search's name, query, groups and description.
+
+|  |  |
+|---|---|
+| Route | [`POST /api/searches/{search}`](api.md#post-apisearchessearch) |
+| Read only | no |
+| Destructive | no |
+
+**Arguments**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `description` | string | no | at most 2000 characters |  |
+| `groups` | array of object | no |  | Named groups of terms: {name (letters, digits, _), mode: any \| all \| none \| at_least, terms: [phrases] (any / all / none), n and of: [group names] (at_least), required (default true: the paper must match it)}. A term is matched as one word of the search box is: folded, its last word a prefix, in the title, authors, journal, tags, abstract or full text. |
+| `name` | string | yes | 1 to 120 characters | Its name, unique. |
+| `query` | string | no | at most 2000 characters | A boolean query in the search box's grammar (AND, OR, NOT, -term, "phrase"). May be empty. |
+| `search` | string | yes | 1 to 120 characters | The search's id, or its name. |
 
 ## use_screener_setup
 
@@ -1599,6 +1950,7 @@ Routes an API key may call that have no tool, and why.
 | Route | Why |
 |---|---|
 | [`GET /api/api.json`](api.md#get-apiapijson) | The API reference itself; GET /api/mcp.json is the MCP one. |
+| [`GET /api/crawl/{search}/export.xlsx`](api.md#get-apicrawlsearchexportxlsx) | A file to download. |
 | [`GET /api/figures/export`](api.md#get-apifiguresexport) | A file to download; figure_picks gives the ids as data. |
 | [`GET /api/figures/image`](api.md#get-apifiguresimage) | An image, for a browser to show. |
 | [`GET /api/library/links`](api.md#get-apilibrarylinks) | Settings for drawing the page's links, not something an agent acts on. |
@@ -1607,8 +1959,11 @@ Routes an API key may call that have no tool, and why.
 | [`GET /api/lists/stream`](api.md#get-apilistsstream) | A live event stream for the page; get_list's rev says the same when asked. |
 | [`GET /api/lists/{slug}/export.csv`](api.md#get-apilistsslugexportcsv) | A file to download; list_rows gives the same rows as data. |
 | [`GET /api/mcp.json`](api.md#get-apimcpjson) | The MCP reference itself; tools/list gives the same list. |
+| [`GET /api/missing/export.xlsx`](api.md#get-apimissingexportxlsx) | A file to download. |
 | [`GET /api/paper/pdf`](api.md#get-apipaperpdf) | The file itself, for a browser to show. |
 | [`GET /api/review/setups/{setup}/export`](api.md#get-apireviewsetupssetupexport) | A file to download; get_screener_setup gives the same rules as JSON. |
+| [`GET /api/searches/{search}/export`](api.md#get-apisearchessearchexport) | A file to download. |
+| [`GET /api/summaries/rollup.xlsx`](api.md#get-apisummariesrollupxlsx) | A file to download. |
 | [`POST /api/export/xlsx`](api.md#post-apiexportxlsx) | A file to download, made from the rows sent. |
 | [`POST /api/lists`](api.md#post-apilists) | An agent edits lists; which lists exist is a person's decision. |
 | [`POST /api/lists/{slug}/delete`](api.md#post-apilistsslugdelete) | Which lists exist is a person's decision. |
@@ -1619,5 +1974,7 @@ Routes an API key may call that have no tool, and why.
 | [`POST /api/lists/{slug}/undelete`](api.md#post-apilistsslugundelete) | Which lists exist is a person's decision. |
 | [`POST /api/logout`](api.md#post-apilogout) | Ends a browser session; a key has none to end. |
 | [`POST /api/logs/events`](api.md#post-apilogsevents) | The browser's own activity reports (track.js), not an action. |
+| [`POST /api/searches/restore`](api.md#post-apisearchesrestore) | The page's undo; an agent makes the search again with create_saved_search. |
 | [`POST /api/sheet/csv`](api.md#post-apisheetcsv) | It reads a sheet for the page's import dialog; list_ops imports rows. |
+| [`POST /api/summaries/put`](api.md#post-apisummariesput) | The page's undo; an agent asks for the summary again with summarize_papers. |
 | [`POST /mcp`](api.md#post-mcp) | The MCP endpoint itself. |

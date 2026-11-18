@@ -67,11 +67,14 @@
           <a class="nav-link" href="#library" data-nav="library"><i class="bi bi-book" aria-hidden="true"></i><span data-i18n="nav.library"></span></a>
           <a class="nav-link" href="#lists" data-nav="lists"><i class="bi bi-list-ol" aria-hidden="true"></i><span data-i18n="nav.lists"></span></a>
           <a class="nav-link" href="#missing" data-nav="missing"><i class="bi bi-search-heart" aria-hidden="true"></i><span data-i18n="nav.missing"></span></a>
+          <a class="nav-link" href="#searches" data-nav="searches"><i class="bi bi-bookmark-star" aria-hidden="true"></i><span data-i18n="nav.searches"></span></a>
+          <a class="nav-link" href="#research-log" data-nav="research-log"><i class="bi bi-journal-check" aria-hidden="true"></i><span data-i18n="nav.research_log"></span></a>
           <a class="nav-link" href="#figures" data-nav="figures"><i class="bi bi-images" aria-hidden="true"></i><span data-i18n="nav.figures"></span></a>
           <a class="nav-link" href="#code" data-nav="code"><i class="bi bi-code-slash" aria-hidden="true"></i><span data-i18n="nav.code"></span></a>
           <a class="nav-link" href="#datasets" data-nav="datasets"><i class="bi bi-database" aria-hidden="true"></i><span data-i18n="nav.datasets"></span></a>
           <a class="nav-link" href="#review" data-nav="review"><i class="bi bi-clipboard-check" aria-hidden="true"></i><span data-i18n="nav.review"></span></a>
           <a class="nav-link" href="#review-rules" data-nav="review-rules"><i class="bi bi-funnel" aria-hidden="true"></i><span data-i18n="nav.review_rules"></span></a>
+          <a class="nav-link" href="#summaries" data-nav="summaries"><i class="bi bi-card-text" aria-hidden="true"></i><span data-i18n="nav.summaries"></span></a>
           <a class="nav-link" href="#status" data-nav="status"><i class="bi bi-activity" aria-hidden="true"></i><span data-i18n="nav.status"></span></a>
           <hr class="sidebar-rule" />
           <!-- Account: its second line names who is signed in (App.labelAccount). -->
@@ -281,6 +284,24 @@
               </div>
             </section>
 
+            <!-- LLM summaries, made on request (static/js/summaries.js). -->
+            <section class="card" id="paper-summaries-card">
+              <div class="card-body">
+                <div class="row g-2 align-items-center mb-2">
+                  <div class="col-12 col-md"><h3 class="card-title h5 mb-0" data-i18n="summaries.paper_heading"></h3></div>
+                  <div class="col-auto">
+                    <label for="paper-summary-section" class="visually-hidden" data-i18n="summaries.section"></label>
+                    <select id="paper-summary-section" class="form-select form-select-sm"></select>
+                  </div>
+                  <div class="col-auto">
+                    <button id="paper-summarize" type="button" class="btn btn-outline-primary btn-sm"><i class="bi bi-stars" aria-hidden="true"></i> <span data-i18n="summaries.summarize"></span></button>
+                  </div>
+                </div>
+                <p id="paper-summaries-note" class="small text-body-secondary mb-2" hidden></p>
+                <div id="paper-summaries" class="accordion"></div>
+              </div>
+            </section>
+
             <section class="card" id="paper-figures-card" hidden>
               <div class="card-body">
                 <h3 class="card-title h5" data-i18n="paper.figures_heading"></h3>
@@ -334,6 +355,7 @@
                 <li class="nav-item"><a class="nav-link" href="#missing" data-missing-tab="refs"><span data-i18n="missing.tab_refs"></span> <span class="badge text-bg-light border"></span></a></li>
                 <li class="nav-item"><a class="nav-link" href="#missing" data-missing-tab="citing"><span data-i18n="missing.tab_citing"></span> <span class="badge text-bg-light border"></span></a></li>
                 <li class="nav-item"><a class="nav-link" href="#missing" data-missing-tab="authors"><span data-i18n="missing.tab_authors"></span> <span class="badge text-bg-light border" hidden></span></a></li>
+                <li class="nav-item"><a class="nav-link" href="#missing" data-missing-tab="crawl"><span data-i18n="crawl.tab"></span> <span class="badge text-bg-light border" hidden></span></a></li>
               </ul>
             </div>
             <div class="card-body py-2">
@@ -363,6 +385,11 @@
                   </button>
                   <ul id="missing-columns" class="dropdown-menu data-table-menu"></ul>
                 </div>
+                <div class="col-auto">
+                  <a id="missing-export" class="btn btn-outline-secondary" href="/api/missing/export.xlsx" download data-i18n-attr="title:missing.export_title">
+                    <i class="bi bi-download" aria-hidden="true"></i> <span data-i18n="missing.export"></span>
+                  </a>
+                </div>
                 <!-- How many are showing; scrolling to the end loads more (the
                      button is there for the keyboard). -->
                 <div class="col-auto ms-auto d-flex align-items-center gap-2">
@@ -374,27 +401,226 @@
             </div>
             <div id="missing-works" class="table-fill"></div>
             <div id="missing-authors" class="table-fill" hidden></div>
+            <!-- The citation-graph crawl (static/js/crawl.js). -->
+            <div id="crawl-panel" class="card-body border-top" hidden>
+              <form id="crawl-form" class="row g-2 align-items-end">
+                <div class="col-12 col-md-4 col-xl-3">
+                  <label for="crawl-search" class="form-label small mb-1" data-i18n="crawl.search"></label>
+                  <select id="crawl-search" class="form-select"></select>
+                </div>
+                <div class="col-6 col-md-2 col-xl-1">
+                  <label for="crawl-max-visits" class="form-label small mb-1" data-i18n="crawl.max_visits"></label>
+                  <input id="crawl-max-visits" class="form-control" type="number" min="1" max="5000" value="500" />
+                </div>
+                <div class="col-6 col-md-2 col-xl-1">
+                  <label for="crawl-max-depth" class="form-label small mb-1" data-i18n="crawl.max_depth"></label>
+                  <input id="crawl-max-depth" class="form-control" type="number" min="0" max="4" value="2" />
+                </div>
+                <div class="col-6 col-md-2 col-xl-1">
+                  <label for="crawl-api-budget" class="form-label small mb-1" data-i18n="crawl.api_budget"></label>
+                  <input id="crawl-api-budget" class="form-control" type="number" min="0" max="20000" value="1000" />
+                </div>
+                <div class="col-6 col-md-2 col-xl-1">
+                  <label for="crawl-min-novel" class="form-label small mb-1" data-i18n="crawl.min_novel_hits"></label>
+                  <input id="crawl-min-novel" class="form-control" type="number" min="0" max="50" value="2" />
+                </div>
+                <div class="col-12 col-md-auto dropdown">
+                  <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" data-i18n="crawl.more"></button>
+                  <div class="dropdown-menu p-3 filter-menu">
+                    <div class="row g-2">
+                      <div class="col-6"><label for="crawl-min-seed" class="form-label small mb-1" data-i18n="crawl.min_seed_hits"></label><input id="crawl-min-seed" class="form-control form-control-sm" type="number" min="0" max="50" value="1" /></div>
+                      <div class="col-6"><label for="crawl-keyword-weight" class="form-label small mb-1" data-i18n="crawl.keyword_weight"></label><input id="crawl-keyword-weight" class="form-control form-control-sm" type="number" min="0" max="10" step="0.1" value="1" /></div>
+                      <div class="col-6"><label for="crawl-cite-weight" class="form-label small mb-1" data-i18n="crawl.cite_weight"></label><input id="crawl-cite-weight" class="form-control form-control-sm" type="number" min="0" max="10" step="0.1" value="0.4" /></div>
+                      <div class="col-6"><label for="crawl-link-weight" class="form-label small mb-1" data-i18n="crawl.link_weight"></label><input id="crawl-link-weight" class="form-control form-control-sm" type="number" min="0" max="10" step="0.1" value="0.5" /></div>
+                      <div class="col-12 form-check form-switch ms-2"><input id="crawl-cited-by" class="form-check-input" type="checkbox" role="switch" checked /><label for="crawl-cited-by" class="form-check-label" data-i18n="crawl.cited_by"></label></div>
+                    </div>
+                    <p class="form-text mb-0" data-i18n="crawl.score_help"></p>
+                  </div>
+                </div>
+                <div class="col-auto d-flex gap-2">
+                  <button id="crawl-start" type="submit" class="btn btn-primary"><i class="bi bi-play-fill" aria-hidden="true"></i> <span data-i18n="crawl.start"></span></button>
+                  <button id="crawl-stop" type="button" class="btn btn-outline-danger" hidden><i class="bi bi-stop-fill" aria-hidden="true"></i> <span data-i18n="crawl.stop"></span></button>
+                </div>
+              </form>
+              <div id="crawl-progress" class="mt-2" hidden>
+                <div class="progress" role="progressbar" data-i18n-attr="aria-label:crawl.progress_label"><div id="crawl-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated"></div></div>
+                <p id="crawl-progress-text" class="small text-body-secondary mb-0 mt-1"></p>
+              </div>
+              <div class="row g-2 align-items-center mt-2">
+                <div class="col-auto">
+                  <div class="btn-group btn-group-sm" role="group" data-i18n-attr="aria-label:crawl.view_label">
+                    <input type="radio" class="btn-check" name="crawl-view" id="crawl-view-novel" value="novel" checked />
+                    <label class="btn btn-outline-secondary" for="crawl-view-novel" data-i18n="crawl.view_novel"></label>
+                    <input type="radio" class="btn-check" name="crawl-view" id="crawl-view-visited" value="visited" />
+                    <label class="btn btn-outline-secondary" for="crawl-view-visited" data-i18n="crawl.view_visited"></label>
+                  </div>
+                </div>
+                <div class="col-auto"><a id="crawl-export" class="btn btn-outline-secondary btn-sm" href="#" download hidden><i class="bi bi-download" aria-hidden="true"></i> <span data-i18n="crawl.export"></span></a></div>
+                <div class="col-12 col-md small text-body-secondary text-md-end" id="crawl-summary"></div>
+              </div>
+            </div>
+            <div id="crawl-table" class="table-fill" hidden></div>
           </section>
 
-          <div class="modal fade" id="missing-add-dialog" tabindex="-1" aria-labelledby="missing-add-heading" aria-hidden="true">
-            <div class="modal-dialog">
-              <form class="modal-content" id="missing-add-form">
-                <div class="modal-header">
-                  <h3 class="modal-title h5" id="missing-add-heading" data-i18n="missing.add_heading"></h3>
-                  <button type="button" class="btn-close" data-bs-dismiss="modal" data-i18n-attr="aria-label:nav.close"></button>
+        </section>
+
+        <!-- Saved searches: a name, a boolean query and named groups of
+             terms, run over the library and the missing pool.
+             static/js/searches.js -->
+        <section class="view" data-view="searches" id="searches-panel" hidden>
+          <h2 class="view-title visually-hidden" data-i18n="searches.heading"></h2>
+          <div class="row g-3">
+            <div class="col-12 col-lg-4 col-xxl-3">
+              <section class="card h-100">
+                <div class="card-body">
+                  <div class="d-flex align-items-center gap-2 mb-2">
+                    <h3 class="card-title h6 mb-0 me-auto" data-i18n="searches.saved_heading"></h3>
+                    <button id="searches-new" type="button" class="btn btn-outline-primary btn-sm"><i class="bi bi-plus-lg" aria-hidden="true"></i> <span data-i18n="searches.new"></span></button>
+                  </div>
+                  <p id="searches-empty" class="small text-body-secondary" data-i18n="searches.empty" hidden></p>
+                  <div id="searches-list" class="list-group list-group-flush searches-list"></div>
                 </div>
-                <div class="modal-body">
-                  <p id="missing-add-title" class="fw-semibold"></p>
-                  <label for="missing-add-list" class="form-label" data-i18n="missing.add_list"></label>
-                  <select id="missing-add-list" class="form-select"></select>
+              </section>
+            </div>
+            <div class="col-12 col-lg-8 col-xxl-9">
+              <form id="search-form" class="card h-100" novalidate>
+                <div class="card-body">
+                  <div class="row g-2">
+                    <div class="col-12 col-md-6">
+                      <label for="search-name" class="form-label small mb-1" data-i18n="searches.name"></label>
+                      <input id="search-name" class="form-control" maxlength="120" autocomplete="off" />
+                    </div>
+                    <div class="col-12 col-md-6">
+                      <label for="search-description" class="form-label small mb-1" data-i18n="searches.description"></label>
+                      <input id="search-description" class="form-control" maxlength="2000" autocomplete="off" />
+                    </div>
+                    <div class="col-12">
+                      <label for="search-query" class="form-label small mb-1" data-i18n="searches.query"></label>
+                      <input id="search-query" class="form-control font-monospace" maxlength="2000" autocomplete="off" spellcheck="false" data-i18n-attr="placeholder:searches.query_placeholder" />
+                      <p class="form-text mb-0" data-i18n="library.search_help"></p>
+                    </div>
+                  </div>
+                  <div class="d-flex align-items-center gap-2 mt-3 mb-1">
+                    <h3 class="h6 mb-0 me-auto" data-i18n="searches.groups_heading"></h3>
+                    <button id="search-add-group" type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-plus-lg" aria-hidden="true"></i> <span data-i18n="searches.add_group"></span></button>
+                  </div>
+                  <p class="form-text mt-0" data-i18n="searches.groups_help"></p>
+                  <div id="search-groups" class="d-flex flex-column gap-2"></div>
+                  <div id="search-problems" class="alert alert-danger py-2 mt-2 mb-0" role="alert" hidden></div>
                 </div>
-                <div class="modal-footer">
-                  <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" data-i18n="ui.cancel"></button>
-                  <button type="submit" class="btn btn-primary" data-i18n="missing.add_button"></button>
+                <div class="card-footer d-flex flex-wrap gap-2">
+                  <button id="search-save" type="submit" class="btn btn-primary" data-i18n="searches.save"></button>
+                  <button id="search-delete" type="button" class="btn btn-outline-danger" data-i18n="searches.delete" hidden></button>
+                  <span id="search-state" class="small text-body-secondary align-self-center ms-auto"></span>
                 </div>
               </form>
             </div>
           </div>
+          <section class="card mt-3">
+            <div class="card-header">
+              <ul class="nav nav-tabs card-header-tabs">
+                <li class="nav-item"><a class="nav-link active" href="#searches" data-search-pool="library"><span data-i18n="searches.tab_library"></span> <span class="badge text-bg-light border"></span></a></li>
+                <li class="nav-item"><a class="nav-link" href="#searches" data-search-pool="missing"><span data-i18n="searches.tab_missing"></span> <span class="badge text-bg-light border"></span></a></li>
+              </ul>
+            </div>
+            <div class="card-body py-2">
+              <div class="row g-2 align-items-center">
+                <div class="col-12 col-md" id="search-tally"></div>
+                <div class="col-auto">
+                  <button id="search-add-all" type="button" class="btn btn-outline-primary btn-sm"><i class="bi bi-plus-lg" aria-hidden="true"></i> <span data-i18n="searches.add_all"></span></button>
+                </div>
+                <div class="col-auto dropdown">
+                  <button id="search-export" type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-download" aria-hidden="true"></i> <span data-i18n="searches.export"></span>
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a id="search-export-xlsx" class="dropdown-item" href="#" download data-i18n="searches.export_xlsx"></a></li>
+                    <li><a id="search-export-md" class="dropdown-item" href="#" download data-i18n="searches.export_md"></a></li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <div id="search-results"></div>
+          </section>
+        </section>
+
+        <!-- Which papers in a Markdown research log are not in the library.
+             static/js/research_log.js -->
+        <section class="view" data-view="research-log" id="research-log-panel" hidden>
+          <h2 class="view-title visually-hidden" data-i18n="research_log.heading"></h2>
+          <form id="log-form" class="card">
+            <div class="card-body">
+              <p class="small text-body-secondary" data-i18n="research_log.help"></p>
+              <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-6">
+                  <label for="log-file" class="form-label small mb-1" data-i18n="research_log.file"></label>
+                  <input id="log-file" class="form-control" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" />
+                </div>
+                <div class="col-12 col-md-auto">
+                  <div class="form-check form-switch mb-2">
+                    <input id="log-list-only" class="form-check-input" type="checkbox" role="switch" />
+                    <label for="log-list-only" class="form-check-label" data-i18n="research_log.list_only"></label>
+                  </div>
+                </div>
+                <div class="col-12">
+                  <label for="log-text" class="form-label small mb-1" data-i18n="research_log.paste"></label>
+                  <textarea id="log-text" class="form-control font-monospace small" rows="6" spellcheck="false" data-i18n-attr="placeholder:research_log.paste_placeholder"></textarea>
+                </div>
+              </div>
+            </div>
+            <div class="card-footer d-flex flex-wrap gap-2 align-items-center">
+              <button id="log-check" type="submit" class="btn btn-primary" data-i18n="research_log.check"></button>
+              <button id="log-download" type="button" class="btn btn-outline-secondary" hidden><i class="bi bi-download" aria-hidden="true"></i> <span data-i18n="research_log.download"></span></button>
+              <span id="log-summary" class="small text-body-secondary ms-md-auto"></span>
+            </div>
+          </form>
+          <section class="card mt-3" id="log-results-card" hidden>
+            <div class="card-header">
+              <ul class="nav nav-tabs card-header-tabs">
+                <li class="nav-item"><a class="nav-link active" href="#research-log" data-log-tab="missing"><span data-i18n="research_log.tab_missing"></span> <span class="badge text-bg-light border"></span></a></li>
+                <li class="nav-item"><a class="nav-link" href="#research-log" data-log-tab="recovered"><span data-i18n="research_log.tab_recovered"></span> <span class="badge text-bg-light border"></span></a></li>
+                <li class="nav-item"><a class="nav-link" href="#research-log" data-log-tab="all"><span data-i18n="research_log.tab_all"></span> <span class="badge text-bg-light border"></span></a></li>
+              </ul>
+            </div>
+            <div id="log-results"></div>
+          </section>
+        </section>
+
+        <!-- LLM summaries: the queue, and one section's summaries rolled up.
+             static/js/summaries.js -->
+        <section class="view view-fill" data-view="summaries" id="summaries-panel" hidden>
+          <h2 class="view-title visually-hidden" data-i18n="summaries.heading"></h2>
+          <p id="summaries-no-model" class="alert alert-warning py-2 mb-0" role="status" data-i18n="summaries.no_model" hidden></p>
+          <section class="card card-fill">
+            <div class="card-body py-2">
+              <div class="row g-2 align-items-center">
+                <div class="col-auto">
+                  <label for="rollup-section" class="visually-hidden" data-i18n="summaries.section"></label>
+                  <select id="rollup-section" class="form-select"></select>
+                </div>
+                <div class="col-12 col-md-5 col-xl-3">
+                  <label for="rollup-search" class="visually-hidden" data-i18n="summaries.search_label"></label>
+                  <input id="rollup-search" class="form-control" type="search" autocomplete="off" data-i18n-attr="placeholder:summaries.search_placeholder" />
+                </div>
+                <div class="col-auto dropdown">
+                  <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    <i class="bi bi-layout-three-columns" aria-hidden="true"></i> <span data-i18n="table.columns"></span>
+                  </button>
+                  <ul id="rollup-columns" class="dropdown-menu data-table-menu"></ul>
+                </div>
+                <div class="col-auto">
+                  <a id="rollup-export" class="btn btn-outline-secondary" href="#" download><i class="bi bi-download" aria-hidden="true"></i> <span data-i18n="summaries.export"></span></a>
+                </div>
+                <div class="col-auto">
+                  <button id="summaries-cancel" type="button" class="btn btn-outline-danger btn-sm" hidden data-i18n="summaries.cancel"></button>
+                </div>
+                <div class="col-12 col-lg ms-lg-auto small text-body-secondary text-lg-end" id="summaries-status"></div>
+              </div>
+              <div id="rollup-tags" class="d-flex flex-wrap gap-1 mt-2"></div>
+            </div>
+            <div id="rollup-table" class="table-fill"></div>
+          </section>
+
         </section>
 
         <!-- The content queue and its failures. static/js/status.js -->
@@ -1053,6 +1279,9 @@
                     <button id="list-copy-to" type="button" class="btn btn-outline-primary btn-sm" hidden>
                       <i class="bi bi-box-arrow-right" aria-hidden="true"></i> <span data-i18n="lists.copy_to"></span>
                     </button>
+                    <button id="list-summarize" type="button" class="btn btn-outline-primary btn-sm" hidden>
+                      <i class="bi bi-stars" aria-hidden="true"></i> <span data-i18n="summaries.summarize"></span>
+                    </button>
                   </div>
                 </div>
 
@@ -1079,6 +1308,88 @@
 
         <!-- Everything about you: who you are, how you sign in, and what can
              act as you. A feature's card stays hidden until its own JS shows it. -->
+        <!-- Add to list, from Missing, Searches, the crawl and the research log (missing.js). -->
+        <div class="modal fade" id="missing-add-dialog" tabindex="-1" aria-labelledby="missing-add-heading" aria-hidden="true">
+          <div class="modal-dialog">
+            <form class="modal-content" id="missing-add-form">
+              <div class="modal-header">
+                <h3 class="modal-title h5" id="missing-add-heading" data-i18n="missing.add_heading"></h3>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" data-i18n-attr="aria-label:nav.close"></button>
+              </div>
+              <div class="modal-body">
+                <p id="missing-add-title" class="fw-semibold"></p>
+                <label for="missing-add-list" class="form-label" data-i18n="missing.add_list"></label>
+                <select id="missing-add-list" class="form-select"></select>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" data-i18n="ui.cancel"></button>
+                <button type="submit" class="btn btn-primary" data-i18n="missing.add_button"></button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- What to summarise, from a list's selection or the Paper screen (summaries.js). -->
+        <div class="modal fade" id="summarize-dialog" tabindex="-1" aria-labelledby="summarize-heading" aria-hidden="true">
+          <div class="modal-dialog">
+            <form class="modal-content" id="summarize-form">
+              <div class="modal-header">
+                <h3 class="modal-title h5" id="summarize-heading" data-i18n="summaries.dialog_heading"></h3>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" data-i18n-attr="aria-label:nav.close"></button>
+              </div>
+              <div class="modal-body">
+                <p id="summarize-what" class="fw-semibold"></p>
+                <fieldset>
+                  <legend class="form-label fs-6" data-i18n="summaries.sections_label"></legend>
+                  <div id="summarize-sections" class="row row-cols-2 g-1"></div>
+                </fieldset>
+                <div class="form-check form-switch mt-2">
+                  <input id="summarize-force" class="form-check-input" type="checkbox" role="switch" />
+                  <label for="summarize-force" class="form-check-label" data-i18n="summaries.force"></label>
+                </div>
+                <p id="summarize-model" class="form-text mb-0"></p>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" data-i18n="ui.cancel"></button>
+                <button type="submit" class="btn btn-primary" data-i18n="summaries.summarize"></button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- A list's Google Sheet mirror (static/js/list_gsheet.js). -->
+        <div class="modal fade" id="gsheet-dialog" tabindex="-1" aria-labelledby="gsheet-heading" aria-hidden="true">
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h3 class="modal-title h5" id="gsheet-heading" data-i18n="gsheet.heading"></h3>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" data-i18n-attr="aria-label:nav.close"></button>
+              </div>
+              <div class="modal-body">
+                <p id="gsheet-unavailable" class="alert alert-warning py-2" data-i18n="gsheet.unavailable" hidden></p>
+                <p class="small text-body-secondary" data-i18n="gsheet.help"></p>
+                <fieldset id="gsheet-modes">
+                  <legend class="form-label fs-6" data-i18n="gsheet.mode"></legend>
+                  <div class="form-check"><input class="form-check-input" type="radio" name="gsheet-mode" id="gsheet-off" value="off" /><label class="form-check-label" for="gsheet-off" data-i18n="gsheet.mode_off"></label></div>
+                  <div class="form-check"><input class="form-check-input" type="radio" name="gsheet-mode" id="gsheet-one-way" value="one-way" /><label class="form-check-label" for="gsheet-one-way" data-i18n="gsheet.mode_one_way"></label></div>
+                  <div class="form-check"><input class="form-check-input" type="radio" name="gsheet-mode" id="gsheet-two-way" value="two-way" /><label class="form-check-label" for="gsheet-two-way" data-i18n="gsheet.mode_two_way"></label></div>
+                </fieldset>
+                <dl class="row small mt-3 mb-0">
+                  <dt class="col-4" data-i18n="gsheet.last_push"></dt><dd class="col-8" id="gsheet-last-push"></dd>
+                  <dt class="col-4" data-i18n="gsheet.last_pull"></dt><dd class="col-8" id="gsheet-last-pull"></dd>
+                </dl>
+                <p id="gsheet-error" class="alert alert-danger py-2 small mb-0 mt-2" role="alert" hidden></p>
+                <p id="gsheet-note" class="alert alert-info py-2 small mb-0 mt-2" role="status" hidden></p>
+              </div>
+              <div class="modal-footer flex-wrap">
+                <a id="gsheet-open" class="btn btn-outline-secondary me-auto" href="#" target="_blank" rel="noopener" hidden><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i> <span data-i18n="gsheet.open"></span></a>
+                <button id="gsheet-overwrite" type="button" class="btn btn-outline-danger" data-i18n="gsheet.overwrite" hidden></button>
+                <button id="gsheet-sync" type="button" class="btn btn-primary" data-i18n="gsheet.sync_now" hidden></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <section class="view" data-view="account" id="account-panel">
           <h2 class="view-title visually-hidden" data-i18n="account.heading"></h2>
 
@@ -1982,6 +2293,10 @@
   <script src="/js/datasets.js"></script>
   <script src="/js/review_rules.js"></script>
   <script src="/js/review.js"></script>
+  <script src="/js/searches.js"></script>
+  <script src="/js/crawl.js"></script>
+  <script src="/js/research_log.js"></script>
+  <script src="/js/summaries.js"></script>
   <script src="/js/library.js"></script>
   <script src="/js/board_view.js"></script>
   <script src="/js/board_columns.js"></script>
@@ -1992,6 +2307,7 @@
   <script src="/js/tag_menu.js"></script>
   <script src="/js/list_manage.js"></script>
   <script src="/js/list_sheet.js"></script>
+  <script src="/js/list_gsheet.js"></script>
   <script src="/js/keys.js"></script>
   <script src="/js/mcp.js"></script>
   <script src="/js/sessions.js"></script>

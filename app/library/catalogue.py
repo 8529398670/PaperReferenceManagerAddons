@@ -370,6 +370,28 @@ class Catalogue:
         rows.sort(key=lambda p: scores[p.key], reverse=True)
         return SearchResult(rows=rows, scores=scores)
 
+    def term_keys(self, term: str) -> set[str]:
+        """The papers holding one folded term (a phrase, its last word a
+        prefix), in their title, authors, journal, tags, abstract or full
+        text: what one word of the search box matches. Saved searches build
+        their groups from these."""
+        folded = q.fold(term)
+        if not folded:
+            return set()
+        found = {p.key for p in self._papers.values() if folded in p.head_f}
+        for doc_id in self.index.body_match(fts_phrase(folded, prefix=True)):
+            key = self._by_doc.get(doc_id)
+            if key is not None:
+                found.add(key)
+        return found
+
+    def query_keys(self, text: str) -> set[str]:
+        """The papers a boolean query matches, with no near-title fallback."""
+        if not q.parse(text):
+            return {p.key for p in self._papers.values()}
+        result = self.search(text)
+        return set() if result.fuzzy else {p.key for p in result.rows}
+
     # -- does the library have it? ---------------------------------------------
 
     def exists(self, doi: str, title: str) -> bool:

@@ -77,6 +77,24 @@ migrate_config
 # the data directory alone cannot be decrypted.
 resolve_data_dir
 
+# The Zotero library is only ever read: its folder goes in read-only at
+# /zotero (docker.zotero_dir, else library.zotero_dir, with ~ and relative
+# paths resolved here on the host). Without it the app starts with an empty
+# library, so say so rather than start a container that shows nothing.
+case "$docker_zotero_dir" in
+  "~")   ZOTERO_DIR="$HOME" ;;
+  "~/"*) ZOTERO_DIR="${HOME}/${docker_zotero_dir#\~/}" ;;
+  /*)    ZOTERO_DIR="$docker_zotero_dir" ;;
+  *)     ZOTERO_DIR="$( pwd )/${docker_zotero_dir#./}" ;;
+esac
+ZOTERO_DIR="${ZOTERO_DIR%/}"
+if [ ! -f "${ZOTERO_DIR}/zotero.sqlite" ]; then
+  echo "ERROR: no zotero.sqlite in ${ZOTERO_DIR}" >&2
+  echo "       Set docker.zotero_dir (or library.zotero_dir) in ${CONFIG_FILE}" >&2
+  echo "       to the folder holding zotero.sqlite and storage/." >&2
+  exit 1
+fi
+
 # config.yaml is writable from inside the container, so treat docker.data_dir
 # as something a compromised container could have chosen: this script hands
 # that directory to the container's user (chown -R below). The Settings screen
@@ -273,6 +291,7 @@ docker run -d \
   -v "${DATA_DIR}:/app/data" \
   -v "${CONFIG_FILE}:${CONTAINER_CONFIG}" \
   -v "${SECRET_FILE}:${CONTAINER_SECRET}:ro" \
+  -v "${ZOTERO_DIR}:/zotero:ro" \
   --read-only \
   --tmpfs "/tmp:rw,noexec,nosuid,size=${docker_tmpfs_size}" \
   --cap-drop ALL \

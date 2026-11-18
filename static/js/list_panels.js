@@ -124,6 +124,7 @@ const ListPanels = {
       item( "bi-journal-arrow-down" , "lists.menu_refs" , () => this.importRefs() , { disabled: locked } ),
       item( "bi-filetype-csv" , "lists.menu_csv_import" , () => this.importCsv() , { disabled: locked } ),
       item( "bi-table" , "lists.menu_sheet" , () => ListSheet.open() , { disabled: locked } ),
+      item( "bi-google" , "lists.menu_gsheet" , () => ListGSheet.open( view.slug ) ),
       item( "bi-download" , "lists.menu_csv_export" , () => this.exportCsv( false ) ),
       item( "bi-funnel" , "lists.menu_csv_export_shown" , () => this.exportCsv( true ) ),
       rule(),

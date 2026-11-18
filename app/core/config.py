@@ -40,6 +40,11 @@ import yaml
 
 from app.core.layout import PINNED, in_container
 
+# Where docker/run.sh mounts the Zotero folder (docker.zotero_dir) inside the
+# container, read-only. library.zotero_dir is the host's path, and is ignored
+# there.
+CONTAINER_ZOTERO_DIR = "/zotero"
+
 # APP_SLUG names the application on disk. It is what turns into
 # ~/.config/<slug>/, so it is deliberately the lowercase, filesystem-safe form
 # of the project name rather than the display name. It is a constant rather
@@ -193,7 +198,10 @@ class EnrichSection:
 
 @dataclass
 class LlmSection:
+    provider: str
+    anthropic_api_key: str
     openai_api_key: str
+    gemini_api_key: str
     model: str
 
 
@@ -231,6 +239,7 @@ class DockerSection:
     cpus: str
     pids_limit: int
     tmpfs_size: str
+    zotero_dir: str
 
 
 @dataclass
@@ -445,7 +454,7 @@ class Config:
     # summaries, the Sheets mirror, the MRI planner), as config.yaml has them:
     # every one is [live], so the running Config carries the sections whole.
     enrich: EnrichSection = field(default_factory=lambda: EnrichSection("", "", "", ""))
-    llm: LlmSection = field(default_factory=lambda: LlmSection("", ""))
+    llm: LlmSection = field(default_factory=lambda: LlmSection("", "", "", "", ""))
     google_sheets: GoogleSheetsSection = field(default_factory=lambda: GoogleSheetsSection(False, "", "", "", "", "one-way", 5, 30, 25, [], "", ""))
     mri_design: MriDesignSection = field(default_factory=lambda: MriDesignSection("", ""))
 
@@ -871,6 +880,10 @@ def validate(file: File) -> list[str]:
         "library.proxy_url must be empty or an http(s) address containing {doi}",
     )
     check(len(library.openalex_api_key) <= 200 and "\n" not in library.openalex_api_key, "library.openalex_api_key is not a key")
+    check(file.llm.provider in ("", "claude", "openai", "gemini"), "llm.provider must be empty, claude, openai or gemini")
+    for name in ("anthropic_api_key", "openai_api_key", "gemini_api_key", "model"):
+        value = getattr(file.llm, name)
+        check(len(value) <= 300 and "\n" not in value, f"llm.{name} is not a key or model name")
     sheets = file.google_sheets
     check(sheets.default_mode in ("one-way", "two-way"), "google_sheets.default_mode must be one-way or two-way")
     check(sheets.push_delay >= 0 and sheets.poll_seconds >= 5 and sheets.max_remove >= 0,
@@ -889,6 +902,7 @@ def validate(file: File) -> list[str]:
     check(bool(_CPUS.match(docker.cpus)), f"docker.cpus must be a number like 1 or 0.5, got {docker.cpus!r}")
     check(docker.pids_limit > 0, "docker.pids_limit must be positive")
     check(bool(_SIZE.match(docker.tmpfs_size)), f"docker.tmpfs_size must look like 16m, got {docker.tmpfs_size!r}")
+    check(docker.zotero_dir == "" or path_ok(docker.zotero_dir), "docker.zotero_dir must be empty or a path with no ':' in it")
 
     return problems
 
@@ -1146,7 +1160,10 @@ def build_config(file: File, path: Path, paths: "Paths", secret_key: str) -> Con
 
 def library_config(file: File, paths: "Paths") -> LibraryConfig:
     zotero = Path(file.library.zotero_dir).expanduser()
-    if not zotero.is_absolute():
+    if in_container():
+        # docker/run.sh mounts the host's Zotero folder here, read-only.
+        zotero = Path(CONTAINER_ZOTERO_DIR)
+    elif not zotero.is_absolute():
         zotero = paths.project_dir / zotero
     return LibraryConfig(
         zotero_dir=zotero,

@@ -96,6 +96,7 @@ const PaperView = {
     this.drawNetwork( paper , content );
     this.drawLinks( content );
     this.drawSections( content.sections || [] );
+    SummariesView.showPaper( paper.key );
   },
 
   // The badge summary, from the full content (the same shape the rows get).

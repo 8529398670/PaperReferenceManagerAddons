@@ -72,6 +72,7 @@ def sample_value(key: Any) -> Any:
         "docker.cpus": "2",
         "docker.tmpfs_size": "32m",
         "google_sheets.default_mode": "two-way",
+        "llm.provider": "gemini",
         "mri_design.base_url": "https://planner.example.com",
     }
     if key.path in special:

@@ -212,6 +212,62 @@
         ],
         "type": "object"
       },
+      "CrawlResult": {
+        "properties": {
+          "run": {
+            "description": "The run's settings and counts, null when it never ran.",
+            "oneOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "total": {
+            "type": "integer"
+          },
+          "works": {
+            "description": "wid, doi, title, journal, year, cited_by, oa_pdf, authors, score, hits (terms matched), links (times reached), depth, from / from_title / from_key (the work it was reached from, and its library key when a seed), how (cites / cited by), in_library (it has been added since).",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "run",
+          "total",
+          "works"
+        ],
+        "type": "object"
+      },
+      "CrawlStatus": {
+        "properties": {
+          "defaults": {
+            "description": "The crawl's default settings.",
+            "type": "object"
+          },
+          "runs": {
+            "description": "Each saved search's last crawl: settings, terms, seeds, visited, novel, api_used, errors, when.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "status": {
+            "description": "running, search_id, search, visited, novel, api_used, max_visits, started_at / finished_at, error.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "defaults",
+          "runs",
+          "status"
+        ],
+        "type": "object"
+      },
       "Error": {
         "properties": {
           "error": {
@@ -688,6 +744,21 @@
         ],
         "type": "object"
       },
+      "PaperSummaries": {
+        "properties": {
+          "summaries": {
+            "additionalProperties": {
+              "type": "object"
+            },
+            "description": "By section: hashtags, summary (Markdown), provider, model, at, by, cut (the text was too long and was cut), and state (done, queued, running, failed) with error.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "summaries"
+        ],
+        "type": "object"
+      },
       "PruneResult": {
         "properties": {
           "bytes_after": {
@@ -708,6 +779,49 @@
           "bytes_before",
           "compressed",
           "deleted"
+        ],
+        "type": "object"
+      },
+      "ResearchLogCheck": {
+        "properties": {
+          "extracted": {
+            "description": "Paper blocks found.",
+            "type": "integer"
+          },
+          "lines": {
+            "type": "integer"
+          },
+          "missing": {
+            "type": "integer"
+          },
+          "papers": {
+            "description": "Each paper: title, line, date (the heading above it), url, doi, occurrences (lines), mentions, and when checked: found (\"doi\", \"title\" or \"\" for missing), recovered (its DOI is not in the library but its title is), key.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "recovered": {
+            "type": "integer"
+          },
+          "report": {
+            "description": "The Markdown report, as the old command wrote it.",
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "unique": {
+            "description": "After merging repeats by title.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "extracted",
+          "lines",
+          "papers",
+          "source",
+          "unique"
         ],
         "type": "object"
       },
@@ -1022,6 +1136,82 @@
           "api_keys",
           "login_links",
           "sessions"
+        ],
+        "type": "object"
+      },
+      "SavedSearch": {
+        "properties": {
+          "search": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "search"
+        ],
+        "type": "object"
+      },
+      "SavedSearchRun": {
+        "properties": {
+          "library": {
+            "description": "Library papers matched, newest first: key, title, doi, year, journal, authors, added, tags.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "library_groups": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "How many library papers each group matches on its own.",
+            "type": "object"
+          },
+          "library_total": {
+            "type": "integer"
+          },
+          "missing": {
+            "description": "Missing works matched, by connections: wid, doi, title, journal, year, cited_by, oa_pdf, authors, conn.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "missing_groups": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "missing_total": {
+            "type": "integer"
+          },
+          "search": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "library",
+          "library_groups",
+          "library_total",
+          "missing",
+          "missing_groups",
+          "missing_total",
+          "search"
+        ],
+        "type": "object"
+      },
+      "SavedSearches": {
+        "properties": {
+          "searches": {
+            "description": "Each search: id, name, description, query, groups, created / updated at and by.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "searches"
         ],
         "type": "object"
       },
@@ -1448,6 +1638,18 @@
         ],
         "type": "object"
       },
+      "SheetMirror": {
+        "properties": {
+          "sheet": {
+            "description": "available (google_sheets is on and has credentials), mode (off, one-way, two-way), spreadsheet_id, url, last_push, last_pull, error, refused (the last read-back was refused), note, pending, poll_seconds, default_mode.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "sheet"
+        ],
+        "type": "object"
+      },
       "SignIn": {
         "description": "Either the sign-in finished, or a two-factor code is needed: send it with the challenge to /api/login/two-factor.",
         "oneOf": [
@@ -1478,6 +1680,152 @@
             "type": "object"
           }
         ]
+      },
+      "SummariesQueued": {
+        "properties": {
+          "kept": {
+            "description": "Already summarised, left alone (send force to redo).",
+            "type": "integer"
+          },
+          "queued": {
+            "type": "integer"
+          },
+          "unknown": {
+            "description": "Keys that are not library papers.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kept",
+          "queued",
+          "unknown"
+        ],
+        "type": "object"
+      },
+      "SummariesRollup": {
+        "properties": {
+          "columns": {
+            "description": "The \"**Subsection.**\" headers the summaries carry, in first-seen order.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "extra": {
+            "description": "The extra columns from config/rollup-extra-columns.yaml.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "hashtags": {
+            "description": "[hashtag, papers] most used first.",
+            "items": {
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "rows": {
+            "description": "One per paper: key, title, doi, year, journal, hashtags, parts {header: text} (the whole summary, in its parts), extra {name: snippets}, model, at.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "section": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "columns",
+          "extra",
+          "hashtags",
+          "rows",
+          "section"
+        ],
+        "type": "object"
+      },
+      "SummariesStatus": {
+        "properties": {
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Summaries kept, by section.",
+            "type": "object"
+          },
+          "done": {
+            "description": "Summaries made since the server started.",
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "model": {
+            "type": "string"
+          },
+          "provider": {
+            "description": "The provider config.yaml picks: claude, openai or gemini; \"\" when no key is set.",
+            "type": "string"
+          },
+          "queued": {
+            "type": "integer"
+          },
+          "running": {
+            "description": "[paper key, section] being summarised now.",
+            "oneOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sections": {
+            "description": "[key, display name] of each section.",
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "counts",
+          "done",
+          "failed",
+          "model",
+          "provider",
+          "queued",
+          "running",
+          "sections"
+        ],
+        "type": "object"
+      },
+      "SummaryDeleted": {
+        "properties": {
+          "summary": {
+            "description": "The summary as it was, for undo (POST /api/summaries/put).",
+            "oneOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "summary"
+        ],
+        "type": "object"
       },
       "Theme": {
         "description": "A color scheme on the Appearance screen. Colors are #rrggbb. Anything not given is worked out by static/js/theme.js at readable contrast.",
@@ -6333,6 +6681,377 @@
         ]
       }
     },
+    "/api/crawl": {
+      "get": {
+        "description": "Whether a crawl is running and how far it has got, and the last crawl of each saved search.",
+        "operationId": "get_api_crawl",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrawlStatus"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "The crawl's progress and past runs",
+        "tags": [
+          "Crawl"
+        ]
+      },
+      "post": {
+        "description": "A best-first walk over OpenAlex from the library papers matching a saved search: score = keyword_weight x terms matched + cite_weight x log10(citations + 1) + link_weight x times reached. Runs in the background; GET /api/crawl says how far it has got, and the result replaces that search's last one.",
+        "operationId": "post_api_crawl",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "api_budget": {
+                    "default": 1000,
+                    "description": "OpenAlex requests at most; 0 uses only what is cached.",
+                    "maximum": 20000,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "cite_weight": {
+                    "default": 0.4,
+                    "maximum": 10,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "cited_by": {
+                    "default": true,
+                    "description": "Also walk forward, to the works citing each one.",
+                    "type": "boolean"
+                  },
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "keyword_weight": {
+                    "default": 1.0,
+                    "maximum": 10,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "link_weight": {
+                    "default": 0.5,
+                    "maximum": 10,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "max_depth": {
+                    "default": 2,
+                    "maximum": 4,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "max_visits": {
+                    "default": 500,
+                    "maximum": 5000,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "min_novel_hits": {
+                    "default": 2,
+                    "description": "Terms a work needs to be reported.",
+                    "maximum": 50,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "min_seed_hits": {
+                    "default": 1,
+                    "description": "Terms a library paper needs to be a seed.",
+                    "maximum": 50,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "search": {
+                    "description": "The saved search whose terms score the works (id or name).",
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "search"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrawlStatus"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "409": {
+            "$ref": "#/components/responses/E409"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Start a crawl",
+        "tags": [
+          "Crawl"
+        ]
+      }
+    },
+    "/api/crawl/stop": {
+      "post": {
+        "description": "Stop the crawl under way; what it found so far is kept as its result.",
+        "operationId": "post_api_crawl_stop",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrawlStatus"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Stop the crawl",
+        "tags": [
+          "Crawl"
+        ]
+      }
+    },
+    "/api/crawl/{search}": {
+      "get": {
+        "description": "The works the last crawl for a saved search found, best score first.",
+        "operationId": "get_api_crawl_search",
+        "parameters": [
+          {
+            "description": "The search's id, or its name.",
+            "in": "path",
+            "name": "search",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "\"novel\" (default): works you lack. \"visited\": every work walked.",
+            "in": "query",
+            "name": "view",
+            "schema": {
+              "default": "novel",
+              "enum": [
+                "novel",
+                "visited"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 500,
+              "maximum": 2000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrawlResult"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "A saved search's last crawl",
+        "tags": [
+          "Crawl"
+        ]
+      }
+    },
+    "/api/crawl/{search}/export.xlsx": {
+      "get": {
+        "description": "The last crawl for a saved search: Novel and Visited sheets, with score, terms matched, links, depth and where each was reached from.",
+        "operationId": "get_api_crawl_search_export_xlsx",
+        "parameters": [
+          {
+            "description": "The search's id, or its name.",
+            "in": "path",
+            "name": "search",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "A crawl as a workbook",
+        "tags": [
+          "Crawl"
+        ],
+        "x-mcp-http": "A file to download."
+      }
+    },
     "/api/datasets": {
       "get": {
         "description": "One row per paper that links a data archive record or names a public collection (HCP, NSD, ...), each record with what its archive says it is. The Datasets screen also groups these by dataset.",
@@ -9784,6 +10503,169 @@
         ]
       }
     },
+    "/api/lists/{slug}/sheet": {
+      "get": {
+        "description": "Whether the list is mirrored to a Google Sheet, how, and how the last push and read-back went.",
+        "operationId": "get_api_lists_slug_sheet",
+        "parameters": [
+          {
+            "description": "The list's slug.",
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SheetMirror"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "410": {
+            "$ref": "#/components/responses/E410"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "A list's Google Sheet mirror",
+        "tags": [
+          "Google Sheets"
+        ]
+      },
+      "post": {
+        "description": "Switch a list's Google Sheet mirror off, one-way or two-way; sync now; or overwrite the sheet with the list.",
+        "operationId": "post_api_lists_slug_sheet",
+        "parameters": [
+          {
+            "description": "The list's slug.",
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "mode": {
+                    "description": "off; one-way (the list is pushed to its sheet after each change); two-way (also read back every poll_seconds). The first switch on makes the spreadsheet.",
+                    "enum": [
+                      "off",
+                      "one-way",
+                      "two-way"
+                    ],
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "overwrite": {
+                    "description": "Write the list over the sheet now, dropping anything typed there since the last read.",
+                    "type": "boolean"
+                  },
+                  "sync_now": {
+                    "description": "Push (and read back, two-way) now.",
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SheetMirror"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "409": {
+            "$ref": "#/components/responses/E409"
+          },
+          "410": {
+            "$ref": "#/components/responses/E410"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Mirror a list to a Google Sheet",
+        "tags": [
+          "Google Sheets"
+        ]
+      }
+    },
     "/api/lists/{slug}/undelete": {
       "post": {
         "description": "Out of the trash, at the slug it had.",
@@ -10442,6 +11324,71 @@
         "tags": [
           "Missing papers"
         ]
+      }
+    },
+    "/api/missing/export.xlsx": {
+      "get": {
+        "description": "The old missing.xlsx, from the live pool: the top works by connections, the newest, the most cited, the top authors, and one sheet per saved search. Each row has its DOI, proxy and open-access links, year, journal and connections. Skipped works are left out.",
+        "operationId": "get_api_missing_export_xlsx",
+        "parameters": [
+          {
+            "description": "Rows per sheet. Default 1000.",
+            "in": "query",
+            "name": "top",
+            "schema": {
+              "default": 1000,
+              "maximum": 5000,
+              "minimum": 10,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Also a sheet per saved search (default true).",
+            "in": "query",
+            "name": "searches",
+            "schema": {
+              "default": true,
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "The missing pool as a workbook",
+        "tags": [
+          "Missing pool"
+        ],
+        "x-mcp-http": "A file to download."
       }
     },
     "/api/missing/skip": {
@@ -12117,6 +13064,86 @@
         ]
       }
     },
+    "/api/research-log/check": {
+      "post": {
+        "description": "Reads a Markdown research log (# 03SEP2026 date headings, &nbsp;-separated blocks of a title line and its links), lifts each paper's DOI out of its links, and checks each the way /api/exists does: a DOI settles it, else the title. A DOI miss is retried by title and marked recovered.",
+        "operationId": "post_api_research_log_check",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "list_only": {
+                    "description": "Only what the parser extracted, unchecked: for a log whose layout drifted.",
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "default": "research log",
+                    "description": "The file's name, for the report.",
+                    "maxLength": 200,
+                    "type": "string"
+                  },
+                  "text": {
+                    "description": "The log's Markdown.",
+                    "maxLength": 8388608,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchLogCheck"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Which papers in a research log you lack",
+        "tags": [
+          "Research log"
+        ]
+      }
+    },
     "/api/review/check": {
       "post": {
         "description": "Whether rules load (every pattern compiles, every value has the right type): a whole document, a setup, or a setup with changes made. And how many papers using them would re-screen.",
@@ -13376,6 +14403,635 @@
         "x-required-role": "admin"
       }
     },
+    "/api/searches": {
+      "get": {
+        "description": "Every saved search: a name, a boolean query and named groups of terms. The crawl and missing.xlsx use them.",
+        "operationId": "get_api_searches",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedSearches"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "The saved searches",
+        "tags": [
+          "Saved searches"
+        ]
+      },
+      "post": {
+        "description": "A new saved search. A search that does not hold together is a 400 listing each problem with where it is.",
+        "operationId": "post_api_searches",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "description": {
+                    "maxLength": 2000,
+                    "type": "string"
+                  },
+                  "groups": {
+                    "description": "Named groups of terms: {name (letters, digits, _), mode: any | all | none | at_least, terms: [phrases] (any / all / none), n and of: [group names] (at_least), required (default true: the paper must match it)}. A term is matched as one word of the search box is: folded, its last word a prefix, in the title, authors, journal, tags, abstract or full text.",
+                    "items": {
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "name": {
+                    "description": "Its name, unique.",
+                    "maxLength": 120,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "query": {
+                    "description": "A boolean query in the search box's grammar (AND, OR, NOT, -term, \"phrase\"). May be empty.",
+                    "maxLength": 2000,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedSearch"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Save a search",
+        "tags": [
+          "Saved searches"
+        ]
+      }
+    },
+    "/api/searches/restore": {
+      "post": {
+        "description": "Undo a delete: the search as it was, with its id.",
+        "operationId": "post_api_searches_restore",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "search": {
+                    "description": "The search as delete_saved_search answered it.",
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "search"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedSearch"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Put a deleted search back",
+        "tags": [
+          "Saved searches"
+        ],
+        "x-mcp-http": "The page's undo; an agent makes the search again with create_saved_search."
+      }
+    },
+    "/api/searches/try": {
+      "post": {
+        "description": "Run a search as sent, without saving it: what the editor shows as you type.",
+        "operationId": "post_api_searches_try",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "description": {
+                    "maxLength": 2000,
+                    "type": "string"
+                  },
+                  "groups": {
+                    "description": "Named groups of terms: {name (letters, digits, _), mode: any | all | none | at_least, terms: [phrases] (any / all / none), n and of: [group names] (at_least), required (default true: the paper must match it)}. A term is matched as one word of the search box is: folded, its last word a prefix, in the title, authors, journal, tags, abstract or full text.",
+                    "items": {
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "limit": {
+                    "default": 200,
+                    "maximum": 2000,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "name": {
+                    "default": "Unsaved",
+                    "maxLength": 120,
+                    "type": "string"
+                  },
+                  "pool": {
+                    "default": "both",
+                    "description": "\"both\" (default), \"library\" or \"missing\".",
+                    "enum": [
+                      "library",
+                      "missing",
+                      "both"
+                    ],
+                    "type": "string"
+                  },
+                  "query": {
+                    "description": "A boolean query in the search box's grammar (AND, OR, NOT, -term, \"phrase\"). May be empty.",
+                    "maxLength": 2000,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedSearchRun"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Try a search before saving it",
+        "tags": [
+          "Saved searches"
+        ]
+      }
+    },
+    "/api/searches/{search}": {
+      "post": {
+        "description": "Replace a saved search's name, query, groups and description.",
+        "operationId": "post_api_searches_search",
+        "parameters": [
+          {
+            "description": "The search's id, or its name.",
+            "in": "path",
+            "name": "search",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "description": {
+                    "maxLength": 2000,
+                    "type": "string"
+                  },
+                  "groups": {
+                    "description": "Named groups of terms: {name (letters, digits, _), mode: any | all | none | at_least, terms: [phrases] (any / all / none), n and of: [group names] (at_least), required (default true: the paper must match it)}. A term is matched as one word of the search box is: folded, its last word a prefix, in the title, authors, journal, tags, abstract or full text.",
+                    "items": {
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "name": {
+                    "description": "Its name, unique.",
+                    "maxLength": 120,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "query": {
+                    "description": "A boolean query in the search box's grammar (AND, OR, NOT, -term, \"phrase\"). May be empty.",
+                    "maxLength": 2000,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedSearch"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Change a saved search",
+        "tags": [
+          "Saved searches"
+        ]
+      }
+    },
+    "/api/searches/{search}/delete": {
+      "post": {
+        "description": "Delete a saved search. The answer is the search as it was, which POST /api/searches/restore puts back.",
+        "operationId": "post_api_searches_search_delete",
+        "parameters": [
+          {
+            "description": "The search's id, or its name.",
+            "in": "path",
+            "name": "search",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedSearch"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Delete a saved search",
+        "tags": [
+          "Saved searches"
+        ]
+      }
+    },
+    "/api/searches/{search}/export": {
+      "get": {
+        "description": "Every match, library and missing, as an .xlsx (a sheet each) or a Markdown list.",
+        "operationId": "get_api_searches_search_export",
+        "parameters": [
+          {
+            "description": "The search's id, or its name.",
+            "in": "path",
+            "name": "search",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "\"xlsx\" (default) or \"md\".",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "default": "xlsx",
+              "enum": [
+                "xlsx",
+                "md"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "A saved search's matches as a file",
+        "tags": [
+          "Saved searches"
+        ],
+        "x-mcp-http": "A file to download."
+      }
+    },
+    "/api/searches/{search}/run": {
+      "get": {
+        "description": "The library papers and missing works a saved search matches, and how many each of its groups matches alone.",
+        "operationId": "get_api_searches_search_run",
+        "parameters": [
+          {
+            "description": "The search's id, or its name.",
+            "in": "path",
+            "name": "search",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "\"both\" (default), \"library\" or \"missing\".",
+            "in": "query",
+            "name": "pool",
+            "schema": {
+              "default": "both",
+              "enum": [
+                "library",
+                "missing",
+                "both"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Rows of each pool to return. Default 500, at most 2000.",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 500,
+              "maximum": 2000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedSearchRun"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Run a saved search",
+        "tags": [
+          "Saved searches"
+        ]
+      }
+    },
     "/api/sheet/csv": {
       "post": {
         "description": "A public Google Sheet's rows, and the links behind its cells, for an import. The request always goes to docs.google.com's own export, built from the sheet ID alone, so nothing else can be fetched. At most 20 MB.",
@@ -13474,6 +15130,561 @@
           "Lists"
         ],
         "x-mcp-http": "It reads a sheet for the page's import dialog; list_ops imports rows."
+      }
+    },
+    "/api/summaries": {
+      "post": {
+        "description": "Queue LLM summaries of these papers' sections. One call each, in the background, with config.yaml's llm: provider; each one costs money, so a section already summarised is skipped unless force. Progress arrives on the library stream as \"summary\" events.",
+        "operationId": "post_api_summaries",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "force": {
+                    "description": "Summarise again a section already summarised.",
+                    "type": "boolean"
+                  },
+                  "keys": {
+                    "description": "Paper keys, at most 2000.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "sections": {
+                    "description": "Sections to summarise: all (the whole text), abstract, introduction, background, methods, results, conclusions or future.",
+                    "items": {
+                      "enum": [
+                        "abstract",
+                        "all",
+                        "background",
+                        "conclusions",
+                        "future",
+                        "introduction",
+                        "methods",
+                        "results"
+                      ],
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "keys",
+                  "sections"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummariesQueued"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "409": {
+            "$ref": "#/components/responses/E409"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Summarise papers",
+        "tags": [
+          "Summaries"
+        ]
+      }
+    },
+    "/api/summaries/cancel": {
+      "post": {
+        "description": "Drop every queued summary; the one being written finishes.",
+        "operationId": "post_api_summaries_cancel",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummariesQueued"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Empty the summaries queue",
+        "tags": [
+          "Summaries"
+        ]
+      }
+    },
+    "/api/summaries/delete": {
+      "post": {
+        "description": "Forget one paper's summary of one section.",
+        "operationId": "post_api_summaries_delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "key": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "section": {
+                    "enum": [
+                      "all",
+                      "abstract",
+                      "introduction",
+                      "background",
+                      "methods",
+                      "results",
+                      "conclusions",
+                      "future"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key",
+                  "section"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryDeleted"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Delete a summary",
+        "tags": [
+          "Summaries"
+        ]
+      }
+    },
+    "/api/summaries/paper": {
+      "get": {
+        "description": "Every summary kept for a paper, and those queued or failed.",
+        "operationId": "get_api_summaries_paper",
+        "parameters": [
+          {
+            "description": "The paper's key.",
+            "in": "query",
+            "name": "key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaperSummaries"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "One paper's summaries",
+        "tags": [
+          "Summaries"
+        ]
+      }
+    },
+    "/api/summaries/put": {
+      "post": {
+        "description": "Undo a delete: the summary as it was.",
+        "operationId": "post_api_summaries_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "key": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "section": {
+                    "enum": [
+                      "all",
+                      "abstract",
+                      "introduction",
+                      "background",
+                      "methods",
+                      "results",
+                      "conclusions",
+                      "future"
+                    ],
+                    "type": "string"
+                  },
+                  "summary": {
+                    "description": "{hashtags, summary, provider, model, at, by}: what delete answered.",
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "key",
+                  "section",
+                  "summary"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryDeleted"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Put a summary back",
+        "tags": [
+          "Summaries"
+        ],
+        "x-mcp-http": "The page's undo; an agent asks for the summary again with summarize_papers."
+      }
+    },
+    "/api/summaries/rollup": {
+      "get": {
+        "description": "Every summary of a section: their subsection headers as columns, the hashtags and a histogram of them, and the extra keyword / regex columns config/rollup-extra-columns.yaml declares.",
+        "operationId": "get_api_summaries_rollup",
+        "parameters": [
+          {
+            "description": "The section to roll up: all (the whole text), abstract, introduction, background, methods, results, conclusions or future.",
+            "in": "query",
+            "name": "section",
+            "schema": {
+              "default": "methods",
+              "enum": [
+                "all",
+                "abstract",
+                "introduction",
+                "background",
+                "methods",
+                "results",
+                "conclusions",
+                "future"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummariesRollup"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "One section's summaries as a table",
+        "tags": [
+          "Summaries"
+        ]
+      }
+    },
+    "/api/summaries/rollup.xlsx": {
+      "get": {
+        "description": "The rollup's Summaries sheet (a column per subsection and extra column) and its Hashtag counts.",
+        "operationId": "get_api_summaries_rollup_xlsx",
+        "parameters": [
+          {
+            "description": "The section to roll up: all (the whole text), abstract, introduction, background, methods, results, conclusions or future.",
+            "in": "query",
+            "name": "section",
+            "schema": {
+              "default": "methods",
+              "enum": [
+                "all",
+                "abstract",
+                "introduction",
+                "background",
+                "methods",
+                "results",
+                "conclusions",
+                "future"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "The rollup as a workbook",
+        "tags": [
+          "Summaries"
+        ],
+        "x-mcp-http": "A file to download."
+      }
+    },
+    "/api/summaries/status": {
+      "get": {
+        "description": "Which language model writes the summaries, what is queued, and how many are kept per section.",
+        "operationId": "get_api_summaries_status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummariesStatus"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "The summaries queue",
+        "tags": [
+          "Summaries"
+        ]
       }
     },
     "/api/team": {
@@ -13743,7 +15954,13 @@
       "name": "Content"
     },
     {
+      "name": "Crawl"
+    },
+    {
       "name": "Figures"
+    },
+    {
+      "name": "Google Sheets"
     },
     {
       "name": "Library"
@@ -13755,10 +15972,22 @@
       "name": "Missing papers"
     },
     {
+      "name": "Missing pool"
+    },
+    {
+      "name": "Research log"
+    },
+    {
       "name": "Review"
     },
     {
+      "name": "Saved searches"
+    },
+    {
       "name": "Screener"
+    },
+    {
+      "name": "Summaries"
     }
   ]
 }

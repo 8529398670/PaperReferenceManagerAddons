@@ -180,6 +180,14 @@ def build_parser() -> argparse.ArgumentParser:
                    help="seed each paper's OpenAlex stage, the missing pool, methods text and enrichment caches from the old caches, instead of the lists")
     p.add_argument("--figures", action="store_true",
                    help="link the old figure crops and montages in as each paper's figures, and bring over the figure picks, instead of the lists")
+    p.add_argument("--searches", action="store_true",
+                   help="translate the old searches/*.py files (beside --from, or in it) into saved searches, instead of the lists")
+    p.add_argument("--summaries", action="store_true",
+                   help="bring the old LLM summaries (summaries/<section>/*.md) in, instead of the lists")
+
+    p = commands.add_parser("google-login", help="one Google consent for the Sheets mirror; prints the credentials for config.yaml")
+    p.add_argument("client_secrets", help='the "installed app" OAuth client JSON from the Google Cloud console')
+    p.add_argument("--no-drive", action="store_true", help="ask for the spreadsheets scope only (share_with and folder_id need Drive)")
 
     p = commands.add_parser("logs", help="the activity log: days, or one day's entries")
     p.add_argument("--day", default="", help="a UTC date, YYYY-MM-DD; without it, list the days")
@@ -206,6 +214,10 @@ def run(arguments: list[str]) -> None:
     # with the server up or down -- the files are only ever appended to.
     if args.command == "logs":
         command_logs(cfg, args)
+        return
+    # "google-login" talks to Google and prints; it touches nothing here.
+    if args.command == "google-login":
+        command_google_login(args)
         return
 
     if cfg.rotation_finished:
@@ -266,6 +278,12 @@ def command_import_legacy(store: db.Store, cfg: config.Config, args: argparse.Na
         return
     if args.figures:
         import_legacy_figures(store, cfg, Path(args.source).expanduser())
+        return
+    if args.searches:
+        import_legacy_searches(store, cfg, Path(args.source).expanduser())
+        return
+    if args.summaries:
+        import_legacy_summaries(store, cfg, Path(args.source).expanduser())
         return
     try:
         done = legacy.import_lists(store, Path(args.source).expanduser(), replace=args.replace)
@@ -364,6 +382,113 @@ def import_legacy_figures(store: db.Store, cfg: config.Config, source: Path) -> 
     print(f"Figures: {result.done} papers seeded ({result.figures} crops linked), {result.already} already here, "
           f"{result.absent} with none in the old output (the worker crops them), {result.no_pdf} with no PDF.")
     print("Picks brought over: " + (", ".join(f"{view} {n}" for view, n in picks.items()) or "none") + ".")
+
+
+def import_legacy_searches(store: db.Store, cfg: config.Config, source: Path) -> None:
+    """The old searches/*.py predicate files, read (never run) and saved as
+    saved searches. A name already saved is left as it is."""
+    from app.extras import searches as ss
+
+    folder = next((f for f in (source / "searches", source.parent / "searches", source) if f.is_dir() and any(f.glob("*.py"))), None)
+    if folder is None:
+        raise ManageError(f"no searches/*.py beside or in {source}")
+
+    class NoCatalogue:
+        def all(self) -> list[Any]:
+            return []
+
+    saved = ss.SavedSearches(store, NoCatalogue(), lambda: None, set)
+    count, problems = ss.import_legacy(saved, folder, "import-legacy")
+    print(f"{count} saved searches made from {folder}.")
+    for problem in problems:
+        print(f"  not translated: {problem}")
+
+
+def import_legacy_summaries(store: db.Store, cfg: config.Config, source: Path) -> None:
+    from app.extras import summaries as sm
+
+    folder = source / "summaries"
+    if not folder.is_dir():
+        raise ManageError(f"no summaries/ folder in {source}")
+    content = open_content(store, cfg)
+    try:
+        service = sm.Summaries(store, content.catalogue, content, cfg.config_file.parent / "llm-prompts",
+                               cfg.config_file.parent / "rollup-extra-columns.yaml", lambda: cfg.llm)
+        imported, kept, unknown = sm.import_legacy(service, folder, "import-legacy")
+    finally:
+        content.close()
+        content._library.close()
+    print(f"Summaries: {imported} brought in, {kept} already here, {unknown} for papers not in the library.")
+
+
+def command_google_login(args: argparse.Namespace) -> None:
+    """The installed-app OAuth flow (PKCE) on a loopback port: opens Google's
+    consent page, catches the answer, and prints the three credential lines
+    for config.yaml's google_sheets: section. Ported from the old
+    tools/google-login.py."""
+    import base64
+    import hashlib
+    import http.server
+    import json
+    import secrets
+    import threading
+    import urllib.parse
+    import urllib.request
+    import webbrowser
+
+    try:
+        data = json.loads(Path(args.client_secrets).expanduser().read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise ManageError(f"could not read {args.client_secrets}: {error}") from None
+    client = data.get("installed") or data.get("web") or data
+    verifier = secrets.token_urlsafe(64)
+    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+    state = secrets.token_urlsafe(16)
+    got: dict[str, str] = {}
+
+    class Catch(http.server.BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802 -- the stdlib's name
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            got.update({k: v[0] for k, v in query.items()})
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b"Done -- you can close this tab.")
+
+        def log_message(self, *_: Any) -> None:
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Catch)
+    redirect = f"http://127.0.0.1:{server.server_port}"
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"] + ([] if args.no_drive else ["https://www.googleapis.com/auth/drive"])
+    url = (client.get("auth_uri") or "https://accounts.google.com/o/oauth2/auth") + "?" + urllib.parse.urlencode({
+        "client_id": client["client_id"], "redirect_uri": redirect, "response_type": "code", "scope": " ".join(scopes),
+        "access_type": "offline", "prompt": "consent", "code_challenge": challenge, "code_challenge_method": "S256", "state": state,
+    })
+    thread = threading.Thread(target=server.handle_request, daemon=True)
+    thread.start()
+    print("Opening the consent page. If no browser opens, visit:\n" + url, file=sys.stderr)
+    webbrowser.open(url)
+    thread.join()
+    if got.get("state") != state or "code" not in got:
+        raise ManageError(f"consent failed: {got.get('error') or 'no code came back'}")
+    body = urllib.parse.urlencode({
+        "client_id": client["client_id"], "client_secret": client.get("client_secret", ""), "code": got["code"],
+        "code_verifier": verifier, "redirect_uri": redirect, "grant_type": "authorization_code",
+    }).encode()
+    request = urllib.request.Request(client.get("token_uri") or "https://oauth2.googleapis.com/token", data=body, method="POST",
+                                     headers={"content-type": "application/x-www-form-urlencoded"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            token = json.loads(response.read())
+    except OSError as error:
+        raise ManageError(f"token exchange failed: {error}") from None
+    if not token.get("refresh_token"):
+        raise ManageError("Google sent no refresh token -- remove the app's access at myaccount.google.com/permissions and run this again")
+    print("# under google_sheets: in config.yaml (and set enabled: true)")
+    print(f'  client_id: "{client["client_id"]}"')
+    print(f'  client_secret: "{client.get("client_secret", "")}"')
+    print(f'  refresh_token: "{token["refresh_token"]}"')
 
 
 def require_user(store: db.Store, user_id: int) -> users.User:

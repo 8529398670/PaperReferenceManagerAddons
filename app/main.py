@@ -29,10 +29,14 @@ from app.core.request_log import RequestLog
 from app.core.security import LoadActor
 from app.core.static_files import StaticServer
 from app.boards.service import BoardService
+from app.boards.sheetsync import SheetSync
 from app.content.enrich import Enricher
 from app.content.figures import Figures
 from app.content.screens import Screens, memberships
 from app.content.service import ContentService
+from app.extras.crawl import Crawler
+from app.extras.searches import SavedSearches
+from app.extras.summaries import Summaries
 from app.library.service import LibraryService
 from app.review.missing import MissingReview
 from app.review.service import ReviewService
@@ -124,6 +128,15 @@ def build_app(
         screens.heard(name, data)
 
     content.publish = publish
+    # Phase 7: saved searches, the citation-graph crawl, LLM summaries and the
+    # Google Sheets mirror. See app/extras/ and app/boards/sheetsync.py.
+    searches = SavedSearches(store, library.catalogue, lambda: content.pool, content.skipped)
+    crawler = Crawler(cfg.library.content_dir / "_crawl", content, library.catalogue, searches,
+                      lambda: settings.get().library.openalex_api_key, library.publish)
+    summaries = Summaries(store, library.catalogue, content, cfg.config_file.parent / "llm-prompts",
+                          cfg.config_file.parent / "rollup-extra-columns.yaml", lambda: settings.get().llm, library.publish)
+    sheets = SheetSync(boards, lambda: settings.get().google_sheets)
+    boards.listeners.append(sheets.heard)
 
     @asynccontextmanager
     async def lifespan(app: Starlette) -> AsyncIterator[None]:
@@ -139,6 +152,8 @@ def build_app(
         screens.start()
         review_missing.start()
         boards.start()
+        summaries.start()
+        sheets.start()
         registry.start()
         try:
             yield
@@ -151,6 +166,9 @@ def build_app(
             await screens.stop()
             await review_missing.stop()
             boards.stop()
+            crawler.stop()
+            await run_in_threadpool(summaries.stop)
+            await run_in_threadpool(sheets.stop)
             await registry.stop()
             log_hub.close()
             await run_in_threadpool(library.close)
@@ -195,6 +213,10 @@ def build_app(
     app.state.review = review
     app.state.review_view = review_view
     app.state.review_missing = review_missing
+    app.state.searches = searches
+    app.state.crawler = crawler
+    app.state.summaries = summaries
+    app.state.sheets = sheets
     app.state.language = lang
     # Reported to MCP clients as serverInfo.version.
     app.state.version = version

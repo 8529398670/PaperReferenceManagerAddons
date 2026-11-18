@@ -274,12 +274,21 @@ enrich:
   # A Kaggle API key. [live]
   kaggle_key: ""
 
-# A language model for paper summaries and the rollup (phase 7). [live]
+# A language model for paper summaries and their rollup, made only when asked
+# for (a Summarize button), never on their own. Keys are read from here and
+# nowhere else. [live]
 llm:
-  # An OpenAI API key. Empty switches summaries off. [live]
+  # claude, openai or gemini. Empty takes the first of those with a key. [live]
+  provider: ""
+  # An Anthropic API key (console.anthropic.com). [live]
+  anthropic_api_key: ""
+  # An OpenAI API key. [live]
   openai_api_key: ""
-  # Which model writes the summaries. [live]
-  model: "gpt-5.4-nano"
+  # A Gemini API key (aistudio.google.com). [live]
+  gemini_api_key: ""
+  # Which model writes the summaries. Empty is the provider's default:
+  # claude-opus-5-5, gpt-5.4-nano or gemini-2.5-flash. [live]
+  model: ""
 
 # Mirroring lists to Google Sheets (phase 7). Each list is switched on and off,
 # and one-way or two-way, from its list menu. The credentials are an
@@ -343,3 +352,8 @@ docker:
   cpus: "1"
   pids_limit: 128
   tmpfs_size: 16m                  # the only writable path besides data_dir
+
+  # The Zotero folder (zotero.sqlite and storage/) on the host, mounted
+  # read-only at /zotero. Empty uses library.zotero_dir. ~ and relative paths
+  # are resolved on the host.
+  zotero_dir: ""
