@@ -465,6 +465,10 @@ def delete_user(request: Request, body: UserIDPath) -> DeleteUserReply:
         raise Refused(403, "only the owner can delete an admin account") from None
     if removed is None:
         raise Refused(404, "no such user")
+    libraries = getattr(request.app.state, "libraries", None)
+    if libraries is not None:
+        # Their own library's folder goes with them (app/library/registry.py).
+        libraries.forget_user(body.user_id)
     audit(request, KIND_ADMIN, "user deleted", {"user_id": body.user_id})
     return DeleteUserReply(ok=True, removed=msgspec.convert(removed.to_dict(), Revoked))
 

@@ -153,9 +153,12 @@ class ContentService:
         # library.source remote: nothing that needs a paper's PDF or text runs
         # until the paper is opened (open()), and what already ran is kept.
         # The papers opened so far, kept across restarts.
+        # A paper from a user's own library (app/library/registry.py, always
+        # remote) is on demand too, whatever the server's library is: see
+        # _on_demand.
         self.on_demand = isinstance(catalogue.library, RemoteLibrary)
         self._demanded_path = content_dir / DEMANDED_FILE
-        self.demanded: set[str] = self._load_demanded() if self.on_demand else set()
+        self.demanded: set[str] = self._load_demanded()
         self._wids: dict[str, str] = {}
         # Papers gone from the library but kept (Catalogue.vanished), as of
         # the last reconcile.
@@ -245,6 +248,18 @@ class ContentService:
         tmp.write_text(json.dumps(sorted(self.demanded)), encoding="utf-8")
         os.replace(tmp, self._demanded_path)
 
+    def _owner(self, key: str) -> Any:
+        """The user library whose copy of the paper is used, or None for the
+        server's (or with a single catalogue)."""
+        owner_of = getattr(self.catalogue, "owner_of", None)
+        if owner_of is None:
+            return None
+        owner = owner_of(key)
+        return owner if owner is not None and getattr(owner, "source_id", "server") != "server" else None
+
+    def _on_demand(self, key: str) -> bool:
+        return self.on_demand or self._owner(key) is not None
+
     def _settled(self, rows: dict[tuple[str, str], tuple[str, str]], key: str, stage: str) -> bool:
         return rows.get((key, stage), ("", ""))[0] in st.SETTLED
 
@@ -277,6 +292,12 @@ class ContentService:
         if not pdf:
             return []
         sig = "pdf:" + pdf_signature({"pdfs": [pdf]})
+        owner = self._owner(paper.key)
+        if owner is not None and not (self._settled(rows, paper.key, st.FIGURES) and self._settled(rows, paper.key, st.OCR)):
+            # The worker fetches only the server library's files: a user
+            # library's PDF is fetched here, with that user's key.
+            if owner.library.ensure_pdf(pdf) is None:
+                return []
         out = []
         if not self._settled(rows, paper.key, st.FIGURES):
             out.append((st.FIGURES, sig, {"pdf": pdf}))
@@ -316,8 +337,12 @@ class ContentService:
         wants: list[tuple[Any, ...]] = []
         release: list[tuple[str, str]] = []
         settled = 0
+        on_demand: set[str] = set()
         for paper in papers:
-            sigs = self.on_demand_signatures(paper, rows) if self.on_demand else self.signatures(paper, rows)
+            od = self._on_demand(paper.key)
+            if od:
+                on_demand.add(paper.key)
+            sigs = self.on_demand_signatures(paper, rows) if od else self.signatures(paper, rows)
             if sigs is None:
                 continue
             added = paper.record.get("date_added") or ""
@@ -328,12 +353,12 @@ class ContentService:
                         settled += 1
                         continue
                     wants.append((paper.key, stage, sig, added, 0.0))
-                elif self.on_demand and row[0] == st.HELD:
+                elif od and row[0] == st.HELD:
                     release.append((paper.key, stage))
-            for stage, sig, given in (self.on_demand_heavy(paper, rows) if self.on_demand else self.heavy(paper)):
+            for stage, sig, given in (self.on_demand_heavy(paper, rows) if od else self.heavy(paper)):
                 if rows.get((paper.key, stage), ("", None))[1] != sig:
                     wants.append((paper.key, stage, sig, added, 0.0, given))
-                elif self.on_demand and rows.get((paper.key, stage), ("", None))[0] == st.HELD:
+                elif od and rows.get((paper.key, stage), ("", None))[0] == st.HELD:
                     # Held before the paper was opened, and wanted as it is.
                     release.append((paper.key, stage))
         changed = (self.files.want(wants) if wants else 0) + settled
@@ -349,7 +374,9 @@ class ContentService:
             # opened paper: waits until something wants it.
             changed += self.files.hold(st.LOCAL + st.HEAVY, self.demanded)
         else:
-            changed += self.files.unhold(keep=waiting)
+            # Users' libraries' papers stay on demand: what an unopened one
+            # had left over waits.
+            changed += self.files.unhold(keep=waiting | (on_demand - self.demanded))
         changed += self.files.hold_keys(waiting)
         if waiting - self._waiting:
             # Out of the citation network now; backfill_one puts it back if
@@ -713,7 +740,7 @@ class ContentService:
     def open(self, key: str) -> None:
         """Someone is looking at this paper: what it is waiting on goes first.
         With a remote library this is also what starts its work at all."""
-        if self.on_demand:
+        if self._on_demand(key):
             if key not in self.demanded and self.catalogue.get(key) is not None:
                 self.demanded.add(key)
                 try:

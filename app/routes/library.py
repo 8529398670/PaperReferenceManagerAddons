@@ -19,7 +19,7 @@ from starlette.responses import FileResponse, Response
 from app.apidocs import QUERY, Reply, route
 from app.apidocs import Request as RequestType
 from app.core import sse
-from app.library.catalogue import Catalogue, public, sort_papers
+from app.library.catalogue import Catalogue, Paper, public, sort_papers
 from app.routes.helpers import PAGE_LIMIT_MESSAGE, PAGE_MAX, PAGE_OFFSET_MESSAGE, Paged, Refused, error, get_config
 
 MAX_EXISTS_QUERIES = 5000
@@ -27,8 +27,36 @@ PAGE_DEFAULT = 50
 TAG = "Library"
 
 
+def library_for(request: Request) -> Any:
+    """The library this request reads: its user's own (the Account screen),
+    else the server's. See app/library/registry.py."""
+    libraries = getattr(request.app.state, "libraries", None)
+    if libraries is None:
+        return request.app.state.library
+    actor = getattr(request.state, "actor", None)
+    service = libraries.for_user(actor.user if actor is not None else None)
+    # app.state.library is the server's library (tests point it elsewhere).
+    return request.app.state.library if service is libraries.server else service
+
+
 def get_catalogue(request: Request) -> Catalogue:
-    return request.app.state.library.catalogue
+    return library_for(request).catalogue
+
+
+def find_paper(request: Request, spec: str) -> tuple[Paper | None, Any]:
+    """A paper by key (or DOI, see Catalogue.find), and the library it was
+    found in: the user's own first, then the server's -- a shared list can
+    hold a paper the user's library does not. Never another user's library."""
+    own = library_for(request)
+    paper = own.catalogue.find(spec)
+    if paper is not None:
+        return paper, own
+    server = request.app.state.library
+    if server is not own:
+        paper = server.catalogue.find(spec)
+        if paper is not None:
+            return paper, server
+    return None, None
 
 
 Limit = Annotated[int, QUERY, Meta(ge=1, le=PAGE_MAX, description="Papers to return. Default 50.", extra={"error": PAGE_LIMIT_MESSAGE})]
@@ -199,7 +227,7 @@ class PaperReply(Reply):
     mcp="get_paper", read_only=True,
 )
 def get_paper(request: Request, body: PaperKey) -> PaperReply:
-    paper = get_catalogue(request).find(body.key)
+    paper, _ = find_paper(request, body.key)
     if paper is None:
         raise Refused(404, "no such paper in the library")
     return PaperReply(paper=public(paper, full=True))
@@ -214,10 +242,10 @@ def get_paper(request: Request, body: PaperKey) -> PaperReply:
 def get_pdf(request: Request, body: PaperKey) -> Response:
     """Only a path Zotero recorded for that paper is ever served, never one
     the request names."""
-    paper = get_catalogue(request).find(body.key)
+    paper, found_in = find_paper(request, body.key)
     if paper is None:
         raise Refused(404, "no such paper in the library")
-    library = get_catalogue(request).library
+    library = found_in.catalogue.library
     for name in paper.record.get("pdfs") or []:
         # A remote library's file is fetched the first time it is opened.
         path = library.ensure_pdf(name)
@@ -307,7 +335,9 @@ async def stream_library(request: Request) -> Response:
     refused = stream_refused(request)
     if refused is not None:
         return refused
-    hub: sse.Hub = request.app.state.library.hub
+    from starlette.concurrency import run_in_threadpool
+
+    hub: sse.Hub = (await run_in_threadpool(library_for, request)).hub
     client = hub.join(stream_owner(request))
     if client is None:
         return error(503, "too many live streams")

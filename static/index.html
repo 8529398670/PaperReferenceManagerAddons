@@ -1345,6 +1345,40 @@
             </div>
           </section>
 
+          <!-- Which library you read: the server's, or your own ZoteroWebDAV
+               server. Browser sessions only; see account_library.js. -->
+          <section class="card" id="account-library-panel" hidden>
+            <div class="card-body">
+              <h3 class="card-title d-flex flex-wrap align-items-center gap-2">
+                <span data-i18n="account.library_heading"></span>
+                <span id="account-library-badge" class="badge text-bg-secondary"></span>
+              </h3>
+              <p class="text-body-secondary" data-i18n="account.library_description"></p>
+              <p id="account-library-status" class="small mb-3"></p>
+              <form id="account-library-form" class="row g-3" autocomplete="off">
+                <div class="col-12 col-lg-6">
+                  <label for="account-library-url" class="form-label" data-i18n="account.library_url_label"></label>
+                  <input id="account-library-url" class="form-control" type="url" maxlength="300" required spellcheck="false"
+                         data-i18n-attr="placeholder:account.library_url_placeholder" />
+                </div>
+                <div class="col-12 col-md-6 col-lg-3">
+                  <label for="account-library-key" class="form-label" data-i18n="account.library_key_label"></label>
+                  <input id="account-library-key" class="form-control" type="password" maxlength="300" spellcheck="false"
+                         autocomplete="new-password" />
+                </div>
+                <div class="col-12 col-md-6 col-lg-3">
+                  <label for="account-library-name" class="form-label" data-i18n="account.library_name_label"></label>
+                  <input id="account-library-name" class="form-control" maxlength="64" spellcheck="false"
+                         data-i18n-attr="placeholder:account.library_name_placeholder" />
+                </div>
+                <div class="col-12 d-flex flex-wrap gap-2">
+                  <button type="submit" id="account-library-save" class="btn btn-primary" data-i18n="account.library_save_button"></button>
+                  <button type="button" id="account-library-clear" class="btn btn-outline-secondary" data-i18n="account.library_clear_button" hidden></button>
+                </div>
+              </form>
+            </div>
+          </section>
+
           <!-- A login link for your own account, to sign in on another device.
                Any signed-in user may mint one; see Api.createMyLoginLink. -->
           <section class="card">
@@ -2243,6 +2277,7 @@
   <script src="/js/sessions.js"></script>
   <script src="/js/about.js"></script>
   <script src="/js/two_factor.js"></script>
+  <script src="/js/account_library.js"></script>
   <script src="/js/logs.js"></script>
   <script src="/js/jobs.js"></script>
   <script src="/js/settings.js"></script>

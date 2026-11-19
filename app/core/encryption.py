@@ -187,6 +187,7 @@ PURPOSE_COOKIE = "cookie"  # the session cookie (app/core/security.py)
 PURPOSE_TOTP = "totp"  # two-factor secrets, inside the user record
 PURPOSE_FILES = "files"  # each uploaded file's own key, inside its record
 PURPOSE_WEBHOOKS = "webhooks"  # each webhook's signing secret, inside its record
+PURPOSE_LIBRARY = "library"  # a user's own library address and key, inside the user record
 
 
 def subkey(key_hex: str, purpose: str) -> str:

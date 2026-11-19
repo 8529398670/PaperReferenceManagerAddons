@@ -33,6 +33,8 @@ from app.review.service import DEFAULT, ReviewService, SetupError
 from app.routes.boards import actor_name
 from app.routes.helpers import Refused
 from app.routes.logs import audit
+from app.routes.content import missing_scope
+from app.routes.library import find_paper
 
 TAG = "Screener"
 MAX_TEST_CHARS = 400_000
@@ -585,7 +587,7 @@ class ReviewPaperReply(Reply):
     mcp="get_review", read_only=True,
 )
 def review_paper(request: Request, body: ReviewKey) -> ReviewPaperReply:
-    paper = request.app.state.library.catalogue.find(body.key)
+    paper = find_paper(request, body.key)[0]
     if paper is None:
         raise Refused(404, "paper_not_found")
     found = request.app.state.review_view.paper(paper.key)
@@ -660,7 +662,7 @@ class MissingReviewReply(Reply):
 )
 def review_missing(request: Request, body: Empty) -> MissingReviewReply:
     missing = request.app.state.review_missing
-    snapshot = missing.snapshot(request.app.state.content.skipped())
+    snapshot = missing.snapshot(request.app.state.content.skipped(), missing_scope(request))
     judged, rev = judged_papers(request)
     rules = get_review(request).rules
     content = request.app.state.content

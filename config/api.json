@@ -531,6 +531,10 @@
           "is_owner": {
             "type": "boolean"
           },
+          "library": {
+            "$ref": "#/components/schemas/MyLibrary",
+            "description": "Which library you read: your own ZoteroWebDAV server or the server's (see POST /api/account/library)."
+          },
           "login_link": {
             "description": "Your own live login link, or null.",
             "oneOf": [
@@ -658,6 +662,7 @@
           "display_name",
           "id",
           "is_owner",
+          "library",
           "login_link",
           "logs_enabled",
           "logs_ui_clicks",
@@ -750,6 +755,51 @@
           "twins",
           "unpaired_local",
           "unpaired_server"
+        ],
+        "type": "object"
+      },
+      "MyLibrary": {
+        "properties": {
+          "error": {
+            "description": "Why the last look at your library failed. Empty when it did not.",
+            "type": "string"
+          },
+          "key_set": {
+            "description": "Whether an API key is stored. The key itself is never sent back.",
+            "type": "boolean"
+          },
+          "last_sync": {
+            "description": "When your library was last read, in Unix seconds. 0: not yet.",
+            "type": "number"
+          },
+          "name": {
+            "description": "The WebDAV library read on that server. Empty: your default one.",
+            "type": "string"
+          },
+          "own": {
+            "description": "Whether you read your own ZoteroWebDAV server. false: the server's library.",
+            "type": "boolean"
+          },
+          "papers": {
+            "type": "integer"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "url": {
+            "description": "Your server's address. Empty when own is false.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "key_set",
+          "last_sync",
+          "name",
+          "own",
+          "papers",
+          "ready",
+          "url"
         ],
         "type": "object"
       },
@@ -2173,6 +2223,142 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/account/library": {
+      "post": {
+        "description": "Read your ZoteroWebDAV server instead of this server's library: its address, an API key from it, and optionally which WebDAV library. The address and key are checked with one read before they are kept. Lists, review and what is worked out for each paper stay shared.",
+        "operationId": "post_api_account_library",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "key": {
+                    "description": "An API key from that server (id.secret). Empty keeps the one stored.",
+                    "maxLength": 300,
+                    "type": "string"
+                  },
+                  "library": {
+                    "description": "Which of your WebDAV libraries to read. Empty: your default one.",
+                    "maxLength": 64,
+                    "type": "string"
+                  },
+                  "url": {
+                    "description": "Your ZoteroWebDAV server's address, https://.",
+                    "maxLength": 300,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "url"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyLibrary"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Read your own library",
+        "tags": [
+          "Account"
+        ]
+      }
+    },
+    "/api/account/library/clear": {
+      "post": {
+        "description": "Forget your own library's address and key and read this server's library again.",
+        "operationId": "post_api_account_library_clear",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyLibrary"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Read the server's library again",
+        "tags": [
+          "Account"
+        ]
+      }
+    },
     "/api/account/login-link": {
       "post": {
         "description": "A link that signs your own account in on a browser or another device. An API key may ask only if your account let it, from a browser session (POST /api/keys/{key_id}/sign-in); its link works once, for at most 15 minutes.",

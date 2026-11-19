@@ -38,6 +38,7 @@ from app.extras.crawl import Crawler
 from app.extras.searches import SavedSearches
 from app.extras.summaries import Summaries
 from app.library.service import LibraryService
+from app.library.registry import LibraryRegistry
 from app.review.missing import MissingReview
 from app.review.service import ReviewService
 from app.review.view import ReviewView
@@ -91,12 +92,15 @@ def build_app(
     # app/boards/.
     library = LibraryService(cfg)
     registry.register("library-sync", housekeeping.HOUR_SECONDS, library.sync_job)
+    # And every user's own library (the Account screen): a request reads its
+    # user's. The content queue reads them all at once (libraries.union).
+    libraries = LibraryRegistry(cfg, settings, store, library)
     boards = BoardService(store, library.catalogue)
     registry.register("lists-purge", housekeeping.HOUR_SECONDS, boards.purge_job)
     # Each paper's derived content, queued and filled one paper at a time.
     # See app/content/.
     content = ContentService(
-        cfg.library.content_dir, cfg.library.index_path, library.catalogue, store,
+        cfg.library.content_dir, cfg.library.index_path, libraries.union, store,
         cfg.config_file.parent / "modalities.yaml", lambda: settings.get().library,
     )
     def after_sync() -> None:
@@ -109,9 +113,11 @@ def build_app(
             print(f"[lists] auto-add failed: {error!r}", flush=True)
 
     library.after_sync = after_sync
+    libraries.after_sync = lambda: setattr(content, "dirty", True)
     boards.content = content
     # The scanned PDFs' text, from the worker's OCR, searched like Zotero's.
     library.catalogue.text_fallback = content.ocr_text
+    libraries.text_fallback = content.ocr_text
     # The Figures screen (picks, matches, thumbnails) and the Code / Datasets
     # screens with the GitHub / OSF / archive enrichment behind them.
     figures = Figures(content, store, cfg.config_file.parent / "method-images.txt")
@@ -134,11 +140,11 @@ def build_app(
 
     boards.on_changed = candidates_changed
     figures.on_picks = candidates_changed
-    screens.publish = library.publish
-    review_missing.publish = library.publish
+    screens.publish = libraries.publish
+    review_missing.publish = libraries.publish
 
     def publish(name: str, data: dict) -> None:
-        library.publish(name, data)
+        libraries.publish(name, data)
         screens.heard(name, data)
         # A paper's content moved on: the Library list shows its Code, Datasets and badges.
         boards.library_stale()
@@ -164,6 +170,7 @@ def build_app(
             logger.system(logs.LEVEL_WARN, "secret key moved to secret.key", {"config": str(cfg.config_file), "secret": str(cfg.secret_file)})
         watcher = asyncio.create_task(config_watch(settings))
         library.start(settings)
+        libraries.start()
         content.start()
         screens.start()
         review_missing.start()
@@ -178,6 +185,7 @@ def build_app(
             # on_stop). Jobs next, since they write to the log; the log last.
             watcher.cancel()
             await library.stop()
+            await libraries.stop()
             await content.stop()
             await screens.stop()
             await review_missing.stop()
@@ -188,6 +196,7 @@ def build_app(
             await registry.stop()
             log_hub.close()
             await run_in_threadpool(library.close)
+            await run_in_threadpool(libraries.close)
             await run_in_threadpool(content.close)
             logger.on_flushed = None
             logger.system(logs.LEVEL_INFO, "server stopped")
@@ -223,6 +232,7 @@ def build_app(
     app.state.jobs = registry
     app.state.log_hub = log_hub
     app.state.library = library
+    app.state.libraries = libraries
     app.state.boards = boards
     app.state.content = content
     app.state.figures = figures

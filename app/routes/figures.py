@@ -20,6 +20,7 @@ from app.apidocs import QUERY, Reply, route
 from app.apidocs import Request as RequestType
 from app.content.figures import CHIPS, SORTS, VIEWS, Figures, split_id
 from app.routes.helpers import PAGE_LIMIT_MESSAGE, PAGE_OFFSET_MESSAGE, Paged, Refused
+from app.routes.library import find_paper, get_catalogue
 
 TAG = "Figures"
 PAGE_MAX_PAPERS = 200
@@ -83,8 +84,7 @@ class FiguresReply(Paged):
 )
 def list_figures(request: Request, body: FiguresQuery) -> FiguresReply:
     found = get_figures(request).listing(
-        body.view, body.sort, body.dir == "desc", body.chip, body.mod, body.term, body.q[:200], body.offset, body.limit,
-    )
+        body.view, body.sort, body.dir == "desc", body.chip, body.mod, body.term, body.q[:200], body.offset, body.limit, catalogue=get_catalogue(request))
     return FiguresReply(**found)
 
 
@@ -200,7 +200,7 @@ class ImageQuery(RequestType):
 )
 def figure_image(request: Request, body: ImageQuery) -> Response:
     figures = get_figures(request)
-    paper = request.app.state.library.catalogue.find(body.key)
+    paper = find_paper(request, body.key)[0]
     if paper is None:
         raise Refused(404, "no such paper in the library")
     if body.n == 0:

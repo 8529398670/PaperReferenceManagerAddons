@@ -120,20 +120,20 @@ def author_row(author: dict[str, Any]) -> list[Any]:
     ]
 
 
-def missing_workbook(pool: Any, searches: Any, skipped: set[str], proxy_url: str, top: int = 1000) -> bytes:
+def missing_workbook(pool: Any, searches: Any, skipped: set[str], proxy_url: str, top: int = 1000, scope: Any = None) -> bytes:
     """The old `prma missing` workbook, from the live pool: Top N by
     connections, Newest, Cited-by, the top authors, and one sheet per saved
     search (its matches by connections, at most top)."""
     sheets: list[tuple[str, Sequence[str], Sequence[Sequence[Any]]]] = [
-        (f"Top {top} by connections", WORK_HEADER, [work_row(w, proxy_url) for w in pool.ranked("conn", top, skipped)]),
-        (f"Top {top} newest", WORK_HEADER, [work_row(w, proxy_url) for w in pool.ranked("newest", top, skipped)]),
-        (f"Top {top} cited-by", WORK_HEADER, [work_row(w, proxy_url) for w in pool.ranked("cited_by", top, skipped)]),
+        (f"Top {top} by connections", WORK_HEADER, [work_row(w, proxy_url) for w in pool.ranked("conn", top, skipped, scope)]),
+        (f"Top {top} newest", WORK_HEADER, [work_row(w, proxy_url) for w in pool.ranked("newest", top, skipped, scope)]),
+        (f"Top {top} cited-by", WORK_HEADER, [work_row(w, proxy_url) for w in pool.ranked("cited_by", top, skipped, scope)]),
     ]
-    authors = pool.authors(skipped)
+    authors = pool.authors(skipped, scope)
     sheets.append((f"Top {len(authors)} authors", AUTHOR_HEADER, [author_row(a) for a in authors]))
     if searches is not None:
         cache: dict[str, set[int]] = {}
         for search in searches.all():
-            rows, _, _ = searches.run_missing(search, top, cache=cache)
+            rows, _, _ = searches.run_missing(search, top, cache=cache, scope=scope)
             sheets.append((search["name"], WORK_HEADER, [work_row(w, proxy_url) for w in rows]))
     return workbook(sheets)

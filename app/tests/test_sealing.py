@@ -72,7 +72,7 @@ class SealingTest(unittest.TestCase):
         for other in (encryption.subkey(self.key, encryption.PURPOSE_LOGS), self.key):
             with self.assertRaises(encryption.CipherTextError):
                 encryption.xchacha_decrypt_string(other, cookie)
-        purposes = [encryption.PURPOSE_DB, encryption.PURPOSE_LOGS, encryption.PURPOSE_COOKIE, encryption.PURPOSE_TOTP, encryption.PURPOSE_FILES, encryption.PURPOSE_WEBHOOKS]
+        purposes = [encryption.PURPOSE_DB, encryption.PURPOSE_LOGS, encryption.PURPOSE_COOKIE, encryption.PURPOSE_TOTP, encryption.PURPOSE_FILES, encryption.PURPOSE_WEBHOOKS, encryption.PURPOSE_LIBRARY]
         keys = {encryption.subkey(self.key, purpose) for purpose in purposes} | {self.key}
         self.assertEqual(len(keys), len(purposes) + 1)
         self.assertEqual(encryption.subkey(VECTOR_KEY, encryption.PURPOSE_DB), VECTOR_DB)

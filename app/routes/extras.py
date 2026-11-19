@@ -17,6 +17,8 @@ from app.extras.searches import SavedSearches, SearchError
 from app.library.catalogue import public
 from app.routes.boards import actor_name
 from app.routes.helpers import Refused
+from app.routes.content import missing_scope
+from app.routes.library import get_catalogue
 
 SEARCH_TAG = "Saved searches"
 MISSING_TAG = "Missing pool"
@@ -183,19 +185,19 @@ class RunReply(Reply):
 
 def run_search(request: Request, search: dict[str, Any], pool: str, limit: int) -> RunReply:
     saved = get_searches(request)
-    catalogue = request.app.state.library.catalogue
+    catalogue = get_catalogue(request)
     lib: list[dict[str, Any]] = []
     lib_total = 0
     lib_groups: dict[str, int] = {}
     if pool in ("library", "both"):
-        keys, lib_groups = saved.run_library(search)
+        keys, lib_groups = saved.run_library(search, catalogue)
         lib_total = len(keys)
         lib = [public(catalogue.get(k)) for k in keys[:limit] if catalogue.get(k) is not None]
     miss: list[dict[str, Any]] = []
     miss_total = 0
     miss_groups: dict[str, int] = {}
     if pool in ("missing", "both"):
-        miss, miss_total, miss_groups = saved.run_missing(search, limit)
+        miss, miss_total, miss_groups = saved.run_missing(search, limit, scope=missing_scope(request))
     return RunReply(search=search, library=lib, library_total=lib_total, library_groups=lib_groups, missing=miss,
                     missing_total=miss_total, missing_groups=miss_groups)
 
@@ -290,7 +292,8 @@ class MissingExportQuery(RequestType):
 )
 def missing_export(request: Request, body: MissingExportQuery) -> Response:
     content = request.app.state.content
-    data = xlsx.missing_workbook(content.pool, get_searches(request) if body.searches else None, content.skipped(), proxy_url(request), body.top)
+    data = xlsx.missing_workbook(content.pool, get_searches(request) if body.searches else None, content.skipped(), proxy_url(request), body.top,
+                                 scope=missing_scope(request))
     return attachment(data, "missing")
 
 
@@ -330,7 +333,7 @@ class LogReply(Reply):
 def check_log(request: Request, body: LogBody) -> LogReply:
     if not body.text.strip():
         raise Refused(400, "send the log's text")
-    catalogue = request.app.state.library.catalogue
+    catalogue = get_catalogue(request)
     result = logcheck.run(body.text, body.name, None if body.list_only else catalogue.match)
     return LogReply(**result)
 
@@ -396,7 +399,9 @@ def start_crawl(request: Request, body: CrawlBody) -> CrawlStatusReply:
     if not keywords(search):
         raise Refused(400, "that search has no positive terms to score with")
     crawler = request.app.state.crawler
-    if not crawler.start(search, settings, actor_name(request)):
+    scope = missing_scope(request)
+    identity = None if scope is None else scope[1:]
+    if not crawler.start(search, settings, actor_name(request), get_catalogue(request), identity):
         raise Refused(409, "a crawl is already running")
     return status_reply(request)
 
@@ -441,7 +446,8 @@ def crawl_result(request: Request, body: CrawlResultQuery) -> CrawlResultReply:
     if result is None:
         return CrawlResultReply(run=None, works=[], total=0)
     rows = result.get(f"{body.view}_rows") or []
-    wids, dois, titles = request.app.state.content.pool.library
+    scope = missing_scope(request)
+    wids, dois, titles = request.app.state.content.pool.library if scope is None else scope[1:]
     from app.search import query as q
 
     for row in rows:

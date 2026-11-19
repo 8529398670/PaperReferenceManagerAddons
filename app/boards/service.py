@@ -41,7 +41,7 @@ class BoardService:
         # The built-in Library list as last built: {"record", "view"}. Building
         # it reads every paper's scan results, so it is kept until a list,
         # Zotero or a paper's content changes (library_stale).
-        self._library: dict[str, Any] = {}
+        self._library: dict[Any, Any] = {}
         # One auto_add at a time: two syncs close together must not both add.
         self._auto_add_lock = threading.Lock()
 
@@ -146,7 +146,7 @@ class BoardService:
 
     # -- the built-in Library list -------------------------------------------------
 
-    def library_record(self) -> dict[str, Any]:
+    def library_record(self, catalogue: Any = None) -> dict[str, Any]:
         """Every paper in Zotero as a list record, newest added first, locked.
 
         A paper is the same paper on every list, so each row says what the
@@ -160,12 +160,16 @@ class BoardService:
 
         Its rows are what an add would make, so copying from it (import_list
         from "library") lands them like any other list's. Kept until stale:
-        callers only read it."""
-        cached = self._library.get("record")
+        callers only read it.
+
+        catalogue is the reader's library (app/library/registry.py), each
+        kept apart; None is the server's."""
+        catalogue = catalogue if catalogue is not None else self.catalogue
+        cached = self._library.get(id(catalogue))
         if cached is not None:
             return cached
         doc = board.default_doc()
-        papers = sorted(self.catalogue.all(), key=lambda paper: paper.record.get("date_added") or "", reverse=True)
+        papers = sorted(catalogue.all(), key=lambda paper: paper.record.get("date_added") or "", reverse=True)
         items = []
         for paper in papers:
             record = paper.record
@@ -193,14 +197,14 @@ class BoardService:
                 row.setdefault("fields", {}).setdefault(column["id"], "")
         doc.setdefault("options", {})["fold_cols"] = []
         record = {"slug": LIBRARY, "name": LIBRARY_NAME, "rev": 0, "locked": True, "builtin": True, "doc": doc}
-        self._library = {"record": record}
+        self._library[id(catalogue)] = record
         return record
 
-    def find(self, slug: str) -> dict[str, Any]:
-        """A list to read: the built-in Library, or a stored one (following a
-        rename). Raises BoardError."""
+    def find(self, slug: str, catalogue: Any = None) -> dict[str, Any]:
+        """A list to read: the built-in Library (of catalogue, the reader's
+        library), or a stored one (following a rename). Raises BoardError."""
         if slug == LIBRARY:
-            return self.library_record()
+            return self.library_record(catalogue)
         return boards.find_board(self.store, slug)
 
     # -- the other lists, as ops see them ----------------------------------------
@@ -399,16 +403,18 @@ class BoardService:
 
     # -- the rows as the page draws them ---------------------------------------
 
-    def papers_for(self, doc: dict[str, Any]) -> dict[str, Any]:
+    def papers_for(self, doc: dict[str, Any], catalogue: Any = None) -> dict[str, Any]:
         """Per row key, what the library knows now: whether it is there, has a
         PDF, has searchable text, and what of its content is ready (the badges).
         The row itself keeps what it was added with, so a paper deleted from
-        Zotero still reads right on the list."""
+        Zotero still reads right on the list. catalogue is the reader's
+        library (app/library/registry.py); None is the server's."""
+        catalogue = catalogue if catalogue is not None else self.catalogue
         out = {}
         rows = (doc.get("items") or []) + (doc.get("staging") or [])
         badges = self.content.badges([row.get("key", "") for row in rows]) if self.content is not None else {}
         for row in rows:
-            paper = self.catalogue.get(row.get("key", ""))
+            paper = catalogue.get(row.get("key", ""))
             if paper is None:
                 out[row["key"]] = {"in_library": False}
             else:
@@ -422,11 +428,12 @@ class BoardService:
                 }
         return out
 
-    def view(self, record: dict[str, Any]) -> dict[str, Any]:
-        if record.get("builtin") and self._library.get("record") is record and "view" in self._library:
-            return self._library["view"]
+    def view(self, record: dict[str, Any], catalogue: Any = None) -> dict[str, Any]:
+        builtin = record.get("builtin") and any(cached is record for cached in self._library.values() if isinstance(cached, dict))
+        if builtin and ("view", id(record)) in self._library:
+            return self._library[("view", id(record))]
         doc = record["doc"]
-        out = {**boards.summary(record), "doc": doc, "papers": self.papers_for(doc)}
-        if record.get("builtin") and self._library.get("record") is record:
-            self._library["view"] = out
+        out = {**boards.summary(record), "doc": doc, "papers": self.papers_for(doc, catalogue)}
+        if builtin:
+            self._library[("view", id(record))] = out
         return out

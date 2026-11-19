@@ -164,6 +164,25 @@ class Remote:
             raise RemoteError("the remote library answered something unexpected")
         return data
 
+    def post_bytes(self, path: str, params: dict[str, Any], data: bytes, timeout: int = TIMEOUT_SECONDS) -> dict[str, Any]:
+        """A raw upload (mend.py's file pieces): bytes in, JSON out."""
+        headers = {"Authorization": "Bearer " + self._key, "Accept": "application/json", "User-Agent": USER_AGENT,
+                   "Content-Type": "application/octet-stream"}
+        request = urllib.request.Request(self.url(path, params), data=data, headers=headers, method="POST")
+        try:
+            status, _, answer = self.opener(request, timeout)
+        except (OSError, ValueError) as error:
+            raise RemoteError(f"the remote library could not be reached ({_describe(error)})") from None
+        if status != 200:
+            error = _status_error(status)
+            error.status = status  # type: ignore[attr-defined]
+            raise error
+        try:
+            reply = json.loads(answer)
+        except ValueError:
+            raise RemoteError("the remote library answered something that is not JSON") from None
+        return reply if isinstance(reply, dict) else {}
+
     def get_json(self, path: str, params: dict[str, Any] | None = None, timeout: int = TIMEOUT_SECONDS, gzipped: bool = False) -> dict[str, Any]:
         body = self.get(path, params, timeout=timeout, gzipped=gzipped)
         try:
@@ -275,6 +294,10 @@ class RemoteLibrary:
         # changes request open (wait=) -- both from newer servers.
         self._files_stamp: int | None = None
         self._waits = False
+        # False: never hold a request open, even when the server can -- a
+        # user's own library (app/library/registry.py) asks at poll_seconds,
+        # so many of them cannot fill the thread pool with waiting requests.
+        self.long_poll = True
         self._polled_at = 0.0
         self._stamp: tuple[Any, ...] | None = None
         self.clock: Callable[[], float] = time.monotonic
@@ -343,7 +366,7 @@ class RemoteLibrary:
             if snapshot is not None:
                 return snapshot
         restarted = False
-        wait = self._waits and have_items
+        wait = self._waits and have_items and self.long_poll
         while True:
             params: dict[str, Any] = {"since": pulled["rev"], "limit": PAGE_LIMIT}
             if wait:
@@ -470,7 +493,7 @@ class RemoteLibrary:
             if not self._loaded:
                 self._load_mirror()
             now = self.clock()
-            if self._stamp is not None and not self._waits and now - self._polled_at < self.poll_seconds:
+            if self._stamp is not None and not (self._waits and self.long_poll) and now - self._polled_at < self.poll_seconds:
                 return self._stamp
             self._polled_at = now
             full_every = ATTACHMENTS_FULL_SECONDS if self._files_stamp is not None else ATTACHMENTS_REFRESH_SECONDS

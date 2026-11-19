@@ -16,6 +16,7 @@ from app.apidocs import Reply, route
 from app.apidocs import Request as RequestType
 from app.content.screens import Screens
 from app.extras import xlsx
+from app.routes.library import get_catalogue
 from app.routes.helpers import Refused
 
 TAG = "Code and datasets"
@@ -23,6 +24,13 @@ MAX_SHEETS = 8
 MAX_ROWS = 50_000
 MAX_COLUMNS = 60
 XLSX = xlsx.XLSX
+
+
+def mine(request: Request, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The rows of the papers in the viewer's library (app/library/registry.py):
+    the results are everyone's, the list of papers is theirs."""
+    catalogue = get_catalogue(request)
+    return [row for row in rows if catalogue.get(row.get("key", "")) is not None]
 
 
 def get_screens(request: Request) -> Screens:
@@ -54,7 +62,7 @@ class CodeReply(Reply):
 )
 def list_code(request: Request, body: Empty) -> CodeReply:
     enrich = request.app.state.settings.get().enrich
-    return CodeReply(papers=get_screens(request).code_rows(), enrich={"github": bool(enrich.github_token), "osf": bool(enrich.osf_token)})
+    return CodeReply(papers=mine(request, get_screens(request).code_rows()), enrich={"github": bool(enrich.github_token), "osf": bool(enrich.osf_token)})
 
 
 class DatasetsReply(Reply):
@@ -75,7 +83,7 @@ class DatasetsReply(Reply):
     mcp="list_datasets", read_only=True,
 )
 def list_datasets(request: Request, body: Empty) -> DatasetsReply:
-    return DatasetsReply(papers=get_screens(request).dataset_rows())
+    return DatasetsReply(papers=mine(request, get_screens(request).dataset_rows()))
 
 
 class Sheet(RequestType):  # noqa: D101 -- one sheet of an export

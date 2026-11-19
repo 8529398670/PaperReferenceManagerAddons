@@ -56,6 +56,8 @@ An error reply is a JSON object whose `error` says what went wrong.
 
 | Method | Path | Summary | Who may call |
 |---|---|---|---|
+| POST | [`/api/account/library`](#post-apiaccountlibrary) | Read your own library | browser session only, anyone signed in |
+| POST | [`/api/account/library/clear`](#post-apiaccountlibraryclear) | Read the server's library again | browser session only, anyone signed in |
 | POST | [`/api/account/login-link`](#post-apiaccountlogin-link) | A login link for yourself | browser session or API key, anyone signed in |
 | POST | [`/api/account/login-link/cancel`](#post-apiaccountlogin-linkcancel) | Stop your own login link working | browser session or API key, anyone signed in |
 | POST | [`/api/account/rename`](#post-apiaccountrename) | Rename your account | browser session or API key, anyone signed in |
@@ -76,6 +78,51 @@ An error reply is a JSON object whose `error` says what went wrong.
 | POST | [`/api/logs/events`](#post-apilogsevents) | Record what happened on the page | browser session or API key, anyone signed in |
 | GET | [`/api/me`](#get-apime) | Who am I | browser session or API key, anyone signed in |
 | GET | [`/api/team`](#get-apiteam) | List team | browser session or API key, anyone signed in |
+
+### POST /api/account/library
+
+Read your own library
+
+Read your ZoteroWebDAV server instead of this server's library: its address, an API key from it, and optionally which WebDAV library. The address and key are checked with one read before they are kept. Lists, review and what is worked out for each paper stay shared.
+
+|  |  |
+|---|---|
+| Who may call | browser session only, anyone signed in |
+| Errors | 400, 401, 403, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `key` | string | no | at most 300 characters | An API key from that server (id.secret). Empty keeps the one stored. |
+| `library` | string | no | at most 64 characters | Which of your WebDAV libraries to read. Empty: your default one. |
+| `url` | string | yes | at most 300 characters | Your ZoteroWebDAV server's address, https://. |
+
+**Reply 200**: Success
+
+[`MyLibrary`](#mylibrary).
+
+### POST /api/account/library/clear
+
+Read the server's library again
+
+Forget your own library's address and key and read this server's library again.
+
+|  |  |
+|---|---|
+| Who may call | browser session only, anyone signed in |
+| Errors | 400, 401, 403, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+
+**Reply 200**: Success
+
+[`MyLibrary`](#mylibrary).
 
 ### POST /api/account/login-link
 
@@ -4734,6 +4781,7 @@ The shapes the routes above refer to by name.
 | `display_name` | string | yes |  |  |
 | `id` | integer | yes |  |  |
 | `is_owner` | boolean | yes |  |  |
+| `library` | [`MyLibrary`](#mylibrary) | yes |  | Which library you read: your own ZoteroWebDAV server or the server's (see POST /api/account/library). |
 | `login_link` | [`LoginLink`](#loginlink) or null | yes |  | Your own live login link, or null. |
 | `logs_enabled` | boolean | yes |  |  |
 | `logs_ui_clicks` | boolean | yes |  |  |
@@ -4777,6 +4825,19 @@ The shapes the routes above refer to by name.
 | `twins` | integer | yes |  |  |
 | `unpaired_local` | integer | yes |  |  |
 | `unpaired_server` | integer | yes |  |  |
+
+### MyLibrary
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `error` | string | yes |  | Why the last look at your library failed. Empty when it did not. |
+| `key_set` | boolean | yes |  | Whether an API key is stored. The key itself is never sent back. |
+| `last_sync` | number | yes |  | When your library was last read, in Unix seconds. 0: not yet. |
+| `name` | string | yes |  | The WebDAV library read on that server. Empty: your default one. |
+| `own` | boolean | yes |  | Whether you read your own ZoteroWebDAV server. false: the server's library. |
+| `papers` | integer | yes |  |  |
+| `ready` | boolean | yes |  |  |
+| `url` | string | yes |  | Your server's address. Empty when own is false. |
 
 ### NewAPIKey
 

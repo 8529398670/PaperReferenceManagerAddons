@@ -17,6 +17,7 @@ from app.extras import xlsx
 from app.extras.summaries import DISPLAY, SECTION_KEYS, Summaries
 from app.routes.boards import actor_name
 from app.routes.helpers import Refused
+from app.routes.library import find_paper
 
 TAG = "Summaries"
 SHEETS_TAG = "Google Sheets"
@@ -76,7 +77,7 @@ class PaperReply(Reply):
     mcp="get_paper_summaries", read_only=True,
 )
 def paper_summaries(request: Request, body: PaperQuery) -> PaperReply:
-    if not body.key or request.app.state.library.catalogue.get(body.key) is None:
+    if not body.key or find_paper(request, body.key)[0] is None:
         raise Refused(404, "no such paper")
     return PaperReply(summaries=get_summaries(request).of_paper(body.key))
 
@@ -158,7 +159,7 @@ class PutBody(RequestType):
     mcp_http="The page's undo; an agent asks for the summary again with summarize_papers.",
 )
 def put_summary(request: Request, body: PutBody) -> DeleteReply:
-    if request.app.state.library.catalogue.get(body.key) is None:
+    if find_paper(request, body.key)[0] is None:
         raise Refused(404, "no such paper")
     record = {k: body.summary.get(k) for k in ("hashtags", "summary", "provider", "model", "at", "by", "cut", "legacy") if k in body.summary}
     if not isinstance(record.get("summary"), str) or not record["summary"]:

@@ -22,6 +22,7 @@ from app.apidocs import Request as RequestType
 from app.boards import cite, gsheet, ops, refparse
 from app.boards import store as boards
 from app.boards.service import LIBRARY, BoardService
+from app.routes.library import get_catalogue
 from app.core import sse
 from app.core.logs import KIND_ADMIN
 from app.core.security import actor_from
@@ -92,7 +93,7 @@ def create_list(request: Request, body: CreateList) -> ListReply:
         doc = None
         source = ""
         if body.from_:
-            original = get_service(request).find(body.from_)
+            original = get_service(request).find(body.from_, get_catalogue(request))
             source = original["slug"]
             doc = boards.copy_doc(original["doc"], body.keys)
         elif body.keys is not None:
@@ -192,13 +193,13 @@ def undelete_list(request: Request, body: SlugPath) -> ListReply:
 def get_list(request: Request, body: SlugPath) -> ListReply:
     service = get_service(request)
     try:
-        record = service.find(body.slug)
+        record = service.find(body.slug, get_catalogue(request))
     except boards.BoardError as refusal:
         raise board_refused(refusal) from None
-    return ListReply(list=service.view(record))
+    return ListReply(list=service.view(record, get_catalogue(request)))
 
 
-def run_ops(service: BoardService, slug: str, batch: Any, user_name: str, if_rev: int | None, dry_run: bool) -> dict[str, Any]:
+def run_ops(service: BoardService, slug: str, batch: Any, user_name: str, if_rev: int | None, dry_run: bool, catalogue: Any = None) -> dict[str, Any]:
     """Raises BoardError."""
     if slug == LIBRARY:
         raise boards.BoardError("the Library is read-only: add its papers to a list instead", 403)
@@ -215,7 +216,7 @@ def run_ops(service: BoardService, slug: str, batch: Any, user_name: str, if_rev
         body["rev"] = record.get("rev", applied.rev) if record else applied.rev
     record = boards.get_board(service.store, slug)
     if record is not None:
-        view = service.view(record) if not dry_run else {**boards.summary(record), "doc": applied.doc, "papers": service.papers_for(applied.doc)}
+        view = service.view(record, catalogue) if not dry_run else {**boards.summary(record), "doc": applied.doc, "papers": service.papers_for(applied.doc, catalogue)}
         body["list"] = view
     return body
 
@@ -262,7 +263,7 @@ def without_list(call: Call, body: Any, serve: Callable[[Any, Any], Any]) -> dic
 )
 def post_ops(request: Request, body: RunOps) -> OpsReply:
     try:
-        answer = run_ops(get_service(request), body.slug, body.ops, actor_name(request), body.if_rev, body.dry_run)
+        answer = run_ops(get_service(request), body.slug, body.ops, actor_name(request), body.if_rev, body.dry_run, get_catalogue(request))
     except boards.BoardError as refusal:
         raise board_refused(refusal) from None
     return OpsReply(**answer)
@@ -411,7 +412,7 @@ def get_rows(request: Request, body: GetRows) -> RowsReply:
     tags = [t.strip() for t in body.tags.split(",") if t.strip()]
     service = get_service(request)
     try:
-        record = service.find(body.slug)
+        record = service.find(body.slug, get_catalogue(request))
     except boards.BoardError as refusal:
         raise board_refused(refusal) from None
     doc = record["doc"]
@@ -432,7 +433,7 @@ def export_csv(service: BoardService, record: dict[str, Any], default_style: str
 def csv_response(request: Request, slug: str, keep: set[str] | None) -> Response:
     service = get_service(request)
     try:
-        record = service.find(slug)
+        record = service.find(slug, get_catalogue(request))
     except boards.BoardError as refusal:
         raise board_refused(refusal) from None
     text = export_csv(service, record, get_config(request).library.cite_style, keep)
@@ -558,7 +559,7 @@ def post_restore(request: Request, body: RestoreBody) -> RestoreReply:
     # A restore is how the page undoes its wide changes, so it travels like them.
     service.mirror(slug, before, after, name)
     record = boards.get_board(service.store, slug)
-    return RestoreReply(ok=True, rev=new_rev, list=service.view(record) if record else None)
+    return RestoreReply(ok=True, rev=new_rev, list=service.view(record, get_catalogue(request)) if record else None)
 
 
 class LockBody(RequestType):

@@ -146,3 +146,25 @@ class ApplyTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CollectionTest(unittest.TestCase):
+    def test_collections_pair_by_name_under_their_parent(self) -> None:
+        C = mend.Collection
+        local = {c.key: c for c in (C("REALTOP1", "Reading"), C("REALSUB1", "Méthodes", "REALTOP1"),
+                                     C("REALSUB2", "Méthodes", "REALOTH1"), C("REALOTH1", "Other"),
+                                     C("REALTWO1", "Twice"), C("REALTWO2", "twice"))}
+        server = {c.key: c for c in (C("MADETOP1", "reading"), C("MADESUB1", "Méthodes", "MADETOP1"),
+                                      C("REALOTH1", "Other"), C("MADESUB2", "Méthodes", "REALOTH1"),
+                                      C("MADETWO1", "Twice"), C("MADENEW1", "Only there"))}
+        moves, counts = mend.plan_collections(local, server)
+        self.assertEqual(sorted((m["from"], m["to"]) for m in moves),
+                         [("MADESUB1", "REALSUB1"), ("MADESUB2", "REALSUB2"), ("MADETOP1", "REALTOP1")])
+        self.assertEqual((counts["paired"], counts["unclear"]), (4, 1))
+        # Mended: nothing left to move.
+        again = {m["to"]: C(m["to"], server[m["from"]].name, "") for m in moves}
+        for c in server.values():
+            if c.key not in {m["from"] for m in moves}:
+                again[c.key] = c
+        again["REALSUB1"].parent, again["REALSUB2"].parent = "REALTOP1", "REALOTH1"
+        self.assertEqual(mend.plan_collections(local, again)[0], [])

@@ -60,6 +60,9 @@ SORTS = {
     "year": "coalesce(w.year, 0)",
 }
 AUTHORS_TOP = 100
+# One library of several, for its own view of the pool (Pool._scoped): its
+# paper keys, wids, lowercased DOIs and folded titles.
+Scope = tuple[set[str], set[str], set[str], set[str]]
 AUTHORS_STALE_SECONDS = 20
 
 
@@ -131,6 +134,31 @@ class Pool:
     def _is_lib(self, wid: str, doi: str, title_f: str) -> int:
         wids, dois, titles = self.library
         return int(wid in wids or (bool(doi) and doi.lower() in dois) or (bool(title_f) and title_f in titles))
+
+    def _scoped(self, scope: Scope | None, outer: bool = False) -> tuple[str, str, str, list[str]]:
+        """SQL for one library of several (app/library/registry.py): (join,
+        lib_cites, cites_lib, where) over works w. scope is (its paper keys,
+        wids, dois, folded titles): the works its papers point at, counted by
+        its papers only, less the ones it has. None is every library together:
+        the stored counters and in_lib. outer keeps works none of its papers
+        reach (their counts 0). Called with the lock held."""
+        if scope is None:
+            return "", "w.lib_cites", "w.cites_lib", ["w.in_lib = 0"]
+        keys, wids, dois, titles = scope
+        for table, values in (("scope_keys", keys), ("scope_wids", wids), ("scope_dois", dois), ("scope_titles", titles)):
+            self._db.execute(f"CREATE TEMP TABLE IF NOT EXISTS {table} (v TEXT PRIMARY KEY)")
+            self._db.execute(f"DELETE FROM temp.{table}")
+            self._db.executemany(f"INSERT OR IGNORE INTO temp.{table} (v) VALUES (?)", ((v,) for v in values if v))
+        join = (
+            f" {'LEFT ' if outer else ''}JOIN (SELECT e.wid AS wid, sum(e.kind = 'ref') AS lc, sum(e.kind = 'cite') AS cl FROM edges e"
+            " JOIN temp.scope_keys k ON k.v = e.lib_key GROUP BY e.wid) s ON s.wid = w.wid"
+        )
+        where = [
+            "w.wid NOT IN (SELECT v FROM temp.scope_wids)",
+            "(w.doi = '' OR w.doi NOT IN (SELECT v FROM temp.scope_dois))",
+            "(w.title_f = '' OR w.title_f NOT IN (SELECT v FROM temp.scope_titles))",
+        ]
+        return join, "coalesce(s.lc, 0)", "coalesce(s.cl, 0)", where
 
     def put_paper(self, key: str, sig: str, refs: Sequence[dict[str, Any]], citers: Sequence[dict[str, Any]]) -> None:
         """Replace one library paper's edges with these works."""
@@ -253,10 +281,12 @@ class Pool:
     # -- the abstract-only review ------------------------------------------------------
 
     def review_due(self, sig: str, limit: int) -> list[tuple[int, str, str]]:
-        """(id, title, abstract) of works not screened under these rules."""
+        """(id, title, abstract) of works not screened under these rules: the
+        ones missing from every library first, then the rest, which another
+        library than the one holding them may be missing."""
         with self._lock:
             return self._db.execute(
-                "SELECT id, title, abstract FROM works WHERE in_lib = 0 AND rv_sig != ? LIMIT ?", (sig, limit)
+                "SELECT id, title, abstract FROM works WHERE rv_sig != ? ORDER BY in_lib ASC LIMIT ?", (sig, limit)
             ).fetchall()
 
     def review_store(self, sig: str, results: Sequence[tuple[int, int, str, str]]) -> None:
@@ -275,33 +305,37 @@ class Pool:
                 raise
             self._db.execute("COMMIT")
 
-    def review_tally(self, sig: str) -> dict[str, Any]:
+    def review_tally(self, sig: str, scope: Scope | None = None) -> dict[str, Any]:
         """How far the screen has got under these rules, and what it found:
         {total, screened, by_state: {state: n}, reasons: {code: n}}."""
         with self._lock:
-            total = self._db.execute("SELECT count(*) FROM works WHERE in_lib = 0").fetchone()[0]
+            join, _, _, where = self._scoped(scope)
+            missing = " AND ".join(where)
+            total = self._db.execute(f"SELECT count(*) FROM works w {join} WHERE {missing}").fetchone()[0]
             states = self._db.execute(
-                "SELECT rv_state, count(*) FROM works WHERE in_lib = 0 AND rv_sig = ? GROUP BY rv_state", (sig,)
+                f"SELECT w.rv_state, count(*) FROM works w {join} WHERE {missing} AND w.rv_sig = ? GROUP BY w.rv_state", (sig,)
             ).fetchall()
             reasons = self._db.execute(
-                "SELECT rv_reason, count(*) FROM works WHERE in_lib = 0 AND rv_sig = ? AND rv_state IN (?, ?) GROUP BY rv_reason",
+                f"SELECT w.rv_reason, count(*) FROM works w {join} WHERE {missing} AND w.rv_sig = ? AND w.rv_state IN (?, ?) GROUP BY w.rv_reason",
                 (sig, RV_OUT, RV_NEAR),
             ).fetchall()
         by_state = {int(s): n for s, n in states if s is not None}
         return {"total": total, "screened": sum(by_state.values()), "by_state": by_state,
                 "reasons": dict(sorted(((r or "", n) for r, n in reasons), key=lambda kv: -kv[1]))}
 
-    def review_rows(self, sig: str, state: int, limit: int) -> tuple[list[dict[str, Any]], int]:
+    def review_rows(self, sig: str, state: int, limit: int, scope: Scope | None = None) -> tuple[list[dict[str, Any]], int]:
         """The works the screen put in one state, nearest your library first
         (connections, then citations, then newest). -> (rows, how many in all)."""
         with self._lock:
+            join, lc, cl, where = self._scoped(scope)
+            missing = " AND ".join(where)
             n = self._db.execute(
-                "SELECT count(*) FROM works WHERE in_lib = 0 AND rv_sig = ? AND rv_state = ?", (sig, state)
+                f"SELECT count(*) FROM works w {join} WHERE {missing} AND w.rv_sig = ? AND w.rv_state = ?", (sig, state)
             ).fetchone()[0]
             found = self._db.execute(
-                "SELECT wid, doi, title, journal, year, pubdate, cited_by, oa_pdf, authors, lib_cites, cites_lib, rv FROM works "
-                "WHERE in_lib = 0 AND rv_sig = ? AND rv_state = ? "
-                "ORDER BY (lib_cites + cites_lib) DESC, cited_by DESC, coalesce(year, 0) DESC, id ASC LIMIT ?",
+                f"SELECT w.wid, w.doi, w.title, w.journal, w.year, w.pubdate, w.cited_by, w.oa_pdf, w.authors, {lc}, {cl}, w.rv FROM works w {join} "
+                f"WHERE {missing} AND w.rv_sig = ? AND w.rv_state = ? "
+                f"ORDER BY ({lc} + {cl}) DESC, w.cited_by DESC, coalesce(w.year, 0) DESC, w.id ASC LIMIT ?",
                 (sig, state, limit),
             ).fetchall()
         rows = []
@@ -350,9 +384,15 @@ class Pool:
         paper: str = "",
         limit: int = 100,
         offset: int = 0,
+        scope: Scope | None = None,
     ) -> dict[str, Any]:
         """A page of the pool, and the tab counts for the same search.
-        sort: [(column, descending)], the first one primary."""
+        sort: [(column, descending)], the first one primary.
+
+        scope narrows it to one library of several (app/library/registry.py):
+        (its paper keys, wids, dois, folded titles). The works its papers
+        point at, counted by its papers only, less the ones it has -- the
+        stored counters and in_lib are every library's together."""
         skipped = skipped or set()
         folded = q.fold(text)
         clauses = q.parse(text) if folded else []
@@ -381,12 +421,13 @@ class Pool:
                         "(SELECT rowid FROM works_fts WHERE works_fts MATCH ?)",
                         (exclude,),
                     )
-            where = ["w.in_lib = 0"]
             args: list[Any] = []
             if searching:
                 join = "JOIN temp.hits h ON h.id = w.id"
             else:
                 join = "LEFT JOIN temp.hits h ON h.id = w.id"
+            scoped_join, lib_cites, cites_lib, where = self._scoped(scope)
+            join += scoped_join
             if paper:
                 where.append("w.wid IN (SELECT wid FROM edges WHERE lib_key = ?)")
                 args.append(paper)
@@ -398,7 +439,7 @@ class Pool:
             counts_where = base_where + (f" AND NOT {skip_sql}" if skip_sql and not show_skipped else "")
             counts_args = args + (skip_list if skip_sql and not show_skipped else [])
             row = self._db.execute(
-                f"SELECT count(*), coalesce(sum(w.lib_cites > 0), 0), coalesce(sum(w.cites_lib > 0), 0) FROM works w {join} WHERE {counts_where}",
+                f"SELECT count(*), coalesce(sum({lib_cites} > 0), 0), coalesce(sum({cites_lib} > 0), 0) FROM works w {join} WHERE {counts_where}",
                 counts_args,
             ).fetchone()
             counts = {"all": row[0], "refs": row[1], "citing": row[2]}
@@ -409,17 +450,18 @@ class Pool:
                 ).fetchone()[0]
             page_where = counts_where
             if pool == "refs":
-                page_where += " AND w.lib_cites > 0"
+                page_where += f" AND {lib_cites} > 0"
             elif pool == "citing":
-                page_where += " AND w.cites_lib > 0"
+                page_where += f" AND {cites_lib} > 0"
             order = []
             for column, descending in sort:
                 if column not in SORTS or (column == "relevance" and not searching):
                     continue
-                order.append(f"{SORTS[column]} {'DESC' if descending else 'ASC'}")
+                expression = SORTS[column].replace("w.lib_cites", lib_cites).replace("w.cites_lib", cites_lib)
+                order.append(f"{expression} {'DESC' if descending else 'ASC'}")
             order.append("w.id ASC")
             found = self._db.execute(
-                f"SELECT w.wid, w.doi, w.title, w.journal, w.year, w.pubdate, w.cited_by, w.oa_pdf, w.authors, w.lib_cites, w.cites_lib, h.score "
+                f"SELECT w.wid, w.doi, w.title, w.journal, w.year, w.pubdate, w.cited_by, w.oa_pdf, w.authors, {lib_cites}, {cites_lib}, h.score "
                 f"FROM works w {join} WHERE {page_where} ORDER BY {', '.join(order)} LIMIT ? OFFSET ?",
                 counts_args + [limit, offset],
             ).fetchall()
@@ -447,10 +489,10 @@ class Pool:
             found = self._db.execute("SELECT rowid FROM works_fts WHERE works_fts MATCH ?", (fts_phrase(folded, prefix=True),)).fetchall()
         return {row[0] for row in found}
 
-    def query_ids(self, text: str) -> set[int]:
+    def query_ids(self, text: str, scope: Scope | None = None) -> set[int]:
         """The works a boolean query matches (the Missing screen's grammar)."""
         clauses = q.parse(text)
-        everything = self.universe_ids()
+        everything = self.universe_ids(scope)
         if not clauses:
             return set(everything)
         hits: set[int] = set()
@@ -464,14 +506,17 @@ class Pool:
             hits |= chosen
         return hits
 
-    def universe_ids(self) -> frozenset[int]:
-        """Every work not in the library, kept until the pool moves."""
+    def universe_ids(self, scope: Scope | None = None) -> frozenset[int]:
+        """Every work not in the library (scope's, else any), kept until the
+        pool moves."""
+        marker = None if scope is None else hash(frozenset(scope[0]))
         cached = getattr(self, "_universe", None)
-        if cached is not None and cached[0] == self.rev:
+        if cached is not None and cached[0] == (self.rev, marker):
             return cached[1]
         with self._lock:
-            ids = frozenset(row[0] for row in self._db.execute("SELECT id FROM works WHERE in_lib = 0").fetchall())
-        self._universe = (self.rev, ids)
+            join, _, _, where = self._scoped(scope)
+            ids = frozenset(row[0] for row in self._db.execute(f"SELECT w.id FROM works w {join} WHERE {' AND '.join(where)}").fetchall())
+        self._universe = ((self.rev, marker), ids)
         return ids
 
     def ids_of(self, wids: Iterable[str]) -> set[int]:
@@ -483,16 +528,17 @@ class Pool:
                 out.update(row[0] for row in self._db.execute(f"SELECT id FROM works WHERE wid IN ({','.join('?' * len(chunk))})", chunk))
         return out
 
-    def top_of(self, ids: Iterable[int], limit: int) -> list[str]:
+    def top_of(self, ids: Iterable[int], limit: int, scope: Scope | None = None) -> list[str]:
         """The wids of these works, nearest your library first (connections,
         then citations, then newest), at most limit."""
         with self._lock:
+            join, lc, cl, _ = self._scoped(scope, outer=True)
             self._db.execute("CREATE TEMP TABLE IF NOT EXISTS pick (id INTEGER PRIMARY KEY)")
             self._db.execute("DELETE FROM temp.pick")
             self._db.executemany("INSERT OR IGNORE INTO temp.pick (id) VALUES (?)", ((i,) for i in ids))
             found = self._db.execute(
-                "SELECT w.wid FROM works w JOIN temp.pick p ON p.id = w.id "
-                "ORDER BY (w.lib_cites + w.cites_lib) DESC, w.cited_by DESC, coalesce(w.year, 0) DESC, w.id ASC LIMIT ?", (limit,),
+                f"SELECT w.wid FROM works w JOIN temp.pick p ON p.id = w.id {join} "
+                f"ORDER BY ({lc} + {cl}) DESC, w.cited_by DESC, coalesce(w.year, 0) DESC, w.id ASC LIMIT ?", (limit,),
             ).fetchall()
             self._db.execute("DELETE FROM temp.pick")
         return [row[0] for row in found]
@@ -501,16 +547,17 @@ class Pool:
         with self._lock:
             return {row[0] for row in self._db.execute("SELECT wid FROM works WHERE in_lib = 0").fetchall()}
 
-    def works_by_wid(self, wids: Iterable[str]) -> list[dict[str, Any]]:
+    def works_by_wid(self, wids: Iterable[str], scope: Scope | None = None) -> list[dict[str, Any]]:
         """Rows for these works, as search() makes them (no score)."""
         wanted = list(dict.fromkeys(wids))
         out: list[dict[str, Any]] = []
         with self._lock:
+            join, lc, cl, _ = self._scoped(scope, outer=True)
             for start in range(0, len(wanted), 500):
                 chunk = wanted[start:start + 500]
                 out.extend(self._db.execute(
-                    "SELECT wid, doi, title, journal, year, pubdate, cited_by, oa_pdf, authors, lib_cites, cites_lib FROM works "
-                    f"WHERE wid IN ({','.join('?' * len(chunk))})", chunk,
+                    f"SELECT w.wid, w.doi, w.title, w.journal, w.year, w.pubdate, w.cited_by, w.oa_pdf, w.authors, {lc}, {cl} FROM works w {join} "
+                    f"WHERE w.wid IN ({','.join('?' * len(chunk))})", chunk,
                 ).fetchall())
         rows = []
         for wid, doi, title, journal, year, pubdate, cited_by, oa_pdf, authors, lib_cites, cites_lib in out:
@@ -521,22 +568,23 @@ class Pool:
             })
         return rows
 
-    def ranked(self, order: str, limit: int, skipped: set[str] | None = None) -> list[dict[str, Any]]:
+    def ranked(self, order: str, limit: int, skipped: set[str] | None = None, scope: Scope | None = None) -> list[dict[str, Any]]:
         """The top works by one order: "conn" (connections, then citations),
         "newest" (publication date) or "cited_by" (OpenAlex citations). Skipped
         works are left out. For the missing.xlsx sheets."""
-        orders = {
-            "conn": "(lib_cites + cites_lib) DESC, cited_by DESC, coalesce(year, 0) DESC",
-            "newest": "pubdate DESC, coalesce(year, 0) DESC, (lib_cites + cites_lib) DESC",
-            "cited_by": "cited_by DESC, (lib_cites + cites_lib) DESC",
-        }
         skipped = skipped or set()
         with self._lock:
+            join, lc, cl, where = self._scoped(scope)
+            orders = {
+                "conn": f"({lc} + {cl}) DESC, w.cited_by DESC, coalesce(w.year, 0) DESC",
+                "newest": f"w.pubdate DESC, coalesce(w.year, 0) DESC, ({lc} + {cl}) DESC",
+                "cited_by": f"w.cited_by DESC, ({lc} + {cl}) DESC",
+            }
             found = self._db.execute(
-                f"SELECT wid FROM works WHERE in_lib = 0 ORDER BY {orders[order]}, id ASC LIMIT ?", (limit + len(skipped),)
+                f"SELECT w.wid FROM works w {join} WHERE {' AND '.join(where)} ORDER BY {orders[order]}, w.id ASC LIMIT ?", (limit + len(skipped),)
             ).fetchall()
         wids = [row[0] for row in found if row[0] not in skipped][:limit]
-        by_wid = {row["wid"]: row for row in self.works_by_wid(wids)}
+        by_wid = {row["wid"]: row for row in self.works_by_wid(wids, scope)}
         return [by_wid[w] for w in wids if w in by_wid]
 
     def work(self, wid: str) -> dict[str, Any] | None:
@@ -571,16 +619,18 @@ class Pool:
             papers = self._db.execute("SELECT count(*) FROM filled").fetchone()[0]
         return {"all": row[0], "refs": row[1], "citing": row[2], "papers": papers}
 
-    def authors(self, skipped: set[str] | None = None) -> list[dict[str, Any]]:
+    def authors(self, skipped: set[str] | None = None, scope: Scope | None = None) -> list[dict[str, Any]]:
         """The top authors of the in-bibliographies pool, by summed connections
         then paper count (the old build_authors). Worked out from the stored
-        counters when the pool has moved, and at most every few seconds."""
+        counters when the pool has moved, and at most every few seconds; for
+        one library of several (scope), each time."""
         now = time.monotonic()
         fresh = self._authors_rev == self.rev and self._authors_skips == len(skipped or ())
-        if self._authors_rev != -1 and (fresh or now - self._authors_at < AUTHORS_STALE_SECONDS):
+        if scope is None and self._authors_rev != -1 and (fresh or now - self._authors_at < AUTHORS_STALE_SECONDS):
             return self._authors
         with self._lock:
-            found = self._db.execute("SELECT wid, authors, lib_cites FROM works WHERE in_lib = 0 AND lib_cites > 0").fetchall()
+            join, lc, _, where = self._scoped(scope)
+            found = self._db.execute(f"SELECT w.wid, w.authors, {lc} FROM works w {join} WHERE {' AND '.join(where)} AND {lc} > 0").fetchall()
             rev = self.rev
         skipped = skipped or set()
         papers: dict[str, int] = {}
@@ -598,9 +648,12 @@ class Pool:
                 if aid not in info:
                     info[aid] = (author[1] or "", author[2] if len(author) > 2 else "")
         ranked = sorted(cites, key=lambda aid: (cites[aid], papers[aid]), reverse=True)[:AUTHORS_TOP]
-        self._authors = [
+        listed = [
             {"openalex": aid, "name": info[aid][0], "orcid": info[aid][1] or "", "papers": papers[aid], "lib_cites": cites[aid]} for aid in ranked
         ]
+        if scope is not None:
+            return listed
+        self._authors = listed
         self._authors_at = now
         self._authors_rev = rev
         self._authors_skips = len(skipped)

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 from typing import Any, Callable
 
 from app.core import graceful, sse
@@ -19,23 +20,39 @@ from app.core.config_live import Holder
 from app.library.catalogue import Catalogue
 from app.library.remote import Remote, RemoteLibrary
 from app.library.zotero import Library
+from app.models.user_library import Source, server_source
 from app.search.index import Index
 
 
+def open_remote(source: Source, folder: Path, poll_seconds: int, remote: Remote | None = None) -> RemoteLibrary:
+    """The one way a ZoteroWebDAV library is opened, the server's or a user's
+    (app/library/registry.py), its mirror and PDFs in folder. Only the
+    server's holds a request open at the remote (RemoteLibrary.long_poll): a
+    user's polls, so the threads users' libraries take stay bounded."""
+    library = RemoteLibrary(remote or Remote(source.url, source.key, source.name), folder, poll_seconds)
+    library.long_poll = source.user_id == 0
+    return library
+
+
 def make_library(cfg: Config) -> Library | RemoteLibrary:
-    """library.source picks where the papers come from."""
+    """library.source picks where the server's papers come from."""
     library = cfg.library
     if library.source == "remote":
-        remote = Remote(library.remote_url, library.remote_key, library.remote_library)
-        return RemoteLibrary(remote, library.index_path.parent, library.remote_poll_seconds)
+        return open_remote(server_source(cfg), library.index_path.parent, library.remote_poll_seconds)
     return Library(library.zotero_dir, library.index_path.parent)
 
 
 class LibraryService:
-    def __init__(self, cfg: Config) -> None:
-        library = make_library(cfg)
+    """One library and what is built on it. The server's library (config.yaml)
+    is made from cfg alone; a user's own one (app/library/registry.py) is
+    handed its library and index path, in a folder of its own."""
+
+    def __init__(self, cfg: Config, library: Library | RemoteLibrary | None = None, index_path: Path | None = None,
+                 source_id: str = "server") -> None:
+        library = library if library is not None else make_library(cfg)
         self.library = library
-        self.index = Index(cfg.library.index_path)
+        self.source_id = source_id
+        self.index = Index(index_path or cfg.library.index_path)
         self.catalogue = Catalogue(library, self.index)
         self.hub = sse.Hub(max_clients=32)
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -79,14 +96,32 @@ class LibraryService:
                 self.library.poll_seconds = current.remote_poll_seconds
             await asyncio.sleep(current.watch_seconds)
 
+    @property
+    def running(self) -> bool:
+        return self._task is not None
+
+    def load(self) -> None:
+        """What the index holds, without asking the library: a user's library
+        is known (its papers kept, app/content) before its watcher starts."""
+        if not self._loaded:
+            self.catalogue.load()
+            self._loaded = True
+
     def start(self, settings: Holder) -> None:
+        if self._task is not None:
+            return
         self._loop = asyncio.get_running_loop()
         self._task = asyncio.create_task(self._watch(settings))
 
-    async def stop(self) -> None:
+    def pause(self) -> None:
+        """Stops the watcher and keeps everything else: a user's library that
+        nobody has looked at for a while (registry.py)."""
         if self._task is not None:
             self._task.cancel()
             self._task = None
+
+    async def stop(self) -> None:
+        self.pause()
         self.hub.close()
 
     def close(self) -> None:

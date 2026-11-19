@@ -20,6 +20,7 @@ from app.models import login_tokens, sessions, users
 from app.models import api_keys
 from app.models import themes
 from app.models import two_factor
+from app.routes.account_library import MyLibrary, my_library
 from app.routes.api_docs_md import api_doc_url
 from app.routes.api_docs_md import mcp_doc_url
 from app.routes.admin import CancelLoginLinkReply, DisplayName, ExpiresInMinutes, LoginLink, LoginLinkReply, MaxUses, OkReply, RenameUserReply, link_options, link_reply
@@ -56,6 +57,7 @@ class Me(Reply, kw_only=True):
     themes_builtins: Annotated[int, Meta(description="Which built-in themes that list has seen (see builtins on POST /api/account/themes).", extra_json_schema={"x-feature": "appearance"})]
     theme_id: Annotated[str, Meta(description="The theme you use. Empty: the first.", extra_json_schema={"x-feature": "appearance"})]
     tag_colors: Annotated[str, Meta(description="Where your tag colours come from: wsu or theme (see POST /api/account/tag-colors).")]
+    library: Annotated[MyLibrary, Meta(description="Which library you read: your own ZoteroWebDAV server or the server's (see POST /api/account/library).")]
     two_factor: Annotated[bool, Meta(extra_json_schema={"x-feature": "two_factor"})]
     two_factor_enabled: Annotated[bool, Meta(extra_json_schema={"x-feature": "two_factor"})]
     auth: str
@@ -118,6 +120,7 @@ def me(request: Request) -> Me:
         themes_builtins=themes_builtins,
         theme_id=actor.user.theme_id,
         tag_colors=actor.user.tag_colors,
+        library=my_library(request, actor.user),
         two_factor=two_factor.is_on(actor.user),
         two_factor_enabled=cfg.two_factor_enabled,
         auth=actor.method,

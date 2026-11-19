@@ -73,6 +73,14 @@ class User:
     # Where tag colours come from: "wsu" (Wright State's palette) or "theme"
     # (a gradient of the theme in use). See TagColors in static/js/paper_links.js.
     tag_colors: str = "wsu"
+    # This person's own library, a ZoteroWebDAV server, in place of the
+    # server's. The address and key are sealed here as well as with the
+    # record, like the TOTP secret; empty means the server's library. See
+    # app/models/user_library.py.
+    library_url: str = ""
+    library_key: str = ""
+    library_name: str = ""
+    library_set_at: datetime | None = None
 
     @property
     def disabled(self) -> bool:
@@ -98,6 +106,10 @@ class User:
             "themes_builtins": self.themes_builtins,
             "theme_id": self.theme_id,
             "tag_colors": self.tag_colors,
+            "library_url": self.library_url,
+            "library_key": self.library_key,
+            "library_name": self.library_name,
+            "library_set_at": to_iso(self.library_set_at),
         }
 
     @classmethod
@@ -117,6 +129,10 @@ class User:
             themes_builtins=record.get("themes_builtins", 0),
             theme_id=record.get("theme_id", ""),
             tag_colors=record.get("tag_colors") or "wsu",
+            library_url=record.get("library_url", ""),
+            library_key=record.get("library_key", ""),
+            library_name=record.get("library_name", ""),
+            library_set_at=from_iso(record.get("library_set_at")),
         )
 
 

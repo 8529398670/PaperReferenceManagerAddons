@@ -343,12 +343,18 @@ def open_content(store: db.Store, cfg: config.Config) -> Any:
     """The content service without a server: the catalogue as the index last
     saw it, then brought up to date with Zotero."""
     from app.content.service import ContentService
+    from app.core.config_live import Holder
+    from app.library.registry import LibraryRegistry
     from app.library.service import LibraryService
 
     library = LibraryService(cfg)
     library._load_and_sync()
+    # Users' own libraries too, as their indexes last saw them: their papers'
+    # results are theirs to keep.
+    libraries = LibraryRegistry(cfg, Holder(cfg), store, library)
+    libraries.load_all()
     content = ContentService(
-        cfg.library.content_dir, cfg.library.index_path, library.catalogue, store,
+        cfg.library.content_dir, cfg.library.index_path, libraries.union, store,
         cfg.config_file.parent / "modalities.yaml", lambda: cfg.library,
     )
     content._library = library

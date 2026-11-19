@@ -22,6 +22,7 @@ from app.content.pool import POOLS, parse_sort
 from app.content.service import ContentService
 from app.routes.boards import actor_name
 from app.routes.helpers import PAGE_LIMIT_MESSAGE, PAGE_MAX, PAGE_OFFSET_MESSAGE, Paged, Refused
+from app.routes.library import find_paper, get_catalogue
 
 TAG = "Content"
 MISSING_TAG = "Missing papers"
@@ -81,7 +82,7 @@ class ContentReply(Reply):
     mcp="get_paper_content", read_only=True,
 )
 def paper_content(request: Request, body: PaperKey) -> ContentReply:
-    paper = request.app.state.library.catalogue.find(body.key)
+    paper = find_paper(request, body.key)[0]
     if paper is None:
         raise Refused(404, "no such paper in the library")
     content = get_content(request)
@@ -107,7 +108,7 @@ class PaperText(RequestType):
     mcp_http="Plain text, for a browser to show.",
 )
 def paper_text(request: Request, body: PaperText) -> Response:
-    paper = request.app.state.library.catalogue.find(body.key)
+    paper = find_paper(request, body.key)[0]
     if paper is None:
         raise Refused(404, "no such paper in the library")
     text = get_content(request).text_of(paper.key, body.part, paper.record.get("title") or "")
@@ -142,7 +143,7 @@ def retry(request: Request, body: RetryBody) -> RetryReply:
         raise Refused(400, STAGE_ERROR)
     key = ""
     if body.key:
-        paper = request.app.state.library.catalogue.find(body.key)
+        paper = find_paper(request, body.key)[0]
         if paper is None:
             raise Refused(404, "no such paper in the library")
         key = paper.key
@@ -198,7 +199,7 @@ class StatusReply(Reply):
     mcp="content_status", read_only=True,
 )
 def content_status(request: Request) -> StatusReply:
-    catalogue = request.app.state.library.catalogue
+    catalogue = get_catalogue(request)
     papers = catalogue.all()
     status = get_content(request).status()
     library = {
@@ -250,7 +251,7 @@ STATE_SETS = {
     mcp="content_papers", read_only=True,
 )
 def stage_papers(request: Request, body: StageListing) -> StageReply:
-    catalogue = request.app.state.library.catalogue
+    catalogue = get_catalogue(request)
     rows = []
     needle = body.q.strip().lower()
     for task in get_content(request).files.listing(body.stage, STATE_SETS[body.state]):
@@ -313,6 +314,22 @@ class MissingReply(Paged):
     paper: Annotated[dict[str, Any] | None, Meta(description="The library paper a network filter names.")] = None
 
 
+def missing_scope(request: Request) -> tuple[set[str], set[str], set[str], set[str]] | None:
+    """With users' own libraries about (app/library/registry.py), the pool
+    holds every library's network: narrowed to the reader's. None with only
+    the server's library, which the stored counters already describe."""
+    libraries = getattr(request.app.state, "libraries", None)
+    if libraries is None or len(libraries.services()) < 2:
+        return None
+    content = get_content(request)
+    papers = get_catalogue(request).all()
+    keys = {paper.key for paper in papers}
+    wids = {content.wid_of(key) for key in keys} - {""}
+    dois = {(paper.record.get("doi") or "").lower() for paper in papers} - {""}
+    titles = {paper.title_f for paper in papers} - {""}
+    return keys, wids, dois, titles
+
+
 @route(
     "GET /api/missing", summary="Search the papers you do not have",
     tag=MISSING_TAG, errors=(404,),
@@ -328,13 +345,14 @@ def search_missing(request: Request, body: MissingSearch) -> MissingReply:
     paper_info = None
     paper_key = ""
     if body.paper:
-        paper = request.app.state.library.catalogue.find(body.paper)
+        paper = find_paper(request, body.paper)[0]
         if paper is None:
             raise Refused(404, "no such paper in the library")
         paper_key = paper.key
         paper_info = {"key": paper.key, "title": paper.record.get("title", "")}
     found = content.pool.search(
         body.q[:500], body.pool, parse_sort(body.sort), content.skipped(), body.skipped == "show", paper_key, body.limit, body.offset,
+        scope=missing_scope(request),
     )
     end = body.offset + len(found["rows"])
     return MissingReply(
@@ -355,7 +373,7 @@ class AuthorsReply(Reply):
 )
 def missing_authors(request: Request) -> AuthorsReply:
     content = get_content(request)
-    return AuthorsReply(authors=content.pool.authors(content.skipped()))
+    return AuthorsReply(authors=content.pool.authors(content.skipped(), missing_scope(request)))
 
 
 class SkipBody(RequestType):

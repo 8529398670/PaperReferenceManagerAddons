@@ -250,9 +250,10 @@ class Figures:
 
     def listing(
         self, view: str, sort: str = "added", desc: bool = True, chip: str = "all", mod: str = "", term: str = "",
-        text: str = "", offset: int = 0, limit: int = 40,
+        text: str = "", offset: int = 0, limit: int = 40, catalogue: Any = None,
     ) -> dict[str, Any]:
-        catalogue = self.content.catalogue
+        # The viewer's library (app/library/registry.py); else every library.
+        catalogue = catalogue if catalogue is not None else self.content.catalogue
         state = self.state(view)
         other = self.state(OTHER[view])
         picked = set(state["selected"])

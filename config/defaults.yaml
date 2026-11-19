@@ -227,10 +227,31 @@ backups:
   interval_hours: 24               # [live]
   keep: 7                          # [live]
 
-# The Zotero library this app reads. It is only ever read: the database is
-# copied before each read, so Zotero can stay open, and papers saved there
+# The Zotero library this app reads: your Zotero folder on this machine, or
+# a ZoteroWebDAV server (source). It is only ever read, and papers saved there
 # show up here within seconds -- there is no import or reindex to run.
 library:
+  # Where the library comes from: local reads zotero_dir on this machine,
+  # remote reads a ZoteroWebDAV server (remote_url and remote_key below),
+  # read-only, with PDFs fetched as they are needed. (one of: local, remote)
+  # [restart]
+  source: local
+  # The ZoteroWebDAV server's address, such as https://zotero.example.org.
+  # Only this file sets it. [restart]
+  remote_url: ""
+  # An API key for that server (id.secret, from its API keys screen). Only
+  # this file sets it, and the Settings screen never shows it. [restart]
+  remote_key: ""
+  # Which of your WebDAV libraries on that server to read; empty is your
+  # default one. [restart]
+  remote_library: ""
+  # How often, in seconds, the remote server is asked what changed. [live]
+  remote_poll_seconds: 30
+  # Anyone can read their own ZoteroWebDAV server instead of this library,
+  # on the Account screen. This is how many of those are watched for changes
+  # at once; past it, the one idle longest pauses until it is used again.
+  # [live]
+  max_user_libraries: 20
   # The folder holding zotero.sqlite and storage/. [restart]
   zotero_dir: ~/Zotero
   # How often, in seconds, zotero.sqlite is checked for changes. [live]
@@ -249,22 +270,6 @@ library:
   # Your OpenAlex API key (free at openalex.org). Empty asks without one, at
   # OpenAlex's much lower anonymous limit. [live]
   openalex_api_key: ""
-  # Where the library comes from: local reads zotero_dir on this machine,
-  # remote reads a ZoteroWebDAV server (remote_url and remote_key below),
-  # read-only, with PDFs fetched as they are needed. (one of: local, remote)
-  # [restart]
-  source: local
-  # The ZoteroWebDAV server's address, such as https://zotero.example.org.
-  # Only this file sets it. [restart]
-  remote_url: ""
-  # An API key for that server (id.secret, from its API keys screen). Only
-  # this file sets it, and the Settings screen never shows it. [restart]
-  remote_key: ""
-  # Which of your WebDAV libraries on that server to read; empty is your
-  # default one. [restart]
-  remote_library: ""
-  # How often, in seconds, the remote server is asked what changed. [live]
-  remote_poll_seconds: 30
 
 # Keys for enriching each paper's code and dataset links with what the hosts
 # say about them (repository descriptions, stars, file lists). Empty asks

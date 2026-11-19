@@ -265,9 +265,10 @@ class SavedSearches:
 
     # -- running ----------------------------------------------------------------------
 
-    def run_library(self, search: dict[str, Any]) -> tuple[list[str], dict[str, int]]:
-        """Library keys matched, newest first, and each group's count."""
-        catalogue = self.catalogue
+    def run_library(self, search: dict[str, Any], catalogue: Any = None) -> tuple[list[str], dict[str, int]]:
+        """Library keys matched, newest first, and each group's count: in
+        catalogue, the reader's library (default the server's)."""
+        catalogue = catalogue if catalogue is not None else self.catalogue
         papers = catalogue.all()
         universe = {p.key for p in papers}
         found, tally = evaluate(search, catalogue.term_keys, catalogue.query_keys, universe)
@@ -275,12 +276,13 @@ class SavedSearches:
         return [p.key for p in order], tally
 
     def run_missing(self, search: dict[str, Any], limit: int = 1000, include_skipped: bool = False,
-                    cache: dict[str, set[int]] | None = None) -> tuple[list[dict[str, Any]], int, dict[str, int]]:
+                    cache: dict[str, set[int]] | None = None, scope: Any = None) -> tuple[list[dict[str, Any]], int, dict[str, int]]:
         """Missing works matched, nearest your library first, at most limit;
         how many matched in all; and each group's count. cache carries term
-        hits from one search to the next (missing.xlsx runs every search)."""
+        hits from one search to the next (missing.xlsx runs every search).
+        scope narrows it to the reader's library (pool.Scope)."""
         pool = self.pool_fn()
-        universe: set[int] | frozenset[int] = pool.universe_ids()
+        universe: set[int] | frozenset[int] = pool.universe_ids(scope)
         if not include_skipped:
             skipped = self.skipped_fn()
             if skipped:
@@ -292,9 +294,9 @@ class SavedSearches:
                 cache[term] = pool.term_ids(term)
             return cache[term]
 
-        found, tally = evaluate(search, term_set, pool.query_ids, set(universe))
-        wids = pool.top_of(found, limit)
-        by_wid = {row["wid"]: row for row in pool.works_by_wid(wids)}
+        found, tally = evaluate(search, term_set, lambda text: pool.query_ids(text, scope), set(universe))
+        wids = pool.top_of(found, limit, scope)
+        by_wid = {row["wid"]: row for row in pool.works_by_wid(wids, scope)}
         return [by_wid[w] for w in wids if w in by_wid], len(found), tally
 
 

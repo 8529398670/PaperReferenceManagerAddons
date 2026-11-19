@@ -124,15 +124,16 @@ class MissingReview:
 
     # -- reading ---------------------------------------------------------------------------
 
-    def snapshot(self, skipped: set[str] | None = None) -> dict[str, Any]:
-        """The pool's review as the screen loads it."""
+    def snapshot(self, skipped: set[str] | None = None, scope: P.Scope | None = None) -> dict[str, Any]:
+        """The pool's review as the screen loads it: of the works the reader's
+        library lacks (scope; None for the only library)."""
         rules = self.review.rules
         sig = rules.signature
         skipped = skipped or set()
-        tally = self.pool.review_tally(sig)
-        included, n_in = self.pool.review_rows(sig, P.RV_IN, MAX_INCLUDED)
+        tally = self.pool.review_tally(sig, scope)
+        included, n_in = self.pool.review_rows(sig, P.RV_IN, MAX_INCLUDED, scope)
         near_cap = int(rules.doc.missing.max_nearmiss.value)
-        near, n_near = self.pool.review_rows(sig, P.RV_NEAR, near_cap + len(skipped))
+        near, n_near = self.pool.review_rows(sig, P.RV_NEAR, near_cap + len(skipped), scope)
         labels = dict(rules.doc.missing.miss_labels or {})
         for row in near:
             row["miss_label"] = labels.get(row.get("near_miss", ""), row.get("near_miss", ""))

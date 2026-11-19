@@ -309,15 +309,18 @@ class Crawler:
     def status(self) -> dict[str, Any]:
         return dict(self.state)
 
-    def start(self, search: dict[str, Any], settings: Settings, by: str) -> bool:
-        """False when a crawl is already running."""
+    def start(self, search: dict[str, Any], settings: Settings, by: str, catalogue: Any = None,
+              identity: tuple[set[str], set[str], set[str]] | None = None) -> bool:
+        """False when a crawl is already running. catalogue is the library it
+        starts from and identity (wids, dois, folded titles) what counts as
+        in it: the starter's own (default the server's)."""
         with self._lock:
             if self._thread is not None and self._thread.is_alive():
                 return False
             self._stop = False
             self.state = {"running": True, "search_id": search["id"], "search": search["name"], "visited": 0, "novel": 0,
                           "api_used": 0, "max_visits": settings.max_visits, "started_at": time.time(), "by": by}
-            self._thread = threading.Thread(target=self._run, args=(search, settings, by), name="crawl", daemon=True)
+            self._thread = threading.Thread(target=self._run, args=(search, settings, by, catalogue, identity), name="crawl", daemon=True)
             self._thread.start()
         self.publish("crawl", self.status())
         return True
@@ -330,10 +333,10 @@ class Crawler:
         if thread is not None:
             thread.join(timeout)
 
-    def _seeds(self) -> list[tuple[str, str, dict[str, Any]]]:
+    def _seeds(self, catalogue: Any = None) -> list[tuple[str, str, dict[str, Any]]]:
         """Every library paper with an OpenAlex id, as a compact work."""
         out = []
-        for paper in self.catalogue.all():
+        for paper in (catalogue if catalogue is not None else self.catalogue).all():
             wid = self.content.wid_of(paper.key)
             if not wid:
                 continue
@@ -350,7 +353,8 @@ class Crawler:
         found = pool.compact_of(edges.get("ref", []) + edges.get("cite", []))
         return [found[w] for w in edges.get("ref", []) if w in found], [found[w] for w in edges.get("cite", []) if w in found]
 
-    def _run(self, search: dict[str, Any], settings: Settings, by: str) -> None:
+    def _run(self, search: dict[str, Any], settings: Settings, by: str, catalogue: Any = None,
+             identity: tuple[set[str], set[str], set[str]] | None = None) -> None:
         last = [0.0]
 
         def report(visited: int, novel: int, api: int) -> None:
@@ -360,14 +364,14 @@ class Crawler:
                 last[0] = now
                 self.publish("crawl", self.status())
 
-        wids, dois, titles = self.content.pool.library
+        wids, dois, titles = identity if identity is not None else self.content.pool.library
 
         def in_library(work: dict[str, Any]) -> bool:
             return work.get("wid") in wids or (work.get("doi") or "").lower() in dois or q.fold(work.get("title")) in titles
 
         try:
             key = self.api_key()
-            crawl = Crawl(settings, ss.keywords(search), self._seeds(), self._neighbours,
+            crawl = Crawl(settings, ss.keywords(search), self._seeds(catalogue), self._neighbours,
                           openalex.Client(key) if settings.api_budget > 0 else None, self.cache, in_library, report, lambda: self._stop)
             found = crawl.run()
             found.update(search_id=search["id"], search=search["name"], by=by)

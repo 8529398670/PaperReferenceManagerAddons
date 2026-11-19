@@ -192,6 +192,7 @@ class LibrarySection:
     remote_key: str
     remote_library: str
     remote_poll_seconds: int
+    max_user_libraries: int
 
 
 @dataclass
@@ -341,6 +342,8 @@ class LibraryConfig:
     remote_key: str = ""
     remote_library: str = ""
     remote_poll_seconds: int = 30
+    # How many users' own libraries (app/library/registry.py) are watched at once.
+    max_user_libraries: int = 20
 
 
 @dataclass(frozen=True)
@@ -927,6 +930,7 @@ def validate(file: File) -> list[str]:
     if library.source == "remote":
         check(library.remote_url != "" and library.remote_key != "", "library.source is remote, so library.remote_url and library.remote_key must be set")
     check(5 <= library.remote_poll_seconds <= 3600, f"library.remote_poll_seconds must be 5-3600, got {library.remote_poll_seconds}")
+    check(1 <= library.max_user_libraries <= 200, f"library.max_user_libraries must be 1-200, got {library.max_user_libraries}")
     check(1 <= library.watch_seconds <= 3600, f"library.watch_seconds must be 1-3600, got {library.watch_seconds}")
     check(
         library.proxy_url == "" or (library.proxy_url.startswith(("http://", "https://")) and "{doi}" in library.proxy_url),
@@ -1233,6 +1237,7 @@ def library_config(file: File, paths: "Paths") -> LibraryConfig:
         remote_key=file.library.remote_key,
         remote_library=file.library.remote_library,
         remote_poll_seconds=file.library.remote_poll_seconds,
+        max_user_libraries=file.library.max_user_libraries,
     )
 
 
