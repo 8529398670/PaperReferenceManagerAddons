@@ -187,6 +187,11 @@ class LibrarySection:
     cite_style: str
     openalex_enabled: bool
     openalex_api_key: str
+    source: str
+    remote_url: str
+    remote_key: str
+    remote_library: str
+    remote_poll_seconds: int
 
 
 @dataclass
@@ -329,6 +334,13 @@ class LibraryConfig:
     content_dir: Path = Path("papers")
     openalex_enabled: bool = True
     openalex_api_key: str = ""
+    # Where the library comes from: "local" reads zotero_dir, "remote" a
+    # ZoteroWebDAV server (app/library/remote.py).
+    source: str = "local"
+    remote_url: str = ""
+    remote_key: str = ""
+    remote_library: str = ""
+    remote_poll_seconds: int = 30
 
 
 @dataclass(frozen=True)
@@ -812,6 +824,25 @@ def trusted_proxy_networks(cfg: "Config") -> list[ipaddress.IPv4Network | ipaddr
     return [network for network in (_proxy_network(entry) for entry in cfg.trusted_proxies) if network is not None]
 
 
+REMOTE_KEY_RE = re.compile(r"[A-Za-z0-9_-]{4,64}\.[A-Za-z0-9_-]{8,200}")
+REMOTE_LIBRARY_RE = re.compile(r"[A-Za-z0-9_.-]{0,64}")
+
+
+def remote_url_ok(url: str) -> bool:
+    """https anywhere; plain http only to this machine (testing)."""
+    from urllib.parse import urlparse
+
+    try:
+        parts = urlparse(url)
+    except ValueError:
+        return False
+    if not parts.hostname or parts.query or parts.fragment or parts.username or parts.password:
+        return False
+    if parts.scheme == "https":
+        return True
+    return parts.scheme == "http" and parts.hostname in ("localhost", "127.0.0.1", "::1")
+
+
 def validate(file: File) -> list[str]:
     """Reject values that would fail later in a confusing way -- a port out
     of range, a Docker size the daemon would refuse. The docker values also
@@ -887,7 +918,15 @@ def validate(file: File) -> list[str]:
     check(backups.keep >= 1, f"backups.keep must be at least 1, got {backups.keep}")
 
     library = file.library
-    check(library.zotero_dir.strip() != "", "library.zotero_dir must not be empty")
+    check(library.source in ("local", "remote"), f"library.source must be local or remote, got {library.source!r}")
+    if library.source == "local":
+        check(library.zotero_dir.strip() != "", "library.zotero_dir must not be empty")
+    check(library.remote_url == "" or remote_url_ok(library.remote_url), "library.remote_url must be empty or an https:// address (http:// only for localhost)")
+    check(library.remote_key == "" or REMOTE_KEY_RE.fullmatch(library.remote_key) is not None, "library.remote_key is not an API key (id.secret)")
+    check(REMOTE_LIBRARY_RE.fullmatch(library.remote_library) is not None, "library.remote_library must be empty or a WebDAV library name")
+    if library.source == "remote":
+        check(library.remote_url != "" and library.remote_key != "", "library.source is remote, so library.remote_url and library.remote_key must be set")
+    check(5 <= library.remote_poll_seconds <= 3600, f"library.remote_poll_seconds must be 5-3600, got {library.remote_poll_seconds}")
     check(1 <= library.watch_seconds <= 3600, f"library.watch_seconds must be 1-3600, got {library.watch_seconds}")
     check(
         library.proxy_url == "" or (library.proxy_url.startswith(("http://", "https://")) and "{doi}" in library.proxy_url),
@@ -1189,6 +1228,11 @@ def library_config(file: File, paths: "Paths") -> LibraryConfig:
         content_dir=paths.app_dir / "papers",
         openalex_enabled=file.library.openalex_enabled,
         openalex_api_key=file.library.openalex_api_key,
+        source=file.library.source,
+        remote_url=file.library.remote_url.rstrip("/"),
+        remote_key=file.library.remote_key,
+        remote_library=file.library.remote_library,
+        remote_poll_seconds=file.library.remote_poll_seconds,
     )
 
 

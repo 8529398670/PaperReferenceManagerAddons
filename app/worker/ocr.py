@@ -367,6 +367,33 @@ def ocr_text(image: Any) -> str:
     return split_stuck_words(text)
 
 
+def text_layer(pdf_path: Path, max_pages: int = 200) -> tuple[str, int]:
+    """The PDF's own text and its page count, as pdfium reads them; ('', 0)
+    when it cannot be opened. needs_ocr says whether the text will do."""
+    import pypdfium2 as pdfium
+
+    try:
+        pdf = pdfium.PdfDocument(str(pdf_path))
+    except Exception:  # noqa: BLE001 -- a broken PDF: let OCR have its go and fail properly
+        return "", 0
+    try:
+        pages = len(pdf)
+        texts: list[str] = []
+        for idx in range(min(pages, max_pages)):
+            page = pdf[idx]
+            try:
+                textpage = page.get_textpage()
+                try:
+                    texts.append(textpage.get_text_range())
+                finally:
+                    textpage.close()
+            finally:
+                page.close()
+        return normalize_text("\n\n".join(texts)), min(pages, max_pages)
+    finally:
+        pdf.close()
+
+
 def ocr_pdf(pdf_path: Path, max_pages: int = 200) -> str:
     """OCR the first max_pages pages of a PDF at 300 DPI. Pages are joined
     with a blank line; a page with nothing readable contributes ''. Raises

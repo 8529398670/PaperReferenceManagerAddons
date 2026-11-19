@@ -86,6 +86,10 @@ class Item:
     pdfs: list[str] = field(default_factory=list)
     # The full text Zotero extracted, one file per PDF attachment.
     fulltext_files: list[str] = field(default_factory=list)
+    # False when the source cannot say what text the paper has (a remote
+    # library: its zips carry no Zotero text). The catalogue then keeps the
+    # text it already has instead of replacing it with nothing.
+    text_known: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -161,6 +165,13 @@ class Library:
         # True when the last read had to leave the -wal out: that view can be
         # behind, so it must not be taken as papers having been removed.
         self.read_fell_back = False
+        # Set by RemoteLibrary; a folder has nothing more to say than its path.
+        self.error = ""
+
+    def ensure_pdf(self, path: str | Path) -> Path | None:
+        """The file at path when it is on disk (RemoteLibrary fetches it)."""
+        path = Path(path)
+        return path if path.is_file() else None
 
     # -- change detection ----------------------------------------------------
 

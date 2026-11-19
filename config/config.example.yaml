@@ -268,6 +268,22 @@ library:
   # Your OpenAlex API key (free at openalex.org). Empty asks without one, at
   # OpenAlex's much lower anonymous limit. [live]
   openalex_api_key: ""
+  # Where the library comes from: local reads zotero_dir on this machine,
+  # remote reads a ZoteroWebDAV server (remote_url and remote_key below),
+  # read-only, with PDFs fetched as they are needed. (one of: local, remote)
+  # [restart]
+  source: local
+  # The ZoteroWebDAV server's address, such as https://zotero.example.org.
+  # Only this file sets it. [restart]
+  remote_url: ""
+  # An API key for that server (id.secret, from its API keys screen). Only
+  # this file sets it, and the Settings screen never shows it. [restart]
+  remote_key: ""
+  # Which of your WebDAV libraries on that server to read; empty is your
+  # default one. [restart]
+  remote_library: ""
+  # How often, in seconds, the remote server is asked what changed. [live]
+  remote_poll_seconds: 30
 
 # Keys for enriching each paper's code and dataset links with what the hosts
 # say about them (repository descriptions, stars, file lists). Empty asks

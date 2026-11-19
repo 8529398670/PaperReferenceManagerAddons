@@ -173,6 +173,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     commands.add_parser("paths", help="where this app keeps its state")
 
+    p = commands.add_parser("mend-remote-keys", help="move the remote library's made-up keys to the local Zotero's own, with their dates")
+    p.add_argument("--dry-run", action="store_true", help="ask the server what it would do, change nothing")
+    p.add_argument("--apply", action="store_true", help="send the moves (without it, only the plan is printed)")
+
     p = commands.add_parser("import-legacy", help="bring in the old prma's lists (or, with --openalex, its OpenAlex cache), once")
     p.add_argument("--from", dest="source", required=True, help="the old prma's output/ folder")
     p.add_argument("--replace", action="store_true", help="replace lists already here (their old version is kept)")
@@ -214,6 +218,11 @@ def run(arguments: list[str]) -> None:
     # with the server up or down -- the files are only ever appended to.
     if args.command == "logs":
         command_logs(cfg, args)
+        return
+    # "mend-remote-keys" reads zotero.sqlite and talks to the remote
+    # library; it never needs the database.
+    if args.command == "mend-remote-keys":
+        command_mend_remote_keys(cfg, args)
         return
     # "google-login" talks to Google and prints; it touches nothing here.
     if args.command == "google-login":
@@ -419,6 +428,19 @@ def import_legacy_summaries(store: db.Store, cfg: config.Config, source: Path) -
         content.close()
         content._library.close()
     print(f"Summaries: {imported} brought in, {kept} already here, {unknown} for papers not in the library.")
+
+
+def command_mend_remote_keys(cfg: config.Config, args: argparse.Namespace) -> None:
+    import json
+
+    from app.library import mend
+    from app.library.remote import RemoteError
+
+    try:
+        report = mend.mend(cfg, send=args.apply or args.dry_run, dry_run=args.dry_run and not args.apply)
+    except RemoteError as error:
+        raise ManageError(str(error)) from None
+    print(json.dumps(report, indent=2))
 
 
 def command_google_login(args: argparse.Namespace) -> None:

@@ -75,6 +75,9 @@ def sample_value(key: Any) -> Any:
         "google_sheets.default_mode": "two-way",
         "llm.provider": "gemini",
         "mri_design.base_url": "https://planner.example.com",
+        "library.source": "remote",
+        "library.remote_url": "https://zotero.example.com",
+        "library.remote_key": "testkeyid.testsecret0123",
     }
     if key.path in special:
         return special[key.path]
@@ -92,4 +95,8 @@ def sample_changes(key: Any) -> dict[str, Any]:
     if key.path == "server.trust_proxy":
         # validate() refuses one without the other.
         changes["server.trusted_proxies"] = ["127.0.0.1"]
+    if key.path == "library.source":
+        # remote needs somewhere to read from.
+        changes["library.remote_url"] = "https://zotero.example.com"
+        changes["library.remote_key"] = "testkeyid.testsecret0123"
     return changes

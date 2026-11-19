@@ -29,6 +29,11 @@ from app.search.index import Index, fts_phrase
 TEXT_RECHECK_SECONDS = 60
 # How often to tell the page how far the text pass has got.
 PROGRESS_EVERY = 50
+# A paper gone from the library is kept this long, out of sight, with its
+# indexed text and (app/content) its results: a key that comes back -- the
+# library source switched, a remote library imported again -- finds them.
+VANISHED_KEEP_SECONDS = 30 * 86400
+VANISHED = "_vanished"
 
 # The fields a list shows, and what the page may sort by.
 SORTS = ("relevance", "added", "year", "title")
@@ -143,11 +148,18 @@ class Catalogue:
         self._dois: dict[str, str] = {}
         self._titles: dict[str, str] = {}
         self._title_list: list[str] = []
+        # key -> the paper as it was, its record carrying when it went.
+        self._vanished: dict[str, Paper] = {}
         self._sync_lock = threading.Lock()
         self._stamp: Any = None
         self._text_checked = 0.0
         self.rev = 0
         self.status = Status()
+        # A look at the library has finished in this process. Until then the
+        # papers are what load() found in the index, as the last run left
+        # them -- with another source's PDF paths, if library.source was
+        # switched -- so app/content must not queue work from them.
+        self.synced = False
         # Hears "changed" (the list of papers moved on) and "progress" (the
         # text pass), from the sync thread. main points it at the SSE hub.
         self.on_event: Callable[[str, dict[str, Any]], None] | None = None
@@ -165,12 +177,19 @@ class Catalogue:
             paper = Paper(doc_id=doc_id, record=record, meta_sig=meta_sig, text_sig=text_sig)
             paper.has_text = bool(record.get("_has_text"))
             _fold_fields(paper)
-            papers[key] = paper
+            if record.get(VANISHED):
+                self._vanished[key] = paper
+            else:
+                papers[key] = paper
         self._replace(papers)
         self.status.ready = bool(papers)
 
     def get(self, key: str) -> Paper | None:
         return self._papers.get(key)
+
+    def vanished(self) -> set[str]:
+        """Papers gone from the library but kept a while (VANISHED_KEEP_SECONDS)."""
+        return set(self._vanished)
 
     def all(self) -> list[Paper]:
         return list(self._papers.values())
@@ -212,21 +231,32 @@ class Catalogue:
     def _sync(self, force: bool) -> SyncResult | None:
         stamp = self.library.stamp()
         if stamp is None:
-            self.status.error = f"no Zotero library at {self.library.sqlite_path}"
+            self.status.error = getattr(self.library, "error", "") or f"no Zotero library at {self.library.sqlite_path}"
             return None
+        # A remote library that could not be asked this time still has its
+        # last copy to show, and says why it may be behind.
+        self.status.error = getattr(self.library, "error", "")
         recheck_text = time.monotonic() - self._text_checked >= TEXT_RECHECK_SECONDS
         if not force and stamp == self._stamp and not recheck_text:
             return None
         items = self.library.read()
         self._stamp = stamp
         self._text_checked = time.monotonic()
-        self.status.error = ""
         result = SyncResult()
 
         papers = dict(self._papers)
         for key, item in items.items():
             meta_sig = item.meta_signature()
             existing = papers.get(key)
+            if existing is None and key in self._vanished:
+                # Back: as it was, text and all.
+                existing = self._vanished.pop(key)
+                existing.record.pop(VANISHED, None)
+                if existing.meta_sig == meta_sig:
+                    self.index.put_meta(key, meta_sig, existing.record)
+                    papers[key] = existing
+                    result.added += 1
+                    continue
             if existing is not None and existing.meta_sig == meta_sig:
                 continue
             record = item.to_dict()
@@ -245,11 +275,21 @@ class Catalogue:
         # papers were deleted.
         if not self.library.read_fell_back:
             gone = [key for key in papers if key not in items]
-            if gone:
-                self.index.delete(gone)
-                for key in gone:
-                    del papers[key]
-                result.removed = len(gone)
+            now = time.time()
+            for key in gone:
+                paper = papers.pop(key)
+                paper.record[VANISHED] = now
+                self.index.put_meta(key, paper.meta_sig, paper.record)
+                self._vanished[key] = paper
+            result.removed = len(gone)
+            expired = [
+                key for key, paper in self._vanished.items()
+                if key not in items and now - float(paper.record.get(VANISHED) or 0) > VANISHED_KEEP_SECONDS
+            ]
+            if expired:
+                self.index.delete(expired)
+                for key in expired:
+                    del self._vanished[key]
 
         if result.added or result.changed or result.removed:
             self._replace(papers)
@@ -262,7 +302,7 @@ class Catalogue:
         pending = [
             (items[key], paper)
             for key, paper in papers.items()
-            if key in items and paper.text_sig != items[key].text_signature()
+            if key in items and items[key].text_known and paper.text_sig != items[key].text_signature()
         ]
         pending.sort(key=lambda pair: pair[0].date_added, reverse=True)
         self.status.text_pending = len(pending)
@@ -287,6 +327,7 @@ class Catalogue:
             self.rev += 1
             self._emit("changed", {"rev": self.rev})
         self.status.last_sync = time.time()
+        self.synced = True
         return result
 
     def put_text(self, key: str, text: str) -> None:

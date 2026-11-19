@@ -696,6 +696,63 @@
         ],
         "type": "object"
       },
+      "MendReport": {
+        "properties": {
+          "ambiguous": {
+            "type": "integer"
+          },
+          "dated": {
+            "type": "integer"
+          },
+          "local": {
+            "type": "integer"
+          },
+          "moves": {
+            "type": "integer"
+          },
+          "paired": {
+            "type": "integer"
+          },
+          "rekeyed": {
+            "type": "integer"
+          },
+          "sent": {
+            "oneOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "server": {
+            "type": "integer"
+          },
+          "twins": {
+            "type": "integer"
+          },
+          "unpaired_local": {
+            "type": "integer"
+          },
+          "unpaired_server": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ambiguous",
+          "dated",
+          "local",
+          "moves",
+          "paired",
+          "rekeyed",
+          "server",
+          "twins",
+          "unpaired_local",
+          "unpaired_server"
+        ],
+        "type": "object"
+      },
       "NewAPIKey": {
         "properties": {
           "created_at": {
@@ -1586,9 +1643,16 @@
                       "apply": {
                         "type": "string"
                       },
+                      "choices": {
+                        "description": "The only values the key takes, shown as a dropdown; empty when it takes any.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
                       "default": {},
                       "file_only": {
-                        "description": "A path: change it in config.yaml, never here.",
+                        "description": "A path or the remote library's address or key: change it in config.yaml, never here.",
                         "type": "boolean"
                       },
                       "help": {
@@ -11723,6 +11787,74 @@
         "x-required-role": "owner"
       },
       "x-feature": "jobs"
+    },
+    "/api/owner/library/mend-keys": {
+      "post": {
+        "operationId": "post_api_owner_library_mend_keys",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "mode": {
+                    "default": "plan",
+                    "description": "plan: pair the records only; dry_run: also ask the server what it would do; apply: move them.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MendReport"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "409": {
+            "$ref": "#/components/responses/E409"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Mend the remote library's keys",
+        "tags": [
+          "Owner"
+        ],
+        "x-required-role": "owner"
+      },
+      "x-feature": "settings"
     },
     "/api/owner/logs/days": {
       "get": {

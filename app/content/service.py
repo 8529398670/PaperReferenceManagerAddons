@@ -33,6 +33,8 @@ stream, so an open screen fills in place.
 from __future__ import annotations
 
 import asyncio
+import copy
+import json
 import hashlib
 import os
 import threading
@@ -45,6 +47,7 @@ from app.content import store as st
 from app.content.pool import Pool
 from app.core import db, graceful
 from app.library.catalogue import Catalogue, Paper
+from app.library.remote import RemoteLibrary, is_remote_path
 from app.review import screen as review_screen
 from app.search import query as q
 
@@ -62,6 +65,8 @@ MODALITIES_FILE = "modalities.yaml"
 # A review result kept per rules signature: review@<sig>.json beside review.json.
 REVIEW_KEPT = "review@"
 REVIEW_KEPT_MAX = 8
+# The papers opened while the library is remote (ContentService.demanded).
+DEMANDED_FILE = "on-demand.json"
 
 
 def read_text(files: list[str]) -> str:
@@ -84,6 +89,11 @@ def read_text(files: list[str]) -> str:
 def pdf_signature(record: dict[str, Any]) -> str:
     parts = []
     for name in record.get("pdfs") or []:
+        if is_remote_path(name):
+            # The path holds the file's md5 and the file may not be fetched
+            # yet: the path is the signature (see app/library/remote.py).
+            parts.append(name)
+            continue
         try:
             stat = os.stat(name)
             parts.append(f"{name}|{int(stat.st_mtime)}|{stat.st_size}")
@@ -140,7 +150,16 @@ class ContentService:
         # library's stream.
         self.publish: Callable[[str, dict[str, Any]], None] = lambda name, data: None
         self.dirty = True
+        # library.source remote: nothing that needs a paper's PDF or text runs
+        # until the paper is opened (open()), and what already ran is kept.
+        # The papers opened so far, kept across restarts.
+        self.on_demand = isinstance(catalogue.library, RemoteLibrary)
+        self._demanded_path = content_dir / DEMANDED_FILE
+        self.demanded: set[str] = self._load_demanded() if self.on_demand else set()
         self._wids: dict[str, str] = {}
+        # Papers gone from the library but kept (Catalogue.vanished), as of
+        # the last reconcile.
+        self._waiting: set[str] = set()
         self._skips: set[str] | None = None
         self._skips_lock = threading.Lock()
         self._last_queue_event = 0.0
@@ -212,6 +231,62 @@ class ContentService:
             out.append((st.OCR, sig, {"pdf": pdf}))
         return out
 
+    # -- on demand (library.source remote) ----------------------------------------
+
+    def _load_demanded(self) -> set[str]:
+        try:
+            data = json.loads(self._demanded_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return set()
+        return {str(key) for key in data} if isinstance(data, list) else set()
+
+    def _save_demanded(self) -> None:
+        tmp = self._demanded_path.with_name(DEMANDED_FILE + ".tmp")
+        tmp.write_text(json.dumps(sorted(self.demanded)), encoding="utf-8")
+        os.replace(tmp, self._demanded_path)
+
+    def _settled(self, rows: dict[tuple[str, str], tuple[str, str]], key: str, stage: str) -> bool:
+        return rows.get((key, stage), ("", ""))[0] in st.SETTLED
+
+    def on_demand_signatures(self, paper: Paper, rows: dict[tuple[str, str], tuple[str, str]]) -> dict[str, str]:
+        """signatures() for a remote library. OpenAlex as ever (it needs no
+        PDF). The rest only for an opened paper, only for stages that never
+        finished -- a result made from the local library's text is kept,
+        never redone -- and only once its text is in (the worker's OCR stage
+        reads the PDF's text layer)."""
+        probe = copy.copy(paper)
+        probe.text_sig = paper.text_sig or "remote"
+        sigs = self.signatures(probe, rows) or {}
+        out = {st.OPENALEX: sigs[st.OPENALEX]}
+        if paper.key not in self.demanded:
+            return out
+        if rows.get((paper.key, st.OCR), ("", ""))[0] != st.DONE:
+            return out
+        for stage, sig in sigs.items():
+            if stage != st.OPENALEX and not self._settled(rows, paper.key, stage):
+                out[stage] = sig
+        return out
+
+    def on_demand_heavy(self, paper: Paper, rows: dict[tuple[str, str], tuple[str, str]]) -> list[tuple[str, str, dict[str, Any]]]:
+        """heavy() for a remote library: an opened paper's figures, and its
+        text (OCR, which uses the text layer when it is good) while any text
+        stage has not finished. The worker fetches the PDF."""
+        if paper.key not in self.demanded:
+            return []
+        pdf = first_pdf(paper.record)
+        if not pdf:
+            return []
+        sig = "pdf:" + pdf_signature({"pdfs": [pdf]})
+        out = []
+        if not self._settled(rows, paper.key, st.FIGURES):
+            out.append((st.FIGURES, sig, {"pdf": pdf}))
+        probe = copy.copy(paper)
+        probe.text_sig = paper.text_sig or "remote"
+        text_stages = [s for s in (self.signatures(probe, rows) or {}) if s != st.OPENALEX]
+        if any(not self._settled(rows, paper.key, s) for s in text_stages) and not self._settled(rows, paper.key, st.OCR):
+            out.append((st.OCR, sig, {"pdf": pdf}))
+        return out
+
     def _load_unusable(self) -> set[str]:
         if self._unusable is None:
             self._unusable = {
@@ -231,14 +306,18 @@ class ContentService:
         if self.review is not None:
             self.review.refresh()
         papers = self.catalogue.all()
-        if not self.catalogue.status.ready or not papers:
+        # Not before the first look at the library: what load() brought back
+        # from the index may carry the other source's PDF paths, and every
+        # signature would seem to have changed.
+        if not self.catalogue.status.ready or not getattr(self.catalogue, "synced", True) or not papers:
             return 0
         rows = self.files.rows()
         self._load_unusable()
         wants: list[tuple[Any, ...]] = []
+        release: list[tuple[str, str]] = []
         settled = 0
         for paper in papers:
-            sigs = self.signatures(paper, rows)
+            sigs = self.on_demand_signatures(paper, rows) if self.on_demand else self.signatures(paper, rows)
             if sigs is None:
                 continue
             added = paper.record.get("date_added") or ""
@@ -249,21 +328,49 @@ class ContentService:
                         settled += 1
                         continue
                     wants.append((paper.key, stage, sig, added, 0.0))
-            for stage, sig, given in self.heavy(paper):
+                elif self.on_demand and row[0] == st.HELD:
+                    release.append((paper.key, stage))
+            for stage, sig, given in (self.on_demand_heavy(paper, rows) if self.on_demand else self.heavy(paper)):
                 if rows.get((paper.key, stage), ("", None))[1] != sig:
                     wants.append((paper.key, stage, sig, added, 0.0, given))
+                elif self.on_demand and rows.get((paper.key, stage), ("", None))[0] == st.HELD:
+                    # Held before the paper was opened, and wanted as it is.
+                    release.append((paper.key, stage))
         changed = (self.files.want(wants) if wants else 0) + settled
+        here = {paper.key for paper in papers}
+        # Gone from the library: kept, its work held, while the catalogue
+        # keeps the paper (VANISHED_KEEP_SECONDS), so a key that comes back
+        # (the source switched, the remote imported again) loses nothing.
+        waiting = {key for key, _ in rows if key not in here} & self.catalogue.vanished()
+        if self.on_demand:
+            for key, stage in release:
+                changed += self.files.unhold(key, stage)
+            # Left over from before the switch, or no longer needed by an
+            # opened paper: waits until something wants it.
+            changed += self.files.hold(st.LOCAL + st.HEAVY, self.demanded)
+        else:
+            changed += self.files.unhold(keep=waiting)
+        changed += self.files.hold_keys(waiting)
+        if waiting - self._waiting:
+            # Out of the citation network now; backfill_one puts it back if
+            # the paper returns.
+            self.pool.drop_paper(waiting - self._waiting)
+            for key in waiting - self._waiting:
+                self._wids.pop(key, None)
+        if self._waiting - waiting:
+            # Some came back: their OpenAlex ids are read again.
+            self._wids.clear()
+        self._waiting = waiting
         if self.review is not None:
             # Off a list and with no figure picked: no longer screened.
             wanted = self.review.candidates()
             for key, stage in list(rows):
-                if stage == st.REVIEW and key not in wanted:
+                if stage == st.REVIEW and key not in wanted and key not in waiting:
                     self.files.drop(key, st.REVIEW, "review.json")
                     self._prune_reviews(key, keep=set())
                     self.review.dropped(key)
                     changed += 1
-        here = {paper.key for paper in papers}
-        gone = {key for key, _ in rows if key not in here}
+        gone = {key for key, _ in rows if key not in here} - waiting
         if gone:
             self.files.forget(gone)
             self.pool.drop_paper(gone)
@@ -280,9 +387,11 @@ class ContentService:
                 state, summary, _ = stages.get(st.OPENALEX, ("", {}, ""))
                 if state == st.DONE and summary.get("wid"):
                     self._wids[key] = summary["wid"]
+        here = {p.key for p in papers}
+        wids = {wid for key, wid in self._wids.items() if key in here}
         dois = {(p.record.get("doi") or "").lower() for p in papers} - {""}
         titles = {p.title_f for p in papers} - {""}
-        self.pool.set_library(set(self._wids.values()), dois, titles)
+        self.pool.set_library(wids, dois, titles)
 
     # -- the lanes -------------------------------------------------------------------
 
@@ -586,7 +695,7 @@ class ContentService:
             return False
         filled = self.pool.filled()
         for (key, stage), (state, sig) in self.files.rows().items():
-            if stage != st.OPENALEX or state != st.DONE or filled.get(key) == sig:
+            if stage != st.OPENALEX or state != st.DONE or filled.get(key) == sig or key in self._waiting:
                 continue
             network = self.files.read(key, "network.json.gz")
             if network is None:
@@ -602,8 +711,20 @@ class ContentService:
     # -- reading -------------------------------------------------------------------
 
     def open(self, key: str) -> None:
-        """Someone is looking at this paper: what it is waiting on goes first."""
-        if self.files.hurry(key):
+        """Someone is looking at this paper: what it is waiting on goes first.
+        With a remote library this is also what starts its work at all."""
+        if self.on_demand:
+            if key not in self.demanded and self.catalogue.get(key) is not None:
+                self.demanded.add(key)
+                try:
+                    self._save_demanded()
+                except OSError as error:
+                    print(f"[content] could not save {DEMANDED_FILE}: {error}", flush=True)
+                self.dirty = True
+            # reconcile releases what the paper still needs (not, say, the
+            # OCR of a paper whose text stages are done).
+            self.dirty = True
+        if self.files.hurry(key) or self.dirty:
             self._queue_event(force=True)
 
     def badges(self, keys: list[str]) -> dict[str, dict[str, Any]]:

@@ -79,7 +79,21 @@ FILE_ONLY_KEYS = frozenset({
     "docker.data_dir",
     "library.zotero_dir",
     "docker.zotero_dir",
+    # Not paths, but they decide which server the library is read from and
+    # with what key: a web session must not point the server elsewhere.
+    "library.remote_url",
+    "library.remote_key",
 })
+
+# File-only credentials: the Settings screen shows only whether they are set,
+# never the value, which only the person with config.yaml can see.
+HIDDEN_KEYS = frozenset({"library.remote_key"})
+
+
+def _shown(path: str, value: Any) -> Any:
+    if path in HIDDEN_KEYS:
+        return "(set)" if value else ""
+    return value
 
 
 def file_only(key: config_schema.KeySchema) -> bool:
@@ -176,6 +190,7 @@ def live_config(boot: Config, boot_file: config.File, file: config.File) -> Conf
             cite_style=file.library.cite_style,
             openalex_enabled=file.library.openalex_enabled,
             openalex_api_key=file.library.openalex_api_key,
+            remote_poll_seconds=file.library.remote_poll_seconds,
         ),
         enrich=copy.deepcopy(file.enrich),
         llm=copy.deepcopy(file.llm),
@@ -475,15 +490,16 @@ class Holder:
                         "key": key.path,
                         "name": key.name,
                         "type": key.type,
-                        "value": values[key.path],
-                        "default": key.default,
+                        "value": _shown(key.path, values[key.path]),
+                        "default": _shown(key.path, key.default),
                         "in_file": key.path in present,
                         "help": key.help,
                         "apply": key.mode,
                         "pending_restart": pending,
-                        "running": running[key.path],
+                        "running": _shown(key.path, running[key.path]),
                         "locked": locked(key),
                         "file_only": file_only(key),
+                        "choices": list(key.choices),
                     })
                 sections.append({"name": section.name, "help": section.help, "keys": keys})
             return {

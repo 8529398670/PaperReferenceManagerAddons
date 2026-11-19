@@ -116,6 +116,34 @@ class HolderTest(unittest.TestCase):
         self.assertNotIn(holder.get().secret_key, encoded)
         self.assertNotIn("secret_key", encoded)
 
+    def test_remote_library_key_is_hidden_and_file_only(self) -> None:
+        holder, path = new_holder(self)
+        secret = "keyid0001.verysecretvalue0123"
+        raw = config_live.read_raw(path).replace('remote_key: ""', f'remote_key: "{secret}"', 1)
+        raw = raw.replace('remote_url: ""', 'remote_url: "https://zotero.example.com"', 1)
+        write(path, raw)
+        holder.poll()
+        holder.poll()
+        snapshot = holder.snapshot()
+        self.assertNotIn(secret, json.dumps(snapshot))
+        key = next(k for s in snapshot["sections"] for k in s["keys"] if k["key"] == "library.remote_key")
+        self.assertEqual(key["value"], "(set)")
+        self.assertTrue(key["file_only"])
+        for name, value in (("library.remote_key", "a.b"), ("library.remote_url", "https://evil.example.com")):
+            with self.subTest(key=name):
+                with self.assertRaises(config_live.FileOnlyError):
+                    holder.save(version_of(path), {name: value})
+
+    def test_library_source_is_a_choice(self) -> None:
+        holder, path = new_holder(self)
+        source = next(k for s in holder.snapshot()["sections"] for k in s["keys"] if k["key"] == "library.source")
+        self.assertEqual(source["choices"], ["local", "remote"])
+        with self.assertRaises(ValidationError):
+            holder.save(version_of(path), {"library.source": "elsewhere"})
+        # remote with nowhere to read from is refused by validate().
+        with self.assertRaises(ValidationError):
+            holder.save(version_of(path), {"library.source": "remote"})
+
     def test_container_locks_script_keys(self) -> None:
         holder, path = new_holder(self)
         with in_container(path, path.parent / "data"):

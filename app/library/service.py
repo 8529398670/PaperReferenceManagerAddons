@@ -17,13 +17,24 @@ from app.core import graceful, sse
 from app.core.config import Config
 from app.core.config_live import Holder
 from app.library.catalogue import Catalogue
+from app.library.remote import Remote, RemoteLibrary
 from app.library.zotero import Library
 from app.search.index import Index
 
 
+def make_library(cfg: Config) -> Library | RemoteLibrary:
+    """library.source picks where the papers come from."""
+    library = cfg.library
+    if library.source == "remote":
+        remote = Remote(library.remote_url, library.remote_key, library.remote_library)
+        return RemoteLibrary(remote, library.index_path.parent, library.remote_poll_seconds)
+    return Library(library.zotero_dir, library.index_path.parent)
+
+
 class LibraryService:
     def __init__(self, cfg: Config) -> None:
-        library = Library(cfg.library.zotero_dir, cfg.library.index_path.parent)
+        library = make_library(cfg)
+        self.library = library
         self.index = Index(cfg.library.index_path)
         self.catalogue = Catalogue(library, self.index)
         self.hub = sse.Hub(max_clients=32)
@@ -60,7 +71,13 @@ class LibraryService:
             except Exception as error:  # noqa: BLE001 -- one bad read must never stop the watching
                 self.catalogue.status.error = str(error)
                 print(f"[library] sync failed: {error!r}", flush=True)
-            await asyncio.sleep(settings.get().library.watch_seconds)
+            current = settings.get().library
+            if isinstance(self.library, RemoteLibrary):
+                # The loop still turns every watch_seconds (a forced look
+                # from the Jobs screen should not wait); the library itself
+                # asks the server only every remote_poll_seconds.
+                self.library.poll_seconds = current.remote_poll_seconds
+            await asyncio.sleep(current.watch_seconds)
 
     def start(self, settings: Holder) -> None:
         self._loop = asyncio.get_running_loop()
@@ -77,6 +94,8 @@ class LibraryService:
 
     def sync_job(self) -> tuple[str, str]:
         """The library-sync job: a full look, whether or not Zotero committed."""
+        if isinstance(self.library, RemoteLibrary):
+            self.library.poll_now()
         result = self._load_and_sync(force=True)
         if result is None:
             return "already running" if not self.catalogue.status.error else "", self.catalogue.status.error

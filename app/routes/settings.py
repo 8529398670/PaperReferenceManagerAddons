@@ -24,7 +24,7 @@ from app.core.config import ValidationError
 from app.core.logs import KIND_ADMIN
 from app.core.yaml_edit import HandEditError
 from app.routes.admin import DateTime
-from app.routes.helpers import Refused
+from app.routes.helpers import Refused, get_config
 from app.routes.helpers import get_settings as holder
 from app.routes.logs import audit
 
@@ -49,7 +49,8 @@ class SettingKey(Reply):
     pending_restart: bool
     running: Any
     locked: bool
-    file_only: Annotated[bool, Meta(description="A path: change it in config.yaml, never here.")]
+    file_only: Annotated[bool, Meta(description="A path or the remote library's address or key: change it in config.yaml, never here.")]
+    choices: Annotated[list[str], Meta(description="The only values the key takes, shown as a dropdown; empty when it takes any.")] = []
 
 
 class SettingsSection(Reply):
@@ -130,3 +131,48 @@ def save_settings(request: Request, body: SaveSettings) -> SettingsResult:
             "scripts": result["scripts"],
         })
     return msgspec.convert(result, SettingsResult)
+
+
+class MendRemoteKeys(RequestType):
+    mode: Annotated[str, Meta(description="plan: pair the records only; dry_run: also ask the server what it would do; "
+                                          "apply: move them.", extra={"enum": ["plan", "dry_run", "apply"]})] = "plan"
+
+
+class MendReport(Reply):
+    """mend.mend: how the remote library's records pair with the local Zotero's."""
+
+    api_name: ClassVar[str] = "MendReport"
+    local: int
+    server: int
+    paired: int
+    rekeyed: int
+    dated: int
+    moves: int
+    unpaired_server: int
+    unpaired_local: int
+    ambiguous: int
+    twins: int
+    sent: dict[str, Any] | None = None
+
+
+@route(
+    "POST /api/owner/library/mend-keys", summary="Mend the remote library's keys",
+    tag="Owner", role=OWNER, feature="settings", errors=(400, 409),
+)
+def mend_remote_keys(request: Request, body: MendRemoteKeys) -> MendReport:
+    """A library on ZoteroWebDAV imported from an export has made-up keys
+    and no dateAdded. This pairs its records with library.zotero_dir's and
+    moves them to Zotero's own keys and dates (app/library/mend.py), files
+    and all. Same as `python -m app manage mend-remote-keys`."""
+    from app.library import mend
+    from app.library.remote import RemoteError
+
+    if body.mode not in ("plan", "dry_run", "apply"):
+        raise Refused(400, "invalid_settings", problems=["mode must be plan, dry_run or apply"])
+    try:
+        report = mend.mend(get_config(request), send=body.mode != "plan", dry_run=body.mode == "dry_run")
+    except RemoteError as failure:
+        raise Refused(409, "remote_library", problems=[str(failure)]) from None
+    if body.mode == "apply":
+        audit(request, KIND_ADMIN, "remote keys mended", {k: v for k, v in report.items() if k != "sent"})
+    return msgspec.convert(report, MendReport)

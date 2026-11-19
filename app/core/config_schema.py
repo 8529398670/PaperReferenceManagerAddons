@@ -39,6 +39,9 @@ MODE_RESTART = "restart"
 MODE_SCRIPTS = "scripts"
 
 _TAG = re.compile(r"\[(live|restart|scripts)\]")
+# "(one of: local, remote)" in a key's comment: the only values it takes,
+# shown as a dropdown on the Settings screen.
+_CHOICES = re.compile(r"\(one of: ([^)]*)\)")
 _TYPES = {"bool": "bool", "int": "int", "str": "string", "list[str]": "list"}
 
 # Limits on a submitted value, before validate() has its say. They keep a
@@ -62,6 +65,9 @@ class KeySchema:
     # at the end of its line, for edit_yaml when it adds the key to a file.
     comment_above: tuple[str, ...] = field(default=(), repr=False)
     comment_inline: str = field(default="", repr=False)
+    # The values a string key is limited to, from "(one of: a, b)"; empty
+    # when it takes any value.
+    choices: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -163,6 +169,7 @@ def _build_schema(raw: str) -> tuple[SectionSchema, ...]:
                 tagged=bool(mode),
                 comment_above=tuple(own),
                 comment_inline=inline,
+                choices=_find_choices(paragraph + [inline]),
             ))
         sections.append(SectionSchema(name=section_key.value, help=_help_text(section_comment, ""), keys=tuple(keys)))
     return tuple(sections)
@@ -180,6 +187,13 @@ def _comment_block(text: _Text, last: int, floor: int) -> list[str]:
     while first > floor and text.line(first).strip().startswith("#"):
         first -= 1
     return [text.line(number).strip() for number in range(first + 1, last + 1)]
+
+
+def _find_choices(lines: list[str]) -> tuple[str, ...]:
+    match = _CHOICES.search(" ".join(line.lstrip("#").strip() for line in lines))
+    if not match:
+        return ()
+    return tuple(part.strip() for part in match.group(1).split(",") if part.strip())
 
 
 def _find_tag(lines: list[str]) -> str:
@@ -303,6 +317,8 @@ def coerce(key: KeySchema, value: Any) -> Any:
     if key.type == "string":
         if not isinstance(value, str) or len(value) > MAX_STRING_LENGTH:
             raise bad(f"text of at most {MAX_STRING_LENGTH} characters")
+        if key.choices and value not in key.choices:
+            raise bad("one of " + ", ".join(key.choices))
         return value
     if key.type == "list":
         if not isinstance(value, list) or any(not isinstance(item, str) for item in value):

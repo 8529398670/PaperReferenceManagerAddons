@@ -1676,6 +1676,7 @@ Runs POST /api/admin/users/{user_id}/sessions/{session_id}/revoke once per item:
 |---|---|---|---|
 | GET | [`/api/owner/jobs`](#get-apiownerjobs) | Background jobs | browser session only, the owner |
 | POST | [`/api/owner/jobs/{name}/run`](#post-apiownerjobsnamerun) | Run a job now | browser session only, the owner |
+| POST | [`/api/owner/library/mend-keys`](#post-apiownerlibrarymend-keys) | Mend the remote library's keys | browser session only, the owner |
 | GET | [`/api/owner/logs/days`](#get-apiownerlogsdays) | The days on record | browser session only, the owner |
 | GET | [`/api/owner/logs/days/{date}`](#get-apiownerlogsdaysdate) | One day's entries | browser session only, the owner |
 | POST | [`/api/owner/logs/days/{date}/delete`](#post-apiownerlogsdaysdatedelete) | Delete one day | browser session only, the owner |
@@ -1729,6 +1730,26 @@ Run a job now
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
 | `ok` | boolean | yes |  |  |
+
+### POST /api/owner/library/mend-keys
+
+Mend the remote library's keys
+
+|  |  |
+|---|---|
+| Who may call | browser session only, the owner |
+| Errors | 400, 403, 404, 409, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `mode` | string | no | default `plan` | plan: pair the records only; dry_run: also ask the server what it would do; apply: move them. |
+
+**Reply 200**: Success
+
+[`MendReport`](#mendreport).
 
 ### GET /api/owner/logs/days
 
@@ -4741,6 +4762,22 @@ The shapes the routes above refer to by name.
 | `display_name` | string | yes |  |  |
 | `id` | integer | yes |  |  |
 
+### MendReport
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `ambiguous` | integer | yes |  |  |
+| `dated` | integer | yes |  |  |
+| `local` | integer | yes |  |  |
+| `moves` | integer | yes |  |  |
+| `paired` | integer | yes |  |  |
+| `rekeyed` | integer | yes |  |  |
+| `sent` | object or null | no |  |  |
+| `server` | integer | yes |  |  |
+| `twins` | integer | yes |  |  |
+| `unpaired_local` | integer | yes |  |  |
+| `unpaired_server` | integer | yes |  |  |
+
 ### NewAPIKey
 
 | Field | Type | Required | Limits | Description |
@@ -4980,8 +5017,9 @@ The shapes the routes above refer to by name.
 | `sections[].help` | string | yes |  |  |
 | `sections[].keys` | array of object | yes |  |  |
 | `sections[].keys[].apply` | string | yes |  |  |
+| `sections[].keys[].choices` | array of string | no |  | The only values the key takes, shown as a dropdown; empty when it takes any. |
 | `sections[].keys[].default` | any | yes |  |  |
-| `sections[].keys[].file_only` | boolean | yes |  | A path: change it in config.yaml, never here. |
+| `sections[].keys[].file_only` | boolean | yes |  | A path or the remote library's address or key: change it in config.yaml, never here. |
 | `sections[].keys[].help` | string | yes |  |  |
 | `sections[].keys[].in_file` | boolean | yes |  |  |
 | `sections[].keys[].key` | string | yes |  |  |

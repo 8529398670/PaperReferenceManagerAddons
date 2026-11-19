@@ -68,7 +68,10 @@ RUNNING = "running"
 DONE = "done"
 FAILED = "failed"
 NOT_FOUND = "not_found"
-STATES = (PENDING, RUNNING, DONE, FAILED, NOT_FOUND)
+# Wanted, but only once someone opens the paper: with library.source remote,
+# work that needs the PDF waits here so the whole library is never fetched.
+HELD = "held"
+STATES = (PENDING, RUNNING, DONE, FAILED, NOT_FOUND, HELD)
 SETTLED = (DONE, NOT_FOUND)
 
 # A failure waits this long before its next try, doubling, up to a day.
@@ -309,6 +312,52 @@ class ContentStore:
                 "UPDATE tasks SET priority = ?, next_at = 0 WHERE key = ? AND state IN (?, ?)", (time.time(), key, PENDING, FAILED)
             )
         return cursor.rowcount
+
+    def hold(self, stages: tuple[str, ...], keep: set[str]) -> int:
+        """Pending tasks of these stages wait (held) unless their paper is in
+        keep: what a remote library does only on demand. -> how many."""
+        marks = ",".join("?" * len(stages))
+        with self._lock:
+            found = self._db.execute(
+                f"SELECT key, stage FROM tasks WHERE state = ? AND stage IN ({marks})", (PENDING, *stages)
+            ).fetchall()
+            held = [(HELD, key, stage) for key, stage in found if key not in keep]
+            if held:
+                self._db.executemany("UPDATE tasks SET state = ? WHERE key = ? AND stage = ? AND state = 'pending'", held)
+        return len(held)
+
+    def unhold(self, key: str = "", stage: str = "", keep: set[str] | frozenset[str] = frozenset()) -> int:
+        """Held tasks are due again: one task, first in line (its paper was
+        opened), or all but keep's (the library is local again; keep is the
+        papers gone from it)."""
+        with self._lock:
+            if key:
+                cursor = self._db.execute(
+                    "UPDATE tasks SET state = ?, priority = ?, changed_at = ? WHERE key = ? AND stage = ? AND state = ?",
+                    (PENDING, time.time(), time.time(), key, stage, HELD),
+                )
+                return cursor.rowcount
+            if not keep:
+                return self._db.execute("UPDATE tasks SET state = ? WHERE state = ?", (PENDING, HELD)).rowcount
+            found = self._db.execute("SELECT key, stage FROM tasks WHERE state = ?", (HELD,)).fetchall()
+            due = [(PENDING, k, s) for k, s in found if k not in keep]
+            if due:
+                self._db.executemany("UPDATE tasks SET state = ? WHERE key = ? AND stage = ? AND state = 'held'", due)
+        return len(due)
+
+    def hold_keys(self, keys: set[str]) -> int:
+        """Every task of these papers that would run waits instead: papers
+        gone from the library, kept a while in case they come back."""
+        if not keys:
+            return 0
+        with self._lock:
+            found = self._db.execute(
+                "SELECT key, stage FROM tasks WHERE state IN (?, ?)", (PENDING, FAILED)
+            ).fetchall()
+            held = [(HELD, k, s) for k, s in found if k in keys]
+            if held:
+                self._db.executemany("UPDATE tasks SET state = ? WHERE key = ? AND stage = ?", held)
+        return len(held)
 
     def retry(self, key: str = "", stage: str = "") -> int:
         """Ask again: failed and not-found tasks of a paper, of a stage, or one.

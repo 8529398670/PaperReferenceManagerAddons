@@ -106,6 +106,7 @@ content:
   state_failed: "Failed"
   state_not_found: "Not found"
   state_none: "Not queued"
+  state_held: "On demand"
   openalex: "OpenAlex"
   # {refs} references and {citers} citing works.
   openalex_done_title: "OpenAlex: {refs} references, {citers} citing works"
@@ -1993,6 +1994,7 @@ errors:
   settings_locked: "That setting cannot be changed from inside the container."
   settings_file_only: "That setting names a path, so it can only be changed in config.yaml."
   invalid_settings: "That value is not allowed."
+  remote_library: "The remote library could not be read or written; problems says why."
   unknown_setting: "There is no such setting."
   settings_hand_edit: "config.yaml is written in a way this screen cannot change. Edit the file by hand."
   # The Screener rules page.

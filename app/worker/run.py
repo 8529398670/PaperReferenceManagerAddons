@@ -94,8 +94,11 @@ def find_model(given: str, app_dir: Path) -> Path | None:
 
 
 class Worker:
-    def __init__(self, files: st.ContentStore, stages: tuple[str, ...], model: Path | None) -> None:
+    def __init__(self, files: st.ContentStore, stages: tuple[str, ...], model: Path | None, fetch: Any = None) -> None:
         self.files = files
+        # With library.source remote: Path -> Path | None, fetching a PDF
+        # that is not cached yet (app/library/remote.py).
+        self.fetch = fetch
         self.stages = stages
         self.model = model
         self.id = f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:6]}"
@@ -155,6 +158,8 @@ class Worker:
         pdf = Path(str((task.get("input") or {}).get("pdf") or ""))
         started = time.monotonic()
         try:
+            if pdf.name and not pdf.is_file() and self.fetch is not None:
+                pdf = self.fetch(pdf) or pdf
             if not pdf.name or not pdf.is_file():
                 raise FileNotFoundError(f"the PDF is not there: {pdf}")
             summary = self.figures(key, pdf) if stage == st.FIGURES else self.ocr(key, pdf)
@@ -182,13 +187,43 @@ class Worker:
     def ocr(self, key: str, pdf: Path) -> dict[str, Any]:
         from app.worker import ocr
 
-        text = ocr.ocr_pdf(pdf)
+        # A PDF with a good text layer needs no OCR: a remote library has no
+        # Zotero text, so every paper from one comes here first.
+        text, pages = ocr.text_layer(pdf)
+        source = "text_layer"
+        if ocr.needs_ocr(text, pages):
+            text = ocr.ocr_pdf(pdf)
+            source = "ocr"
         folder = self.files.dir(key)
         folder.mkdir(mode=0o700, parents=True, exist_ok=True)
         tmp = folder / (OCR_FILE + ".tmp")
         tmp.write_text(text, encoding="utf-8")
         os.replace(tmp, folder / OCR_FILE)
-        return {"chars": len(text)}
+        return {"chars": len(text), "source": source}
+
+
+def remote_fetcher(cfg: Any) -> Any:
+    """With library.source remote, a function that downloads a PDF the
+    server listed but nobody has opened yet; else None."""
+    library = cfg.library
+    if library.source != "remote":
+        return None
+    from app.library import remote as rl
+
+    client = rl.Remote(library.remote_url, library.remote_key, library.remote_library)
+    files_dir = library.index_path.parent / rl.REMOTE_FILES_DIR
+
+    def fetch(pdf: Path) -> Path | None:
+        attach_key = rl.attachment_of(pdf)
+        if attach_key is None or files_dir not in pdf.parents:
+            return None
+        try:
+            return rl.fetch_file(client, attach_key, pdf)
+        except (rl.RemoteError, OSError) as error:
+            print(f"[worker] could not fetch {attach_key}: {error}", flush=True)
+            return None
+
+    return fetch
 
 
 def main(arguments: list[str]) -> None:
@@ -207,7 +242,7 @@ def main(arguments: list[str]) -> None:
             stages = tuple(s for s in stages if s != st.FIGURES)
     if not stages:
         raise SystemExit("nothing to run")
-    worker = Worker(files, stages, model)
+    worker = Worker(files, stages, model, remote_fetcher(cfg))
     if model is None and st.FIGURES in args.stages:
         worker.note = "no model: figures off"
 

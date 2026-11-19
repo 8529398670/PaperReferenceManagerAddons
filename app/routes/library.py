@@ -217,9 +217,11 @@ def get_pdf(request: Request, body: PaperKey) -> Response:
     paper = get_catalogue(request).find(body.key)
     if paper is None:
         raise Refused(404, "no such paper in the library")
+    library = get_catalogue(request).library
     for name in paper.record.get("pdfs") or []:
-        path = Path(name)
-        if path.is_file():
+        # A remote library's file is fetched the first time it is opened.
+        path = library.ensure_pdf(name)
+        if path is not None:
             # inline, so the browser's own viewer opens it.
             return FileResponse(path, media_type="application/pdf", content_disposition_type="inline", filename=path.name)
     raise Refused(404, "this paper has no PDF on disk")

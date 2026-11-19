@@ -175,6 +175,11 @@ const Settings = {
     if ( state.type === "bool" ) {
       input = Dom.el( "input" , { class: "form-check-input" , attrs: { type: "checkbox" , role: "switch" , id: id } } );
       input.checked = Boolean( state.value );
+    } else if ( state.choices && state.choices.length ) {
+      input = Dom.el( "select" , { class: "form-select" , attrs: { id: id } } );
+      const options = state.choices.includes( state.value ) ? state.choices : [ state.value , ...state.choices ];
+      for ( const choice of options ) input.appendChild( Dom.el( "option" , { text: choice , attrs: { value: choice } } ) );
+      input.value = String( state.value );
     } else if ( state.type === "list" ) {
       input = Dom.el( "textarea" , { class: "form-control font-monospace" , attrs: { id: id , rows: String( Math.max( 2 , state.value.length + 1 ) ) } } );
       input.value = state.value.join( "\n" );
