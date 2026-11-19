@@ -58,6 +58,7 @@ An error reply is a JSON object whose `error` says what went wrong.
 |---|---|---|---|
 | POST | [`/api/account/library`](#post-apiaccountlibrary) | Read your own library | browser session only, anyone signed in |
 | POST | [`/api/account/library/clear`](#post-apiaccountlibraryclear) | Read the server's library again | browser session only, anyone signed in |
+| POST | [`/api/account/library/libraries`](#post-apiaccountlibrarylibraries) | Your WebDAV libraries on a server | browser session only, anyone signed in |
 | POST | [`/api/account/login-link`](#post-apiaccountlogin-link) | A login link for yourself | browser session or API key, anyone signed in |
 | POST | [`/api/account/login-link/cancel`](#post-apiaccountlogin-linkcancel) | Stop your own login link working | browser session or API key, anyone signed in |
 | POST | [`/api/account/rename`](#post-apiaccountrename) | Rename your account | browser session or API key, anyone signed in |
@@ -123,6 +124,29 @@ Forget your own library's address and key and read this server's library again.
 **Reply 200**: Success
 
 [`MyLibrary`](#mylibrary).
+
+### POST /api/account/library/libraries
+
+Your WebDAV libraries on a server
+
+The WebDAV libraries an API key can read on a ZoteroWebDAV server, to choose which one you read. An empty key uses the one stored. Nothing is saved.
+
+|  |  |
+|---|---|
+| Who may call | browser session only, anyone signed in |
+| Errors | 400, 401, 403, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `key` | string | no | at most 300 characters | An API key from that server (id.secret). Empty: the one stored. |
+| `url` | string | yes | at most 300 characters | Your ZoteroWebDAV server's address, https://. |
+
+**Reply 200**: Success
+
+[`WebDAVLibraries`](#webdavlibraries).
 
 ### POST /api/account/login-link
 
@@ -5197,3 +5221,17 @@ One of these:
 | `owner` | boolean | yes |  |  |
 | `role` | string | yes | one of `admin`, `user` |  |
 | `two_factor` | boolean | yes |  |  |
+
+### WebDAVLibraries
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `libraries` | array of [`WebDAVLibraryChoice`](#webdavlibrarychoice) | yes |  |  |
+
+### WebDAVLibraryChoice
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `label` | string | yes |  | The owner's note on what it is for. May be empty. |
+| `name` | string | yes |  | Its WebDAV name: what library is set to. |
+| `primary` | boolean | yes |  | true for the one read when no library is named. |

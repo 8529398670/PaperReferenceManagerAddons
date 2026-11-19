@@ -108,6 +108,71 @@ def set_my_library(request: Request, body: SetMyLibrary) -> MyLibrary:
     return my_library(request, user or actor.user)
 
 
+class FindLibraries(RequestType):
+    url: Annotated[str, Meta(description="Your ZoteroWebDAV server's address, https://.", max_length=user_library.MAX_URL)]
+    key: Annotated[str, Meta(description="An API key from that server (id.secret). Empty: the one stored.", max_length=300)] = ""
+
+
+class WebDAVLibrary(Reply, kw_only=True):
+    api_name: ClassVar[str] = "WebDAVLibraryChoice"
+    name: Annotated[str, Meta(description="Its WebDAV name: what library is set to.")]
+    label: Annotated[str, Meta(description="The owner's note on what it is for. May be empty.")]
+    primary: Annotated[bool, Meta(description="true for the one read when no library is named.")]
+
+
+class WebDAVLibraries(Reply, kw_only=True):
+    """The WebDAV libraries a key can read on its server, the default one first."""
+
+    api_name: ClassVar[str] = "WebDAVLibraries"
+    libraries: list[WebDAVLibrary]
+
+
+def list_libraries(remote: Remote) -> list[WebDAVLibrary]:
+    try:
+        page = remote.get_json("/api/webdav/libraries")
+    except RemoteError as error:
+        if "HTTP 404" in str(error):
+            raise Refused(400, "that server does not list WebDAV libraries (WebDAV may be switched off there)") from None
+        raise Refused(400, str(error)) from None
+    rows = page.get("libraries")
+    if not isinstance(rows, list):
+        raise Refused(400, "that address answered, but not as a ZoteroWebDAV server")
+    out = [
+        WebDAVLibrary(name=str(row.get("name") or ""), label=str(row.get("label") or ""), primary=bool(row.get("primary")))
+        for row in rows
+        if isinstance(row, dict) and row.get("name") and row.get("enabled", True)
+    ]
+    out.sort(key=lambda row: (not row.primary, row.name))
+    return out
+
+
+@route(
+    "POST /api/account/library/libraries", summary="Your WebDAV libraries on a server",
+    tag=TAG, access=SESSION_ONLY,
+    description="The WebDAV libraries an API key can read on a ZoteroWebDAV server, to choose which one "
+    "you read. An empty key uses the one stored. Nothing is saved.",
+)
+def find_my_libraries(request: Request, body: FindLibraries) -> WebDAVLibraries:
+    store, cfg, actor = get_store(request), get_config(request), actor_from(request)
+    key = body.key.strip()
+    if not key:
+        current = user_library.source_of(actor.user, cfg.secret_key)
+        if current is None:
+            raise Refused(400, "an API key is needed")
+        key = current.key
+    is_owner = actor.user.id == users.get_owner_id(store)
+    libraries = getattr(request.app.state, "libraries", None)
+    try:
+        url, key, _ = user_library.check(
+            body.url, key, "", public_only=not is_owner,
+            host_ok=libraries.host_ok if libraries is not None else user_library.public_host,
+        )
+    except user_library.LibrarySourceError as invalid:
+        raise Refused(400, str(invalid)) from None
+    factory: Any = libraries.remote_factory if libraries is not None else (lambda s: Remote(s.url, s.key, s.name))
+    return WebDAVLibraries(libraries=list_libraries(factory(user_library.Source(actor.user.id, url, key, "", None))))
+
+
 @route(
     "POST /api/account/library/clear", summary="Read the server's library again",
     tag=TAG, access=SESSION_ONLY,

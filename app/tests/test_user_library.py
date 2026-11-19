@@ -215,3 +215,42 @@ class PoolScopeTest(UserLibraryCase):
         self.assertEqual(([r["wid"] for r in rows], total), (["W1"], 1))
         rows, total, _ = searches.run_missing(search, scope=server_scope)
         self.assertEqual([r["wid"] for r in rows], ["W2"])
+
+
+class LibrariesListTest(UserLibraryCase):
+    def find(self, cookie: str, url: str = URL, key: str = KEY) -> tuple[int, dict]:
+        return self.call("POST", "/api/account/library/libraries", cookie=cookie,
+                         body={"url": url, "key": key, "csrf_token": self.csrf(cookie)})
+
+    def test_lists_enabled_libraries_default_first(self) -> None:
+        status, body = self.find(self.user_cookie)
+        self.assertEqual(status, 200, body)
+        self.assertEqual([(r["name"], r["primary"]) for r in body["libraries"]], [("me", True), ("work", False)])
+        self.assertEqual(body["libraries"][1]["label"], "Lab profile")
+        # Nothing is saved by looking.
+        self.assertFalse(users.get_user(self.store, self.user.id).library_url)
+
+    def test_empty_key_uses_the_stored_one(self) -> None:
+        self.assertEqual(self.find(self.user_cookie, key="")[0], 400)
+        self.connect(self.user_cookie)
+        status, body = self.find(self.user_cookie, key="")
+        self.assertEqual((status, len(body["libraries"])), (200, 2))
+
+    def test_refusals_are_worded_and_never_echo(self) -> None:
+        self.libraries.host_ok = user_library.public_host
+        status, body = self.find(self.user_cookie, url="https://127.0.0.1:8443")
+        self.assertEqual(status, 400)
+        self.libraries.host_ok = lambda url: True
+        for code, words in ((401, "refused the API key"), (404, "does not list WebDAV libraries")):
+            self.remote.status = code
+            status, body = self.find(self.user_cookie)
+            self.assertEqual(status, 400)
+            self.assertIn(words, body["error"])
+            self.assertNotIn(KEY, json.dumps(body))
+            self.assertNotIn("zotero.example.com", json.dumps(body))
+
+    def test_session_only_and_csrf(self) -> None:
+        status, _ = self.call("POST", "/api/account/library/libraries", key=self.user_key, body={"url": URL, "key": KEY})
+        self.assertNotEqual(status, 200)
+        status, _ = self.call("POST", "/api/account/library/libraries", cookie=self.user_cookie, body={"url": URL, "key": KEY})
+        self.assertEqual(status, 403)

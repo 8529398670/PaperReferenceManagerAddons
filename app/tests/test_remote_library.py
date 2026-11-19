@@ -28,6 +28,11 @@ class FakeServer:
         self.status = 200
         self.resync_once = False
         self.fail: Exception | None = None
+        self.webdav: list[dict[str, Any]] = [
+            {"id": 7, "name": "work", "label": "Lab profile", "primary": False, "enabled": True},
+            {"id": 3, "name": "me", "primary": True, "enabled": True},
+            {"id": 9, "name": "off", "primary": False, "enabled": False},
+        ]
 
     def add(self, record: dict[str, Any]) -> None:
         record["rev"] = len(self.records) + 1
@@ -57,6 +62,8 @@ class FakeServer:
             rows = self.attachments[offset:offset + limit]
             following = offset + len(rows) if offset + len(rows) < len(self.attachments) else 0
             return 200, {}, json.dumps({"attachments": rows, "next": following, "total": len(self.attachments)}).encode()
+        if parts.path == "/api/webdav/libraries":
+            return 200, {}, json.dumps({"libraries": self.webdav, "max_libraries": 0}).encode()
         if parts.path.endswith("/file"):
             return 200, {"content-type": "application/pdf"}, PDF
         return 404, {}, b""

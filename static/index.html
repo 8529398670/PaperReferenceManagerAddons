@@ -1354,26 +1354,35 @@
                 <span id="account-library-badge" class="badge text-bg-secondary"></span>
               </h3>
               <p class="text-body-secondary" data-i18n="account.library_description"></p>
+              <div class="btn-group mb-3 d-flex d-sm-inline-flex" role="group" data-i18n-attr="aria-label:account.library_heading">
+                <input type="radio" class="btn-check" name="account-library-choice" id="account-library-choice-server" value="server" autocomplete="off" />
+                <label class="btn btn-outline-primary" for="account-library-choice-server"><i class="bi bi-hdd-stack" aria-hidden="true"></i> <span data-i18n="account.library_choice_server"></span></label>
+                <input type="radio" class="btn-check" name="account-library-choice" id="account-library-choice-own" value="own" autocomplete="off" />
+                <label class="btn btn-outline-primary" for="account-library-choice-own"><i class="bi bi-cloud" aria-hidden="true"></i> <span data-i18n="account.library_choice_own"></span></label>
+              </div>
               <p id="account-library-status" class="small mb-3"></p>
-              <form id="account-library-form" class="row g-3" autocomplete="off">
-                <div class="col-12 col-lg-6">
+              <form id="account-library-form" class="row g-3" autocomplete="off" hidden>
+                <div class="col-12">
                   <label for="account-library-url" class="form-label" data-i18n="account.library_url_label"></label>
                   <input id="account-library-url" class="form-control" type="url" maxlength="300" required spellcheck="false"
                          data-i18n-attr="placeholder:account.library_url_placeholder" />
                 </div>
-                <div class="col-12 col-md-6 col-lg-3">
+                <div class="col-12 col-md-6">
                   <label for="account-library-key" class="form-label" data-i18n="account.library_key_label"></label>
                   <input id="account-library-key" class="form-control" type="password" maxlength="300" spellcheck="false"
                          autocomplete="new-password" />
                 </div>
-                <div class="col-12 col-md-6 col-lg-3">
+                <div class="col-12 col-md-6">
                   <label for="account-library-name" class="form-label" data-i18n="account.library_name_label"></label>
-                  <input id="account-library-name" class="form-control" maxlength="64" spellcheck="false"
-                         data-i18n-attr="placeholder:account.library_name_placeholder" />
+                  <div class="input-group">
+                    <select id="account-library-name" class="form-select"></select>
+                    <button type="button" id="account-library-load" class="btn btn-outline-secondary" data-i18n-attr="title:account.library_name_load,aria-label:account.library_name_load">
+                      <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+                    </button>
+                  </div>
                 </div>
-                <div class="col-12 d-flex flex-wrap gap-2">
+                <div class="col-12">
                   <button type="submit" id="account-library-save" class="btn btn-primary" data-i18n="account.library_save_button"></button>
-                  <button type="button" id="account-library-clear" class="btn btn-outline-secondary" data-i18n="account.library_clear_button" hidden></button>
                 </div>
               </form>
             </div>

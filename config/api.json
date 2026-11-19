@@ -2200,6 +2200,42 @@
           "two_factor"
         ],
         "type": "object"
+      },
+      "WebDAVLibraries": {
+        "properties": {
+          "libraries": {
+            "items": {
+              "$ref": "#/components/schemas/WebDAVLibraryChoice"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "libraries"
+        ],
+        "type": "object"
+      },
+      "WebDAVLibraryChoice": {
+        "properties": {
+          "label": {
+            "description": "The owner's note on what it is for. May be empty.",
+            "type": "string"
+          },
+          "name": {
+            "description": "Its WebDAV name: what library is set to.",
+            "type": "string"
+          },
+          "primary": {
+            "description": "true for the one read when no library is named.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "label",
+          "name",
+          "primary"
+        ],
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -2354,6 +2390,78 @@
           }
         ],
         "summary": "Read the server's library again",
+        "tags": [
+          "Account"
+        ]
+      }
+    },
+    "/api/account/library/libraries": {
+      "post": {
+        "description": "The WebDAV libraries an API key can read on a ZoteroWebDAV server, to choose which one you read. An empty key uses the one stored. Nothing is saved.",
+        "operationId": "post_api_account_library_libraries",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "key": {
+                    "description": "An API key from that server (id.secret). Empty: the one stored.",
+                    "maxLength": 300,
+                    "type": "string"
+                  },
+                  "url": {
+                    "description": "Your ZoteroWebDAV server's address, https://.",
+                    "maxLength": 300,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "url"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebDAVLibraries"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Your WebDAV libraries on a server",
         "tags": [
           "Account"
         ]
