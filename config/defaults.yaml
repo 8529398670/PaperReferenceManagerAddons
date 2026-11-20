@@ -227,15 +227,18 @@ backups:
   interval_hours: 24               # [live]
   keep: 7                          # [live]
 
-# The Zotero library this app reads: your Zotero folder on this machine, or
-# a ZoteroWebDAV server (source). It is only ever read, and papers saved there
+# The Zotero library this app reads: none of its own (each user connects
+# their own ZoteroWebDAV server), your Zotero folder on this machine, or a
+# ZoteroWebDAV server (source). It is only ever read, and papers saved there
 # show up here within seconds -- there is no import or reindex to run.
 library:
-  # Where the library comes from: local reads zotero_dir on this machine,
+  # Where the server's library comes from: none (the default) has no server
+  # library, so everyone, the owner too, connects their own ZoteroWebDAV
+  # server on the Account screen; local reads zotero_dir on this machine;
   # remote reads a ZoteroWebDAV server (remote_url and remote_key below),
-  # read-only, with PDFs fetched as they are needed. (one of: local, remote)
-  # [restart]
-  source: local
+  # read-only, with PDFs fetched as they are needed. (one of: none, local,
+  # remote) [restart]
+  source: none
   # The ZoteroWebDAV server's address, such as https://zotero.example.org.
   # Only this file sets it. [restart]
   remote_url: ""
@@ -256,7 +259,8 @@ library:
   # admins sees an empty library until they connect their own ZoteroWebDAV
   # server on the Account screen. [live]
   users_read_server: false
-  # The folder holding zotero.sqlite and storage/. [restart]
+  # The folder holding zotero.sqlite and storage/, read with source local.
+  # [restart]
   zotero_dir: ~/Zotero
   # How often, in seconds, zotero.sqlite is checked for changes. [live]
   watch_seconds: 2
@@ -368,6 +372,6 @@ docker:
   tmpfs_size: 16m                  # the only writable path besides data_dir
 
   # The Zotero folder (zotero.sqlite and storage/) on the host, mounted
-  # read-only at /zotero. Empty uses library.zotero_dir. ~ and relative paths
-  # are resolved on the host.
+  # read-only at /zotero when library.source is local. Empty uses
+  # library.zotero_dir. ~ and relative paths are resolved on the host.
   zotero_dir: ""

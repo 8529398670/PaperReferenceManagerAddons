@@ -38,6 +38,7 @@ from app.core.config_live import Holder
 from app.core.db import Store
 from app.library.catalogue import Catalogue, Paper, Status
 from app.library.remote import Remote
+from app.library.service import NO_LIBRARY_ERROR, NoLibrary  # noqa: F401 -- NO_LIBRARY_ERROR re-exported
 from app.library.service import LibraryService, open_remote
 from app.models import user_library, users
 from app.models.users import User
@@ -50,27 +51,6 @@ REAP_SECONDS = 60
 # are not dropped at once -- the same grace as a paper gone from a library
 # (catalogue.VANISHED_KEEP_SECONDS).
 RETIRED_KEEP_SECONDS = 30 * 86400
-
-
-NO_LIBRARY_ERROR = "connect your own ZoteroWebDAV server on the Account screen to see papers"
-
-
-class NoLibrary:
-    """The library of a user who may not read the server's and has not
-    connected their own: nothing, and a word on what to do."""
-
-    error = NO_LIBRARY_ERROR
-    read_fell_back = False
-    sqlite_path = ""
-
-    def stamp(self) -> None:
-        return None
-
-    def read(self) -> dict[str, Any]:
-        return {}
-
-    def ensure_pdf(self, path: Any) -> None:
-        return None
 
 
 def _fingerprint(source: user_library.Source) -> str:
@@ -116,7 +96,13 @@ class LibraryRegistry:
     def may_read_server(self, user: User | None) -> bool:
         """Whether this user may read the server's library: the owner and
         admins always, others with library.users_read_server on."""
-        if user is None or user.is_admin or user.id == users.get_owner_id(self.store):
+        if user is None:
+            return True
+        # library.source none: the server has no library, so everyone --
+        # the owner too -- connects their own on the Account screen.
+        if self.settings.get().library.source == "none":
+            return False
+        if user.is_admin or user.id == users.get_owner_id(self.store):
             return True
         return bool(self.settings.get().library.users_read_server)
 

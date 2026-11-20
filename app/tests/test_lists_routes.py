@@ -25,7 +25,7 @@ class LibraryCase(RoutesTestCase):
         self.root = Path(directory.name)
         self.zotero = sample(self.root / "Zotero")
         super().setUp()
-        self.set_config(library=replace(self.cfg.library, zotero_dir=self.root / "Zotero", index_path=self.root / "cache" / "search.db"))
+        self.set_config(library=replace(self.cfg.library, source="local", zotero_dir=self.root / "Zotero", index_path=self.root / "cache" / "search.db"))
         # build_app made its services from the boot config; point them here.
         from app.library.service import LibraryService
         from app.boards.service import BoardService

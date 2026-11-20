@@ -336,9 +336,10 @@ class LibraryConfig:
     content_dir: Path = Path("papers")
     openalex_enabled: bool = True
     openalex_api_key: str = ""
-    # Where the library comes from: "local" reads zotero_dir, "remote" a
-    # ZoteroWebDAV server (app/library/remote.py).
-    source: str = "local"
+    # Where the library comes from: "none" (no server library: each user
+    # connects their own ZoteroWebDAV server), "local" reads zotero_dir,
+    # "remote" a ZoteroWebDAV server (app/library/remote.py).
+    source: str = "none"
     remote_url: str = ""
     remote_key: str = ""
     remote_library: str = ""
@@ -925,7 +926,7 @@ def validate(file: File) -> list[str]:
     check(backups.keep >= 1, f"backups.keep must be at least 1, got {backups.keep}")
 
     library = file.library
-    check(library.source in ("local", "remote"), f"library.source must be local or remote, got {library.source!r}")
+    check(library.source in ("none", "local", "remote"), f"library.source must be none, local or remote, got {library.source!r}")
     if library.source == "local":
         check(library.zotero_dir.strip() != "", "library.zotero_dir must not be empty")
     check(library.remote_url == "" or remote_url_ok(library.remote_url), "library.remote_url must be empty or an https:// address (http:// only for localhost)")

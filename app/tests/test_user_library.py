@@ -267,6 +267,37 @@ class LibrariesListTest(UserLibraryCase):
         self.assertEqual(status, 403)
 
 
+class NoServerLibraryTest(UserLibraryCase):
+    """library.source none, the default: the server reads no library, and
+    everyone -- admins and the owner too -- connects their own."""
+
+    def test_the_default_is_no_server_library(self) -> None:
+        from app.core.config import LibraryConfig
+        from app.library.service import NoLibrary, make_library
+
+        self.assertEqual(LibraryConfig().source, "none")
+        cfg = self.cfg
+        from dataclasses import replace
+
+        none_cfg = replace(cfg, library=replace(cfg.library, source="none"))
+        self.assertIsInstance(make_library(none_cfg), NoLibrary)
+
+    def test_admins_see_nothing_until_they_connect(self) -> None:
+        from dataclasses import replace
+
+        settings = self.libraries.settings
+        current = settings.get()
+        settings._current = replace(current, library=replace(current.library, source="none", users_read_server=True))
+        _, me = self.call("GET", "/api/me", cookie=self.admin_cookie)
+        self.assertEqual((me["library"]["own"], me["library"]["server_allowed"]), (False, False))
+        _, papers = self.call("GET", "/api/papers", cookie=self.admin_cookie)
+        self.assertEqual(papers["papers"], [])
+        self.assertIn("Account screen", papers["status"]["error"])
+        status, body = self.connect(self.admin_cookie)
+        self.assertEqual(status, 200, body)
+        self.assertTrue(body["own"])
+
+
 class ServerSharingTest(UserLibraryCase):
     def test_users_see_nothing_until_they_connect_unless_shared(self) -> None:
         # Off by default: a user with no library of their own sees no papers.

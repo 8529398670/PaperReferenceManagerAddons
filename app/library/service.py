@@ -24,6 +24,28 @@ from app.models.user_library import Source, server_source
 from app.search.index import Index
 
 
+NO_LIBRARY_ERROR = "connect your own ZoteroWebDAV server on the Account screen to see papers"
+
+
+class NoLibrary:
+    """No papers, and a word on what to do: the server's library with
+    library.source none, and the library of a user who may not read the
+    server's and has not connected their own (app/library/registry.py)."""
+
+    error = NO_LIBRARY_ERROR
+    read_fell_back = False
+    sqlite_path = ""
+
+    def stamp(self) -> None:
+        return None
+
+    def read(self) -> dict[str, Any]:
+        return {}
+
+    def ensure_pdf(self, path: Any) -> None:
+        return None
+
+
 def open_remote(source: Source, folder: Path, poll_seconds: int, remote: Remote | None = None) -> RemoteLibrary:
     """The one way a ZoteroWebDAV library is opened, the server's or a user's
     (app/library/registry.py), its mirror and PDFs in folder. Only the
@@ -35,8 +57,11 @@ def open_remote(source: Source, folder: Path, poll_seconds: int, remote: Remote 
 
 
 def make_library(cfg: Config) -> Library | RemoteLibrary:
-    """library.source picks where the server's papers come from."""
+    """library.source picks where the server's papers come from: none (the
+    default) has the server read no library of its own."""
     library = cfg.library
+    if library.source == "none":
+        return NoLibrary()  # type: ignore[return-value]
     if library.source == "remote":
         return open_remote(server_source(cfg), library.index_path.parent, library.remote_poll_seconds)
     return Library(library.zotero_dir, library.index_path.parent)
@@ -77,6 +102,9 @@ class LibraryService:
             self.catalogue.load()
             self._loaded = True
         result = self.catalogue.sync(force=force)
+        if isinstance(self.library, NoLibrary):
+            # Nothing to wait for: an empty library is ready at once.
+            self.catalogue.status.ready = True
         if self.after_sync is not None and (first or (result is not None and result.any())):
             self.after_sync()
         return result
@@ -132,6 +160,8 @@ class LibraryService:
         if isinstance(self.library, RemoteLibrary):
             self.library.poll_now()
         result = self._load_and_sync(force=True)
+        if isinstance(self.library, NoLibrary):
+            return "no server library (library.source none)", ""
         if result is None:
             return "already running" if not self.catalogue.status.error else "", self.catalogue.status.error
         return result.note(), ""

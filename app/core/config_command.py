@@ -292,6 +292,8 @@ def command_shell(args: argparse.Namespace) -> None:
             # else library.zotero_dir. run.sh expands ~ and relative paths on
             # the host, since this may run in a container.
             ("docker_zotero_dir", docker.zotero_dir or file.library.zotero_dir),
+            # Only local reads a Zotero folder; none and remote mount nothing.
+            ("library_source", file.library.source),
             ("server_port", str(file.server.port)),
             ("server_secure_cookies", _flag(file.server.secure_cookies)),
             ("server_trust_proxy", _flag(file.server.trust_proxy)),

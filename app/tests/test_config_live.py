@@ -137,7 +137,7 @@ class HolderTest(unittest.TestCase):
     def test_library_source_is_a_choice(self) -> None:
         holder, path = new_holder(self)
         source = next(k for s in holder.snapshot()["sections"] for k in s["keys"] if k["key"] == "library.source")
-        self.assertEqual(source["choices"], ["local", "remote"])
+        self.assertEqual(source["choices"], ["none", "local", "remote"])
         with self.assertRaises(ValidationError):
             holder.save(version_of(path), {"library.source": "elsewhere"})
         # remote with nowhere to read from is refused by validate().
