@@ -271,6 +271,10 @@ library:
   # at once; past it, the one idle longest pauses until it is used again.
   # [live]
   max_user_libraries: 20
+  # Whether users may read this library. Off: everyone but the owner and
+  # admins sees an empty library until they connect their own ZoteroWebDAV
+  # server on the Account screen. [live]
+  users_read_server: false
   # The folder holding zotero.sqlite and storage/. [restart]
   zotero_dir: ~/Zotero
   # How often, in seconds, zotero.sqlite is checked for changes. [live]

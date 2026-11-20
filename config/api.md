@@ -4861,6 +4861,7 @@ The shapes the routes above refer to by name.
 | `own` | boolean | yes |  | Whether you read your own ZoteroWebDAV server. false: the server's library. |
 | `papers` | integer | yes |  |  |
 | `ready` | boolean | yes |  |  |
+| `server_allowed` | boolean | no | default `true` | Whether you may read the server's library (library.users_read_server; always for the owner and admins). false: until you connect your own, you see no papers. |
 | `url` | string | yes |  | Your server's address. Empty when own is false. |
 
 ### NewAPIKey

@@ -786,6 +786,11 @@
           "ready": {
             "type": "boolean"
           },
+          "server_allowed": {
+            "default": true,
+            "description": "Whether you may read the server's library (library.users_read_server; always for the owner and admins). false: until you connect your own, you see no papers.",
+            "type": "boolean"
+          },
           "url": {
             "description": "Your server's address. Empty when own is false.",
             "type": "string"

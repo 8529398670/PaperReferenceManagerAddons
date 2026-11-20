@@ -31,6 +31,14 @@ class UserLibraryCase(LibraryCase):
         return self.call("POST", "/api/account/library", cookie=cookie,
                          body={"url": url, "key": key, "library": "", "csrf_token": self.csrf(cookie)})
 
+    def share_server(self, on: bool = True) -> None:
+        """library.users_read_server, as if config.yaml said so."""
+        from dataclasses import replace
+
+        settings = self.libraries.settings
+        current = settings.get()
+        settings._current = replace(current, library=replace(current.library, users_read_server=on))
+
     def sync_user(self) -> None:
         service = self.libraries.for_user(users.get_user(self.store, self.user.id), start=False)
         self.assertIsNot(service, self.libraries.server)
@@ -125,7 +133,10 @@ class ReadingTest(UserLibraryCase):
     def test_a_server_paper_still_opens_but_never_another_users_pdf(self) -> None:
         self.connect(self.user_cookie)
         self.sync_user()
-        # The server's paper (a shared list can hold it) opens for the user.
+        # The server's paper (a shared list can hold it) opens for the user
+        # only while the server's library is shared with users.
+        self.assertEqual(self.call("GET", "/api/paper?key=" + WOOLRICH, cookie=self.user_cookie)[0], 404)
+        self.share_server()
         self.assertEqual(self.call("GET", "/api/paper?key=" + WOOLRICH, cookie=self.user_cookie)[0], 200)
         # The user's paper does not open for someone else, nor its PDF.
         self.assertEqual(self.call("GET", "/api/paper?key=10.1000/ABC.1", cookie=self.admin_cookie)[0], 404)
@@ -254,3 +265,38 @@ class LibrariesListTest(UserLibraryCase):
         self.assertNotEqual(status, 200)
         status, _ = self.call("POST", "/api/account/library/libraries", cookie=self.user_cookie, body={"url": URL, "key": KEY})
         self.assertEqual(status, 403)
+
+
+class ServerSharingTest(UserLibraryCase):
+    def test_users_see_nothing_until_they_connect_unless_shared(self) -> None:
+        # Off by default: a user with no library of their own sees no papers.
+        _, me = self.call("GET", "/api/me", cookie=self.user_cookie)
+        self.assertEqual((me["library"]["own"], me["library"]["server_allowed"], me["library"]["papers"]), (False, False, 0))
+        _, papers = self.call("GET", "/api/papers", cookie=self.user_cookie)
+        self.assertEqual(papers["papers"], [])
+        self.assertIn("Account screen", papers["status"]["error"])
+        self.assertEqual(self.call("GET", "/api/paper?key=" + WOOLRICH, cookie=self.user_cookie)[0], 404)
+        _, listed = self.call("GET", "/api/lists/library", cookie=self.user_cookie)
+        self.assertEqual(listed["list"]["count"], 0)
+        # Admins always read it.
+        _, admin = self.call("GET", "/api/me", cookie=self.admin_cookie)
+        self.assertTrue(admin["library"]["server_allowed"])
+        _, papers = self.call("GET", "/api/papers", cookie=self.admin_cookie)
+        self.assertEqual(papers["status"]["papers"], 3)
+        # Shared: the user reads it too.
+        self.share_server()
+        _, papers = self.call("GET", "/api/papers", cookie=self.user_cookie)
+        self.assertEqual(papers["status"]["papers"], 3)
+        # Connected: their own, either way.
+        self.share_server(False)
+        self.connect(self.user_cookie)
+        self.sync_user()
+        _, papers = self.call("GET", "/api/papers", cookie=self.user_cookie)
+        self.assertEqual(len(papers["papers"]), 2)
+
+    def test_the_missing_pool_is_empty_without_a_library(self) -> None:
+        self.app.state.content.pool.put_paper(WOOLRICH, "s", [{"wid": "W2", "title": "Graph cuts", "abstract": ""}], [])
+        _, server = self.call("GET", "/api/missing", cookie=self.admin_cookie)
+        self.assertEqual([w["wid"] for w in server["works"]], ["W2"])
+        _, mine = self.call("GET", "/api/missing", cookie=self.user_cookie)
+        self.assertEqual(mine["works"], [])

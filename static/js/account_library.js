@@ -35,6 +35,8 @@ const AccountLibrary = {
     let line;
     if ( state.error ) {
       line = I18n.get( "account.library_status_error" ).replace( "{error}" , state.error );
+    } else if ( !state.own && !state.server_allowed ) {
+      line = I18n.get( "account.library_status_none" );
     } else if ( !state.own ) {
       line = I18n.get( "account.library_status_server" ).replace( "{papers}" , String( state.papers ) );
     } else if ( !state.ready && !state.last_sync ) {
@@ -48,9 +50,15 @@ const AccountLibrary = {
     const key = Dom.get( "account-library-key" );
     key.placeholder = I18n.get( state.key_set ? "account.library_key_placeholder_set" : "account.library_key_placeholder_new" );
     key.required = !state.key_set;
+    // Without the server's library to fall back on, the only choice is your
+    // own server: the form is always open.
+    const serverAllowed = state.server_allowed !== false;
+    Dom.show( Dom.get( "account-library-choices" ) , serverAllowed );
+    if ( !serverAllowed ) badge.className = "badge text-bg-warning";
+    if ( !serverAllowed && !state.own ) Dom.text( badge , I18n.get( "account.library_none" ) );
     if ( fill ) {
       Dom.get( state.own ? "account-library-choice-own" : "account-library-choice-server" ).checked = true;
-      Dom.show( Dom.get( "account-library-form" ) , state.own );
+      Dom.show( Dom.get( "account-library-form" ) , state.own || !serverAllowed );
       Dom.get( "account-library-url" ).value = state.url;
       key.value = "";
       this.listedFor = "";

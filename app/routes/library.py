@@ -46,13 +46,17 @@ def get_catalogue(request: Request) -> Catalogue:
 def find_paper(request: Request, spec: str) -> tuple[Paper | None, Any]:
     """A paper by key (or DOI, see Catalogue.find), and the library it was
     found in: the user's own first, then the server's -- a shared list can
-    hold a paper the user's library does not. Never another user's library."""
+    hold a paper the user's library does not -- if they may read the server's
+    (library.users_read_server). Never another user's library."""
     own = library_for(request)
     paper = own.catalogue.find(spec)
     if paper is not None:
         return paper, own
     server = request.app.state.library
-    if server is not own:
+    libraries = getattr(request.app.state, "libraries", None)
+    actor = getattr(request.state, "actor", None)
+    allowed = libraries is None or libraries.may_read_server(actor.user if actor is not None else None)
+    if server is not own and allowed:
         paper = server.catalogue.find(spec)
         if paper is not None:
             return paper, server

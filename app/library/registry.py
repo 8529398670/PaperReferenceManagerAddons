@@ -2,7 +2,9 @@
 server any user connected on the Account screen (app/models/user_library.py).
 
 A request is answered from its user's library (for_user): their own if they
-set one, else the server's. Each user's library has a folder of its own,
+set one, else the server's -- for the owner and admins always, for other
+users only with library.users_read_server on. Off (the default), a user with
+no library of their own reads an empty one (NoLibrary) until they connect it. Each user's library has a folder of its own,
 <cache>/libraries/u<id>/, holding its index (search.db), the remote mirror and
 the PDFs fetched so far; the server's library keeps the paths it always had.
 
@@ -50,6 +52,27 @@ REAP_SECONDS = 60
 RETIRED_KEEP_SECONDS = 30 * 86400
 
 
+NO_LIBRARY_ERROR = "connect your own ZoteroWebDAV server on the Account screen to see papers"
+
+
+class NoLibrary:
+    """The library of a user who may not read the server's and has not
+    connected their own: nothing, and a word on what to do."""
+
+    error = NO_LIBRARY_ERROR
+    read_fell_back = False
+    sqlite_path = ""
+
+    def stamp(self) -> None:
+        return None
+
+    def read(self) -> dict[str, Any]:
+        return {}
+
+    def ensure_pdf(self, path: Any) -> None:
+        return None
+
+
 def _fingerprint(source: user_library.Source) -> str:
     return hashlib.sha256(f"{source.url}\n{source.key}\n{source.name}".encode("utf-8")).hexdigest()
 
@@ -83,25 +106,50 @@ class LibraryRegistry:
         self.remote_factory: Callable[[user_library.Source], Remote] = lambda s: Remote(s.url, s.key, s.name)
         # Replaced in tests: whether an address may be used (public_host).
         self.host_ok: Callable[[str], bool] = user_library.public_host
+        self._empty: LibraryService | None = None
 
     # -- which library -------------------------------------------------------
 
     def folder(self, user_id: int) -> Path:
         return self.root / f"u{int(user_id)}"
 
+    def may_read_server(self, user: User | None) -> bool:
+        """Whether this user may read the server's library: the owner and
+        admins always, others with library.users_read_server on."""
+        if user is None or user.is_admin or user.id == users.get_owner_id(self.store):
+            return True
+        return bool(self.settings.get().library.users_read_server)
+
+    def fallback(self, user: User | None) -> LibraryService:
+        """What a user reads with no library of their own open."""
+        return self.server if self.may_read_server(user) else self.empty()
+
+    def empty(self) -> LibraryService:
+        with self._lock:
+            if self._empty is None:
+                folder = self.root / "none"
+                folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+                service = LibraryService(self.cfg, library=NoLibrary(), index_path=folder / "search.db", source_id="none")  # type: ignore[arg-type]
+                service.load()
+                service.catalogue.sync()
+                service.catalogue.status.ready = True
+                self._empty = service
+            return self._empty
+
     def for_user(self, user: User | None, start: bool = True) -> LibraryService:
-        """The library this user reads: their own, else the server's. A user
-        whose own library cannot be opened (an address no longer allowed)
-        reads the server's, and their status says why."""
+        """The library this user reads: their own, else the server's (if they
+        may, else an empty one). A user whose own library cannot be opened
+        (an address no longer allowed) reads that fallback, and their status
+        says why."""
         if user is None:
             return self.server
         source = user_library.source_of(user, self.cfg.secret_key)
         if source is None:
             self._drop(user.id)
-            return self.server
+            return self.fallback(user)
         entry = self._entry(user, source)
         if entry is None:
-            return self.server
+            return self.fallback(user)
         entry.used = time.monotonic()
         if start and not entry.service.running and self._loop is not None:
             self._start(entry)
@@ -250,8 +298,11 @@ class LibraryRegistry:
         with self._lock:
             entries = list(self._entries.values())
             self._entries.clear()
+            empty, self._empty = self._empty, None
         for entry in entries:
             entry.service.close()
+        if empty is not None:
+            empty.close()
 
     # -- every library -------------------------------------------------------
 

@@ -37,24 +37,30 @@ class MyLibrary(Reply, kw_only=True):
     papers: int
     error: Annotated[str, Meta(description="Why the last look at your library failed. Empty when it did not.")]
     last_sync: Annotated[float, Meta(description="When your library was last read, in Unix seconds. 0: not yet.")]
+    server_allowed: Annotated[bool, Meta(description="Whether you may read the server's library (library.users_read_server; always for the owner and admins). false: until you connect your own, you see no papers.")] = True
 
 
 def my_library(request: Request, user: User) -> MyLibrary:
     source = user_library.source_of(user, get_config(request).secret_key)
     libraries = getattr(request.app.state, "libraries", None)
+    allowed = libraries is None or libraries.may_read_server(user)
     if source is None or libraries is None:
+        if not allowed:
+            return MyLibrary(own=False, url="", key_set=False, name="", ready=True, papers=0,
+                             error="", last_sync=0.0, server_allowed=False)
         server = request.app.state.library if libraries is None else libraries.server
         status = server.catalogue.status
         return MyLibrary(own=False, url="", key_set=False, name="", ready=status.ready, papers=status.papers,
                          error=status.error, last_sync=status.last_sync)
     service = libraries.for_user(user, start=False)
-    if service is libraries.server:
+    if service is libraries.server or service.source_id == "none":
         return MyLibrary(own=True, url=source.url, key_set=True, name=source.name, ready=False, papers=0,
-                         error="this address is not allowed: it must be a public server", last_sync=0.0)
+                         error="this address is not allowed: it must be a public server", last_sync=0.0,
+                         server_allowed=allowed)
     status = service.catalogue.status
     error = status.error or getattr(service.library, "error", "")
     return MyLibrary(own=True, url=source.url, key_set=True, name=source.name, ready=status.ready, papers=status.papers,
-                     error=error, last_sync=status.last_sync)
+                     error=error, last_sync=status.last_sync, server_allowed=allowed)
 
 
 class SetMyLibrary(RequestType):

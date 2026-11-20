@@ -22,7 +22,7 @@ from app.content.pool import POOLS, parse_sort
 from app.content.service import ContentService
 from app.routes.boards import actor_name
 from app.routes.helpers import PAGE_LIMIT_MESSAGE, PAGE_MAX, PAGE_OFFSET_MESSAGE, Paged, Refused
-from app.routes.library import find_paper, get_catalogue
+from app.routes.library import find_paper, get_catalogue, library_for
 
 TAG = "Content"
 MISSING_TAG = "Missing papers"
@@ -319,7 +319,10 @@ def missing_scope(request: Request) -> tuple[set[str], set[str], set[str], set[s
     holds every library's network: narrowed to the reader's. None with only
     the server's library, which the stored counters already describe."""
     libraries = getattr(request.app.state, "libraries", None)
-    if libraries is None or len(libraries.services()) < 2:
+    if libraries is None:
+        return None
+    reading_server = library_for(request) is request.app.state.library
+    if reading_server and len(libraries.services()) < 2:
         return None
     content = get_content(request)
     papers = get_catalogue(request).all()
