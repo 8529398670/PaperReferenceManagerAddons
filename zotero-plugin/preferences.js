@@ -1,4 +1,4 @@
-/* The Settings → PRMA pane. The fields save themselves (their preference=
+/* The PRMA Forwarder settings pane. The fields save themselves (their preference=
  * attributes); this only runs Test connection and shows what is waiting. */
 Zotero.PRMAPrefs = {
   init() {

@@ -1,4 +1,4 @@
-// Defaults, read by Zotero 7+ at startup. The Settings → PRMA pane edits them.
+// Defaults, read by Zotero 7+ at startup. The PRMA Forwarder settings pane (Tools → PRMA Forwarder Settings…) edits them.
 pref("extensions.prma.url", "http://127.0.0.1:25620");
 pref("extensions.prma.apiKey", "");
 pref("extensions.prma.autoSend", true);

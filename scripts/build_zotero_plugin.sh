@@ -4,7 +4,7 @@
 #   scripts/build_zotero_plugin.sh
 #
 # Install it in Zotero: Tools → Plugins → gear menu → Install Plugin From
-# File…, then set PRMA's address and an API key in Settings → PRMA. See
+# File…, then set PRMA's address and an API key under Tools → PRMA Forwarder Settings. See
 # zotero-plugin/README.md.
 set -euo pipefail
 cd "$( dirname "${BASH_SOURCE[0]}" )/.."

@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
-  "name": "PRMA forwarder",
-  "version": "1.0.1",
+  "name": "PRMA Forwarder",
+  "version": "1.0.3",
   "description": "Sends each new paper in Zotero, with its PDF, to your Paper Reference Manager, which stores it in your ZoteroWebDAV library.",
   "author": "Paper Reference Manager",
   "applications": {

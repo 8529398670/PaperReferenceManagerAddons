@@ -1,4 +1,4 @@
-/* PRMA forwarder: a bootstrapped Zotero 7+ plugin. The logic is in
+/* PRMA Forwarder: a bootstrapped Zotero 7+ plugin. The logic is in
  * content/prma.js, which puts Zotero.PRMA in place; this file only starts and
  * stops it and adds the item menu to each main window. */
 

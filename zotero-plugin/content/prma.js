@@ -1,4 +1,4 @@
-/* PRMA forwarder: sends new papers to Paper Reference Manager.
+/* PRMA Forwarder: sends new papers to Paper Reference Manager.
  *
  * A paper added to the user library (by the Zotero Connector, an import, a
  * DOI lookup...) is sent once it has settled: no new attachments or notes for
@@ -29,6 +29,8 @@
   const CHUNK = 4 * 1024 * 1024; // PRMA's chunk_bytes (GET /api/ingest/target says it too)
   const MENU_ID = "prma-send-menuitem";
   const MENU_SEP_ID = "prma-send-separator";
+  const TOOLS_MENU_ID = "prma-settings-menuitem";
+  const PANE_ID = "prma-forwarder-prefs";
 
   const PRMA = {
     id: "",
@@ -75,7 +77,8 @@
         pluginID: this.id,
         src: this.rootURI + "preferences.xhtml",
         scripts: [this.rootURI + "preferences.js"],
-        label: "PRMA",
+        id: PANE_ID,
+        label: "PRMA Forwarder",
       });
       this.observerID = Zotero.Notifier.registerObserver(
         { notify: (event, type, ids, extra) => this.notify(event, type, ids, extra) },
@@ -110,10 +113,24 @@
       item.addEventListener("command", () => this.sendSelected(win));
       menu.appendChild(separator);
       menu.appendChild(item);
+
+      // Tools → PRMA Forwarder Settings… opens the settings pane directly.
+      const tools = doc.getElementById("menu_ToolsPopup");
+      if (tools && !doc.getElementById(TOOLS_MENU_ID)) {
+        const settings = doc.createXULElement("menuitem");
+        settings.id = TOOLS_MENU_ID;
+        settings.setAttribute("label", "PRMA Forwarder Settings…");
+        settings.addEventListener("command", () => this.openSettings());
+        tools.appendChild(settings);
+      }
     },
 
     removeFromWindow(win) {
-      for (const id of [MENU_ID, MENU_SEP_ID]) win.document.getElementById(id)?.remove();
+      for (const id of [MENU_ID, MENU_SEP_ID, TOOLS_MENU_ID]) win.document.getElementById(id)?.remove();
+    },
+
+    openSettings() {
+      Zotero.Utilities.Internal.openPreferences(PANE_ID);
     },
 
     async sendSelected(win) {
@@ -217,7 +234,7 @@
 
     async send(item) {
       if (!this.baseURL() || !this.apiKey()) {
-        throw new Error("Set PRMA's address and an API key in Zotero Settings → PRMA.");
+        throw new Error("Set PRMA's address and an API key under Tools → PRMA Forwarder Settings.");
       }
       if (this.sending.has(item.key)) return;
       this.sending.add(item.key);
@@ -304,7 +321,7 @@
       }
       if (!response.ok) {
         const why = data.error || `HTTP ${response.status}`;
-        if (response.status === 401) throw new Error("PRMA refused the API key: check it in Zotero Settings → PRMA.");
+        if (response.status === 401) throw new Error("PRMA refused the API key: check it under Tools → PRMA Forwarder Settings.");
         throw new Error(why.endsWith(".") ? why : why + ".");
       }
       return data;
