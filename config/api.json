@@ -9694,6 +9694,46 @@
         "x-mcp-http": "Which lists exist is a person's decision."
       }
     },
+    "/api/lists/export.zip": {
+      "get": {
+        "description": "Every list (not the Library, not the trash) as one CSV each, as Export CSV makes them, in a .zip. Each file is named after its list, so the import names the new lists the same.",
+        "operationId": "get_api_lists_export_zip",
+        "responses": {
+          "200": {
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Every list as CSVs",
+        "tags": [
+          "Lists"
+        ],
+        "x-mcp-http": "A file to download; list_rows gives the same rows as data."
+      }
+    },
     "/api/lists/schema": {
       "get": {
         "description": "Every op POST /api/lists/{slug}/ops takes, with its parameters, plus how rows and positions are named.",
@@ -9795,6 +9835,91 @@
           "Lists"
         ],
         "x-mcp-http": "A live event stream for the page; get_list's rev says the same when asked."
+      }
+    },
+    "/api/lists/unzip": {
+      "post": {
+        "description": "The CSVs in a .zip, as text, for the page's import: it plans each one as a new list, as it does a single CSV. Nothing is changed.",
+        "operationId": "post_api_lists_unzip",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "file": {
+                    "description": "A .zip of CSVs (Export all makes one), base64. At most 20 MB.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "files": {
+                      "description": "Each .csv in it, in order: {name, text}. Folders and other files are skipped.",
+                      "items": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "files"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Read a .zip of list CSVs",
+        "tags": [
+          "Lists"
+        ],
+        "x-mcp-http": "It reads a file for the page's import dialog; POST /api/lists makes the lists."
       }
     },
     "/api/lists/{slug}": {

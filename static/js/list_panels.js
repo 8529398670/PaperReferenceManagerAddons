@@ -519,6 +519,24 @@ const ListPanels = {
   // Import a CSV (an export of a list, or any spreadsheet saved as one): as a
   // new list, or onto the open one at the top, the bottom or a row number.
   // settings.target: "new" or "this" (the open list), picked first.
+  // Every list as a CSV each, in one .zip: what Import reads back as new lists.
+  async exportAll() {
+    try {
+      const response = await fetch( "/api/lists/export.zip" , { credentials: "same-origin" } );
+      if ( !response.ok ) throw new Error( ( await response.json().catch( () => ( {} ) ) ).error || response.statusText );
+      const disposition = response.headers.get( "Content-Disposition" ) || "";
+      const named = disposition.match( /filename="([^"]+)"/ );
+      const url = URL.createObjectURL( await response.blob() );
+      const link = Dom.el( "a" , { attrs: { href: url , download: named ? named[ 1 ] : "lists.zip" } } );
+      document.body.appendChild( link );
+      link.click();
+      link.remove();
+      setTimeout( () => URL.revokeObjectURL( url ) , 1000 );
+    } catch ( error ) {
+      Dom.toast( error.message , "error" );
+    }
+  },
+
   importCsv( settings = {} ) {
     const lists = this.lists;
     const view = lists.view;
@@ -529,8 +547,11 @@ const ListPanels = {
     let where = "bottom";
     let plan = null;
     const empty = { items: [] , columns: ( lists.newList && lists.newList.columns ) || [] , vocab: { tags: [] } , sections: [] };
-    const file = Dom.el( "input" , { class: "form-control" , attrs: { type: "file" , accept: ".csv,text/csv" , "aria-label": I18n.get( "lists.csv_file" ) } } );
+    const file = Dom.el( "input" , { class: "form-control" , attrs: { type: "file" , multiple: "multiple" , accept: ".csv,.zip,text/csv,application/zip" , "aria-label": I18n.get( "lists.csv_file" ) } } );
     const name = Dom.el( "input" , { class: "form-control" , attrs: { type: "text" , maxlength: "80" , id: "list-csv-name" } } );
+    // Several CSVs, or a .zip of them (Export all): a new list each.
+    // [ { name , plan , error } ], or null for one CSV.
+    let batch = null;
     const count = view ? ( view.doc.items || [] ).length : 0;
     const row = Dom.el( "input" , { class: "form-control form-control-sm" , attrs: { type: "number" , min: "1" , step: "1" , id: "list-csv-row" , "aria-label": I18n.get( "lists.csv_where_at" ) } } );
     row.value = String( count + 1 );
@@ -549,8 +570,46 @@ const ListPanels = {
         ListModal.problem( error.message );
       }
     };
+    const listName = ( fileName ) => fileName.replace( /\.csv$/i , "" ).replace( /[_]+/g , " " ).trim().slice( 0 , 80 );
+    const base64 = ( blob ) => new Promise( ( resolve , reject ) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve( String( reader.result ).split( "," )[ 1 ] || "" );
+      reader.onerror = () => reject( reader.error );
+      reader.readAsDataURL( blob );
+    } );
+    const readBatch = async () => {
+      const sources = [];
+      for ( const one of file.files ) {
+        if ( /\.zip$/i.test( one.name ) ) {
+          const answer = await Api.post( "/api/lists/unzip" , { file: await base64( one ) } );
+          sources.push( ...answer.files );
+        } else sources.push( { name: one.name , text: await one.text() } );
+      }
+      return sources.map( ( source ) => {
+        const entry = { name: listName( source.name ) , plan: null , error: "" };
+        try {
+          entry.plan = ListCSV.plan( ListCSV.parse( source.text ) , empty , "merge" , "bottom" , true );
+        } catch ( error ) {
+          entry.error = error.message;
+        }
+        return entry;
+      } );
+    };
     file.addEventListener( "change" , async () => {
       rows = null;
+      batch = null;
+      const several = file.files.length > 1 || ( file.files.length === 1 && /\.zip$/i.test( file.files[ 0 ].name ) );
+      if ( several ) {
+        ListModal.problem( "" );
+        plan = null;
+        try {
+          batch = await readBatch();
+        } catch ( error ) {
+          ListModal.problem( error.message );
+        }
+        ListModal.redraw();
+        return;
+      }
       if ( file.files.length ) {
         name.value = file.files[ 0 ].name.replace( /\.csv$/i , "" ).replace( /[_]+/g , " " ).trim().slice( 0 , 80 );
         try {
@@ -567,6 +626,62 @@ const ListPanels = {
       replan();
       ListModal.redraw();
     } );
+    // Every list in one Undo step: undo trashes them all, redo takes them out again.
+    const applyBatch = async () => {
+      ListModal.problem( "" );
+      const todo = ( batch || [] ).filter( ( entry ) => entry.plan && entry.plan.ops.length );
+      if ( !todo.length ) return;
+      const before = lists.slug;
+      let made = null;
+      let failed = "";
+      try {
+        await Undo.run( {
+          label: I18n.get( "undo.list_csv_all" ).replace( "{count}" , todo.length ),
+          toast: true,
+          do: async () => {
+            lists.bulk += 1;
+            try {
+              if ( made ) {
+                for ( const slug of made ) await Api.post( "/api/lists/" + encodeURIComponent( slug ) + "/undelete" , {} );
+              } else {
+                made = [];
+                for ( const entry of todo ) {
+                  try {
+                    made.push( ( await Api.post( "/api/lists" , { name: entry.name , ops: entry.plan.ops } ) ).list.slug );
+                  } catch ( error ) {
+                    // The ones made so far stay, and Undo still takes them back.
+                    failed = entry.name + ": " + error.message;
+                    break;
+                  }
+                }
+              }
+            } finally {
+              lists.bulk -= 1;
+            }
+            await lists.loadLists( made[ 0 ] || before );
+          },
+          undo: async () => {
+            lists.bulk += 1;
+            try {
+              for ( const slug of made ) await Api.post( "/api/lists/" + encodeURIComponent( slug ) + "/delete" , {} );
+            } finally {
+              lists.bulk -= 1;
+            }
+            await lists.loadLists( before );
+          },
+        } );
+      } catch ( error ) {
+        ListModal.problem( error.message );
+        return;
+      }
+      if ( failed ) {
+        ListModal.problem( I18n.get( "lists.csv_all_stopped" ).replace( "{made}" , made.length ).replace( "{error}" , () => failed ) );
+        batch = batch.filter( ( entry ) => !todo.slice( 0 , made.length ).includes( entry ) );
+        ListModal.redraw();
+        return;
+      }
+      ListModal.close();
+    };
     const apply = async () => {
       ListModal.problem( "" );
       if ( !plan || plan.ops.length === 0 ) return;
@@ -607,6 +722,25 @@ const ListPanels = {
         Dom.el( "p" , { class: "form-text" , text: I18n.get( "lists.csv_help" ) } ),
         file,
       ];
+      if ( batch ) {
+        const good = batch.filter( ( entry ) => entry.plan && entry.plan.ops.length );
+        body.push(
+          Dom.el( "p" , { class: "mt-3 mb-1" , text: I18n.get( "lists.csv_all_intro" ) } ),
+          Dom.el( "ul" , { class: "list-group" , children: batch.map( ( entry ) => Dom.el( "li" , {
+            class: "list-group-item d-flex flex-wrap justify-content-between gap-2",
+            children: [
+              Dom.el( "span" , { class: "fw-semibold text-break" , text: entry.name } ),
+              Dom.el( "span" , { class: entry.error ? "text-danger small" : "text-body-secondary small" ,
+                text: entry.error || I18n.get( "lists.csv_all_rows" ).replace( "{rows}" , entry.plan.rows ) } ),
+            ],
+          } ) ) } ),
+          Dom.el( "p" , { class: "form-text mb-0" , text: I18n.get( "lists.csv_new_tiers_note" ) } ),
+        );
+        const go = Dom.el( "button" , { class: "btn btn-primary" , attrs: { type: "button" } ,
+          text: I18n.get( "lists.csv_all_apply" ).replace( "{count}" , good.length ) , on: { click: () => applyBatch() } } );
+        go.disabled = good.length === 0;
+        return { body: body , foot: [ go ] };
+      }
       const targets = [ radio( "target" , "new" , I18n.get( "lists.csv_target_new" ) , target === "new" , ( v ) => { target = v; } ) ];
       if ( canAdd ) targets.push( radio( "target" , "this" , I18n.get( "lists.csv_target_this" ).replace( "{name}" , () => view.name ) , target === "this" , ( v ) => { target = v; } ) );
       body.push( Dom.el( "fieldset" , { class: "mt-3" , children: [ Dom.el( "legend" , { class: "form-label fs-6 mb-1" , text: I18n.get( "lists.csv_target" ) } ) , ...targets ] } ) );

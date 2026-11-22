@@ -58,6 +58,10 @@ const Lists = {
   active: -1,
   pickAnchor: -1,
   addTicket: 0,
+  // Above 0 while an import makes or trashes many lists: the stream's news of
+  // each is skipped, and the import reloads once at the end.
+  bulk: 0,
+  pickerTimer: 0,
   addTimer: null,
 
   async init( me ) {
@@ -79,6 +83,7 @@ const Lists = {
     Dom.get( "list-picker" ).addEventListener( "change" , ( event ) => this.open( event.target.value ) );
     Dom.get( "list-new" ).addEventListener( "click" , () => this.showNewForm( true ) );
     Dom.get( "list-import" ).addEventListener( "click" , () => ListPanels.importCsv( { target: "this" } ) );
+    Dom.get( "list-export-all" ).addEventListener( "click" , () => ListPanels.exportAll() );
     Dom.get( "list-new-cancel" ).addEventListener( "click" , () => this.showNewForm( false ) );
     Dom.onSubmit( Dom.get( "list-new-form" ) , this.onCreate.bind( this ) );
     this.initAdd();
@@ -1130,6 +1135,8 @@ const Lists = {
       } catch ( error ) {
         return;
       }
+      // An import making (or trashing) many lists here reloads once when done.
+      if ( this.bulk > 0 ) return;
       // The Library shows what every list says about each paper.
       if ( this.slug === this.LIBRARY && this.sending === 0 ) this.refreshLibrary();
       if ( data.deleted || data.renamed_from ) {
@@ -1143,7 +1150,9 @@ const Lists = {
       }
       if ( !this.lists.some( ( list ) => list.slug === data.slug ) ) {
         // A list made (or put back) somewhere else: offer it in the picker.
-        this.loadLists().catch( () => {} );
+        // Many at once (an import elsewhere) are one reload.
+        clearTimeout( this.pickerTimer );
+        this.pickerTimer = setTimeout( () => this.loadLists().catch( () => {} ) , 1000 );
         return;
       }
       if ( data.slug !== this.slug || !this.view ) return;

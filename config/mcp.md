@@ -1957,6 +1957,7 @@ Routes an API key may call that have no tool, and why.
 | [`GET /api/library/links`](api.md#get-apilibrarylinks) | Settings for drawing the page's links, not something an agent acts on. |
 | [`GET /api/library/stream`](api.md#get-apilibrarystream) | A live event stream for the page; library_version is the polling equivalent. |
 | [`GET /api/lists/deleted`](api.md#get-apilistsdeleted) | Which lists exist is a person's decision. |
+| [`GET /api/lists/export.zip`](api.md#get-apilistsexportzip) | A file to download; list_rows gives the same rows as data. |
 | [`GET /api/lists/stream`](api.md#get-apilistsstream) | A live event stream for the page; get_list's rev says the same when asked. |
 | [`GET /api/lists/{slug}/export.csv`](api.md#get-apilistsslugexportcsv) | A file to download; list_rows gives the same rows as data. |
 | [`GET /api/mcp.json`](api.md#get-apimcpjson) | The MCP reference itself; tools/list gives the same list. |
@@ -1969,6 +1970,7 @@ Routes an API key may call that have no tool, and why.
 | [`GET /api/summaries/rollup.xlsx`](api.md#get-apisummariesrollupxlsx) | A file to download. |
 | [`POST /api/export/xlsx`](api.md#post-apiexportxlsx) | A file to download, made from the rows sent. |
 | [`POST /api/lists`](api.md#post-apilists) | An agent edits lists; which lists exist is a person's decision. |
+| [`POST /api/lists/unzip`](api.md#post-apilistsunzip) | It reads a file for the page's import dialog; POST /api/lists makes the lists. |
 | [`POST /api/lists/{slug}/delete`](api.md#post-apilistsslugdelete) | Which lists exist is a person's decision. |
 | [`POST /api/lists/{slug}/export.csv`](api.md#post-apilistsslugexportcsv) | A file to download; list_rows gives the same rows as data. |
 | [`POST /api/lists/{slug}/lock`](api.md#post-apilistssluglock) | Which lists may change is a person's decision. |

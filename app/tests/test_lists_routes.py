@@ -154,6 +154,35 @@ class LibraryRoutesTest(LibraryCase):
         self.assertEqual(status, 200, body)
         self.assertEqual([i["key"] for i in body["list"]["doc"]["items"]], [WOOLRICH, "ref-a", "ref-b", third])
 
+    def test_every_list_as_a_zip_and_back(self) -> None:
+        import base64
+        import io
+        import zipfile
+
+        self.call("POST", "/api/lists", key=self.user_key, body={"name": "Aim 1"})
+        self.call("POST", "/api/lists", key=self.user_key, body={"name": "Aim/1"})
+        self.call("POST", "/api/lists/aim-1/ops", key=self.user_key, body={"ops": [{"op": "add", "paper": WOOLRICH}]})
+        response = self.request("GET", "/api/lists/export.zip", "", self.user_key, None, None)
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+            names = archive.namelist()
+            # Named after the lists; two that clean to one name are told apart.
+            self.assertEqual(names[-2:], ["Aim 1.csv", "Aim 1 (2).csv"])
+            self.assertIn(WOOLRICH, archive.read("Aim 1.csv").decode("utf-8"))
+        # Read back for the import: the CSVs, in order, as text.
+        packed = base64.b64encode(response.content).decode("ascii")
+        status, body = self.call("POST", "/api/lists/unzip", key=self.user_key, body={"file": packed})
+        self.assertEqual(status, 200)
+        self.assertEqual([f["name"] for f in body["files"]], names)
+        self.assertTrue(body["files"][-1]["text"].startswith("#,DOI_or_Key"))
+        # Not a .zip, or one with no CSVs in it.
+        self.assertEqual(self.call("POST", "/api/lists/unzip", key=self.user_key, body={"file": base64.b64encode(b"nope").decode()})[0], 400)
+        empty = io.BytesIO()
+        with zipfile.ZipFile(empty, "w") as archive:
+            archive.writestr("readme.txt", "hi")
+        self.assertEqual(self.call("POST", "/api/lists/unzip", key=self.user_key, body={"file": base64.b64encode(empty.getvalue()).decode()})[0], 400)
+        self.assertEqual(self.call("GET", "/api/lists/export.zip")[0], 401)
+
     def test_a_locked_list_refuses_changes(self) -> None:
         boards.create_board(self.store, "Frozen", "test")
         self.store.update_value("boards", "frozen", lambda record: record.update(locked=True))

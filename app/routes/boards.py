@@ -10,6 +10,9 @@ from __future__ import annotations
 
 import base64
 import binascii
+import io
+import re
+import zipfile
 from typing import Annotated, Any, Callable, ClassVar, Literal
 
 import msgspec
@@ -27,6 +30,7 @@ from app.core import sse
 from app.core.logs import KIND_ADMIN
 from app.core.security import actor_from
 from app.mcp.registry import Call
+from app.models import to_iso, utc_now
 from app.routes.helpers import Page, Paged, Refused, cut_page, error, get_config, get_store
 from app.routes.logs import audit
 
@@ -139,6 +143,87 @@ class DeletedReply(Reply):
 )
 def deleted_lists(request: Request) -> DeletedReply:
     return DeletedReply(lists=boards.deleted_boards(get_store(request)), days=boards.PURGE_DAYS)
+
+
+# -- every list at once: a .zip of CSVs out, and read back in ---------------------
+
+MAX_ZIP = 20 * 1024 * 1024
+MAX_ZIP_FILES = 200
+_UNSAFE_NAME = re.compile(r'[\\/:*?"<>|\x00-\x1f]+')
+
+
+def zip_name(name: str, taken: set[str]) -> str:
+    """A list's name as a file name in the .zip: what the import names it
+    after. Two lists of one name get (2), (3)."""
+    base = _UNSAFE_NAME.sub(" ", name).strip(" .") or "list"
+    candidate, n = base, 1
+    while candidate.lower() in taken:
+        n += 1
+        candidate = f"{base} ({n})"
+    taken.add(candidate.lower())
+    return candidate + ".csv"
+
+
+@route(
+    "GET /api/lists/export.zip", summary="Every list as CSVs",
+    tag=TAG, reply_type="application/zip",
+    description="Every list (not the Library, not the trash) as one CSV each, as Export CSV makes them, in a .zip. Each file is named after its list, so the import names the new lists the same.",
+    mcp_http="A file to download; list_rows gives the same rows as data.",
+)
+def export_zip(request: Request) -> Response:
+    service = get_service(request)
+    style = get_config(request).library.cite_style
+    buffer = io.BytesIO()
+    taken: set[str] = set()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for row in boards.list_boards(get_store(request)):
+            record = boards.get_board(service.store, row["slug"])
+            if record is None:
+                continue
+            archive.writestr(zip_name(record["name"], taken), export_csv(service, record, style, None))
+    stamp = to_iso(utc_now())[:10]
+    return Response(buffer.getvalue(), media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="lists-{stamp}.zip"'})
+
+
+class UnzipBody(RequestType):
+    file: Annotated[str, Meta(description="A .zip of CSVs (Export all makes one), base64. At most 20 MB.", extra={"error": "file must be text"})]
+
+
+class UnzipReply(Reply):
+    files: Annotated[list[dict[str, str]], Meta(description="Each .csv in it, in order: {name, text}. Folders and other files are skipped.")]
+
+
+@route(
+    "POST /api/lists/unzip", summary="Read a .zip of list CSVs",
+    tag=TAG,
+    description="The CSVs in a .zip, as text, for the page's import: it plans each one as a new list, as it does a single CSV. Nothing is changed.",
+    mcp_http="It reads a file for the page's import dialog; POST /api/lists makes the lists.",
+)
+def unzip_lists(request: Request, body: UnzipBody) -> UnzipReply:
+    try:
+        data = base64.b64decode(body.file, validate=True)
+    except (binascii.Error, ValueError):
+        raise Refused(400, "file must be base64") from None
+    if len(data) > MAX_ZIP:
+        raise Refused(400, "that .zip is over 20 MB")
+    files: list[dict[str, str]] = []
+    total = 0
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            for info in archive.infolist():
+                leaf = info.filename.rsplit("/", 1)[-1]
+                if info.is_dir() or not leaf.lower().endswith(".csv") or leaf.startswith(("._", ".")):
+                    continue
+                total += info.file_size
+                if total > 5 * MAX_ZIP or len(files) >= MAX_ZIP_FILES:
+                    raise Refused(400, f"that .zip holds too much: at most {MAX_ZIP_FILES} CSVs and 100 MB")
+                text = archive.read(info).decode("utf-8-sig", errors="replace")
+                files.append({"name": leaf, "text": text})
+    except zipfile.BadZipFile:
+        raise Refused(400, "that file is not a .zip") from None
+    if not files:
+        raise Refused(400, "there are no .csv files in that .zip")
+    return UnzipReply(files=files)
 
 
 class RenameBody(RequestType):
@@ -305,6 +390,8 @@ def schema_body() -> dict[str, Any]:
         "POST /api/lists/<slug>/delete": "into the trash for 30 days (ops then answer 410); not the main list",
         "POST /api/lists/<slug>/undelete": "out of the trash",
         "GET /api/lists/deleted": "the lists in the trash",
+        "GET /api/lists/export.zip": "every list as a CSV each (as export.csv makes them), in a .zip named after the lists",
+        "POST /api/lists/unzip": "{file: base64 of a .zip} -> {files: [{name, text}]}: the CSVs in it, for an import",
         "GET /api/lists/<slug>": "the list: its document (doc), rev, and what the library knows of each row (papers)",
         "POST /api/lists/<slug>/ops": "{ops: [{op, ...}], if_rev?: rev, dry_run?: bool}",
         "GET /api/lists/<slug>/rows": "the list as flat rows: ?q= text filter, ?tags=a,b&match=any|all|none, ?shelf=1 for the staging shelf, ?limit= (max 500) &offset=",

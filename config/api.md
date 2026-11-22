@@ -3054,8 +3054,10 @@ A token that changes whenever the library does, so a userscript can poll cheaply
 | GET | [`/api/lists`](#get-apilists) | List the lists | browser session or API key, anyone signed in |
 | POST | [`/api/lists`](#post-apilists) | Make a new list | browser session or API key, anyone signed in |
 | GET | [`/api/lists/deleted`](#get-apilistsdeleted) | Deleted lists | browser session or API key, anyone signed in |
+| GET | [`/api/lists/export.zip`](#get-apilistsexportzip) | Every list as CSVs | browser session or API key, anyone signed in |
 | GET | [`/api/lists/schema`](#get-apilistsschema) | List ops reference | browser session or API key, anyone signed in |
 | GET | [`/api/lists/stream`](#get-apilistsstream) | When a list changes | browser session or API key, anyone signed in |
+| POST | [`/api/lists/unzip`](#post-apilistsunzip) | Read a .zip of list CSVs | browser session or API key, anyone signed in |
 | GET | [`/api/lists/{slug}`](#get-apilistsslug) | Read a list | browser session or API key, anyone signed in |
 | POST | [`/api/lists/{slug}/delete`](#post-apilistsslugdelete) | Delete a list | browser session or API key, anyone signed in |
 | GET | [`/api/lists/{slug}/export.csv`](#get-apilistsslugexportcsv) | A list as CSV | browser session or API key, anyone signed in |
@@ -3194,6 +3196,22 @@ The lists in the trash, most recently deleted first. Each can be put back for 30
 | `days` | integer | yes |  | How long a deleted list can be put back. |
 | `lists` | array of object | yes |  |  |
 
+### GET /api/lists/export.zip
+
+Every list as CSVs
+
+Every list (not the Library, not the trash) as one CSV each, as Export CSV makes them, in a .zip. Each file is named after its list, so the import names the new lists the same.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | None, HTTP only: A file to download; list_rows gives the same rows as data. |
+| Errors | 401, 429, 503 |
+
+**Reply 200**: Success
+
+Text, as `application/zip`.
+
 ### GET /api/lists/schema
 
 List ops reference
@@ -3234,6 +3252,31 @@ Server-sent events: "list" {slug, rev, by} whenever any list changes.
 **Reply 200**: Success
 
 Text, as `text/event-stream`.
+
+### POST /api/lists/unzip
+
+Read a .zip of list CSVs
+
+The CSVs in a .zip, as text, for the page's import: it plans each one as a new list, as it does a single CSV. Nothing is changed.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | None, HTTP only: It reads a file for the page's import dialog; POST /api/lists makes the lists. |
+| Errors | 400, 401, 403, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `file` | string | yes |  | A .zip of CSVs (Export all makes one), base64. At most 20 MB. |
+
+**Reply 200**: Success
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `files` | array of map of string | yes |  | Each .csv in it, in order: {name, text}. Folders and other files are skipped. |
 
 ### GET /api/lists/{slug}
 
