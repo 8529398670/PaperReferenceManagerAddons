@@ -78,6 +78,7 @@ const Lists = {
     } );
     Dom.get( "list-picker" ).addEventListener( "change" , ( event ) => this.open( event.target.value ) );
     Dom.get( "list-new" ).addEventListener( "click" , () => this.showNewForm( true ) );
+    Dom.get( "list-import" ).addEventListener( "click" , () => ListPanels.importCsv( { target: "this" } ) );
     Dom.get( "list-new-cancel" ).addEventListener( "click" , () => this.showNewForm( false ) );
     Dom.onSubmit( Dom.get( "list-new-form" ) , this.onCreate.bind( this ) );
     this.initAdd();
@@ -109,6 +110,8 @@ const Lists = {
   async loadLists( choose ) {
     const answer = await Api.request( "/api/lists?limit=1000" );
     this.lists = answer.lists;
+    // What a new list starts with (its columns), for an import planned against it.
+    this.newList = answer.new_list || { columns: [] };
     // Library first: it is always there, so the screen always has a list.
     const picker = Dom.get( "list-picker" );
     picker.replaceChildren(

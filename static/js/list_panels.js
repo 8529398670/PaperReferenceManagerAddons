@@ -152,7 +152,7 @@ const ListPanels = {
         item( "bi-quote" , "lists.menu_cite" , () => this.citeStyle() , { disabled: locked } ) ],
       [ item( "bi-box-arrow-in-down" , "lists.menu_import" , () => manage.importFrom() , { disabled: locked } ),
         item( "bi-journal-arrow-down" , "lists.menu_refs" , () => this.importRefs() , { disabled: locked } ),
-        item( "bi-filetype-csv" , "lists.menu_csv_import" , () => this.importCsv() , { disabled: locked } ),
+        item( "bi-filetype-csv" , "lists.menu_csv_import" , () => this.importCsv( { target: "this" } ) , { disabled: locked } ),
         item( "bi-table" , "lists.menu_sheet" , () => ListSheet.open() , { disabled: locked } ),
         item( "bi-google" , "lists.menu_gsheet" , () => ListGSheet.open( view.slug ) ),
         item( "bi-download" , "lists.menu_csv_export" , () => this.exportCsv( false ) ),
@@ -516,18 +516,35 @@ const ListPanels = {
     }
   },
 
-  importCsv() {
+  // Import a CSV (an export of a list, or any spreadsheet saved as one): as a
+  // new list, or onto the open one at the top, the bottom or a row number.
+  // settings.target: "new" or "this" (the open list), picked first.
+  importCsv( settings = {} ) {
     const lists = this.lists;
+    const view = lists.view;
+    const canAdd = Boolean( view && !view.locked && !view.builtin );
+    let target = settings.target === "this" && canAdd ? "this" : "new";
     let rows = null;
     let mode = "merge";
+    let where = "bottom";
     let plan = null;
+    const empty = { items: [] , columns: ( lists.newList && lists.newList.columns ) || [] , vocab: { tags: [] } , sections: [] };
     const file = Dom.el( "input" , { class: "form-control" , attrs: { type: "file" , accept: ".csv,text/csv" , "aria-label": I18n.get( "lists.csv_file" ) } } );
+    const name = Dom.el( "input" , { class: "form-control" , attrs: { type: "text" , maxlength: "80" , id: "list-csv-name" } } );
+    const count = view ? ( view.doc.items || [] ).length : 0;
+    const row = Dom.el( "input" , { class: "form-control form-control-sm" , attrs: { type: "number" , min: "1" , step: "1" , id: "list-csv-row" , "aria-label": I18n.get( "lists.csv_where_at" ) } } );
+    row.value = String( count + 1 );
+    const position = () => {
+      if ( where !== "at" ) return where;
+      const n = parseInt( row.value , 10 );
+      return Number.isInteger( n ) && n > 0 ? n : "bottom";
+    };
     const replan = () => {
       ListModal.problem( "" );
       plan = null;
       if ( !rows ) return;
       try {
-        plan = ListCSV.plan( rows , lists.view.doc , mode );
+        plan = target === "new" ? ListCSV.plan( rows , empty , "merge" , "bottom" , true ) : ListCSV.plan( rows , view.doc , mode , position() );
       } catch ( error ) {
         ListModal.problem( error.message );
       }
@@ -535,6 +552,7 @@ const ListPanels = {
     file.addEventListener( "change" , async () => {
       rows = null;
       if ( file.files.length ) {
+        name.value = file.files[ 0 ].name.replace( /\.csv$/i , "" ).replace( /[_]+/g , " " ).trim().slice( 0 , 80 );
         try {
           rows = ListCSV.parse( await file.files[ 0 ].text() );
         } catch ( error ) {
@@ -544,9 +562,25 @@ const ListPanels = {
       replan();
       ListModal.redraw();
     } );
+    row.addEventListener( "input" , () => {
+      where = "at";
+      replan();
+      ListModal.redraw();
+    } );
     const apply = async () => {
       ListModal.problem( "" );
       if ( !plan || plan.ops.length === 0 ) return;
+      if ( target === "new" ) {
+        const label = name.value.trim();
+        if ( !label ) {
+          ListModal.problem( I18n.get( "lists.csv_name_needed" ) );
+          return;
+        }
+        // Checked by the server before it makes anything.
+        const made = await ListManage.create( { name: label , ops: plan.ops } , "undo.list_csv_new" );
+        if ( made ) ListModal.close();
+        return;
+      }
       // Checked first, so a problem is named before anything changes.
       try {
         await Api.post( "/api/lists/" + encodeURIComponent( lists.slug ) + "/ops" , { ops: plan.ops , dry_run: true } );
@@ -558,29 +592,58 @@ const ListPanels = {
       if ( answer ) ListModal.close();
     };
     ListModal.open( I18n.get( "lists.csv_title" ) , () => {
-      const radio = ( value , key ) => {
-        const input = Dom.el( "input" , { class: "form-check-input" , attrs: { type: "radio" , name: "list-csv-mode" , id: "list-csv-" + value } } );
-        input.checked = mode === value;
+      const radio = ( group , value , text , checked , change , disabled ) => {
+        const input = Dom.el( "input" , { class: "form-check-input" , attrs: { type: "radio" , name: "list-csv-" + group , id: "list-csv-" + group + "-" + value } } );
+        input.checked = checked;
+        input.disabled = Boolean( disabled );
         input.addEventListener( "change" , () => {
-          mode = value;
+          change( value );
           replan();
           ListModal.redraw();
         } );
-        return Dom.el( "div" , { class: "form-check" , children: [ input , Dom.el( "label" , { class: "form-check-label" , text: I18n.get( key ) , attrs: { for: input.id } } ) ] } );
+        return Dom.el( "div" , { class: "form-check" , children: [ input , Dom.el( "label" , { class: "form-check-label" , text: text , attrs: { for: input.id } } ) ] } );
       };
       const body = [
         Dom.el( "p" , { class: "form-text" , text: I18n.get( "lists.csv_help" ) } ),
         file,
-        Dom.el( "fieldset" , { class: "mt-3" , children: [ radio( "merge" , "lists.csv_merge" ) , radio( "replace" , "lists.csv_replace" ) ] } ),
       ];
+      const targets = [ radio( "target" , "new" , I18n.get( "lists.csv_target_new" ) , target === "new" , ( v ) => { target = v; } ) ];
+      if ( canAdd ) targets.push( radio( "target" , "this" , I18n.get( "lists.csv_target_this" ).replace( "{name}" , () => view.name ) , target === "this" , ( v ) => { target = v; } ) );
+      body.push( Dom.el( "fieldset" , { class: "mt-3" , children: [ Dom.el( "legend" , { class: "form-label fs-6 mb-1" , text: I18n.get( "lists.csv_target" ) } ) , ...targets ] } ) );
+      if ( target === "new" ) {
+        body.push( Dom.el( "div" , { class: "mt-2" , children: [
+          Dom.el( "label" , { class: "form-label" , text: I18n.get( "lists.name_label" ) , attrs: { for: name.id } } ),
+          name,
+          Dom.el( "p" , { class: "form-text mb-0" , text: I18n.get( "lists.csv_new_tiers_note" ) } ),
+        ] } ) );
+      } else {
+        const replace = mode === "replace";
+        row.disabled = replace;
+        const at = radio( "where" , "at" , I18n.get( "lists.csv_where_at" ) , where === "at" , ( v ) => { where = v; } , replace );
+        body.push(
+          Dom.el( "fieldset" , { class: "mt-3" , children: [
+            radio( "mode" , "merge" , I18n.get( "lists.csv_merge" ) , mode === "merge" , ( v ) => { mode = v; } ),
+            radio( "mode" , "replace" , I18n.get( "lists.csv_replace" ) , replace , ( v ) => { mode = v; } ),
+          ] } ),
+          Dom.el( "fieldset" , { class: "mt-3" , children: [
+            Dom.el( "legend" , { class: "form-label fs-6 mb-1" , text: I18n.get( "lists.csv_where" ) } ),
+            radio( "where" , "top" , I18n.get( "lists.csv_where_top" ) , where === "top" , ( v ) => { where = v; } , replace ),
+            radio( "where" , "bottom" , I18n.get( "lists.csv_where_bottom" ) , where === "bottom" , ( v ) => { where = v; } , replace ),
+            Dom.el( "div" , { class: "row g-2 align-items-center" , children: [
+              Dom.el( "div" , { class: "col-auto" , children: [ at ] } ),
+              Dom.el( "div" , { class: "col-4 col-sm-3" , children: [ row ] } ),
+            ] } ),
+          ] } ),
+        );
+      }
       const foot = [];
       if ( plan ) {
         const counts = plan.counts;
         let summary = I18n.get( "lists.csv_counts" ).replace( "{rows}" , plan.rows ).replace( "{new}" , counts.new ).replace( "{updated}" , counts.updated ).replace( "{unchanged}" , counts.unchanged );
-        if ( mode === "replace" ) summary += " " + I18n.get( "lists.csv_removed" ).replace( "{removed}" , counts.removed );
+        if ( target === "this" && mode === "replace" ) summary += " " + I18n.get( "lists.csv_removed" ).replace( "{removed}" , counts.removed );
         if ( plan.columns.length ) summary += " " + I18n.get( "lists.csv_new_columns" ).replace( "{columns}" , () => plan.columns.join( ", " ) );
         body.push( Dom.el( "p" , { class: "mt-3 fw-semibold" , text: summary } ) );
-        const go = Dom.el( "button" , { class: "btn btn-primary" , attrs: { type: "button" } , text: I18n.get( "lists.csv_apply" ) , on: { click: () => apply() } } );
+        const go = Dom.el( "button" , { class: "btn btn-primary" , attrs: { type: "button" } , text: I18n.get( target === "new" ? "lists.csv_apply_new" : "lists.csv_apply" ) , on: { click: () => apply() } } );
         go.disabled = plan.ops.length === 0;
         foot.push( go );
       }

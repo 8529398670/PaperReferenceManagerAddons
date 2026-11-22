@@ -117,6 +117,43 @@ class LibraryRoutesTest(LibraryCase):
         self.assertEqual(len(versions), 1)
         self.assertEqual(self.call("POST", "/api/lists/nope/ops", key=self.user_key, body={"ops": [{"op": "remove", "rows": ["#1"]}]})[0], 404)
 
+    def test_a_list_made_from_an_import(self) -> None:
+        # What the Import dialog sends for a CSV: the list and its rows in one call.
+        ops = [
+            {"op": "tag_create", "name": "fMRI", "color": "#336699"},
+            {"op": "column_add", "label": "Verdict"},
+            {"op": "add", "paper": {"key": WOOLRICH, "title": "Woolrich", "doi": WOOLRICH}, "if_absent": True, "auto_tag": False, "prefill": False, "at": "bottom", "tags": ["fMRI"], "cells": {"Notes": "key paper", "Verdict": "yes"}},
+            {"op": "add", "paper": {"key": MINDALIGN, "title": "MindAlign", "doi": MINDALIGN}, "if_absent": True, "auto_tag": False, "prefill": False, "at": "bottom"},
+        ]
+        status, body = self.call("POST", "/api/lists", key=self.user_key, body={"name": "Imported", "ops": ops})
+        self.assertEqual(status, 200, body)
+        self.assertEqual((body["list"]["slug"], body["list"]["count"]), ("imported", 2))
+        doc = self.call("GET", "/api/lists/imported", key=self.user_key)[1]["list"]["doc"]
+        self.assertEqual([i["key"] for i in doc["items"]], [WOOLRICH, MINDALIGN])
+        self.assertEqual((doc["items"][0]["tags"], doc["items"][0]["fields"]["notes"], doc["items"][0]["fields"]["verdict"]), (["fMRI"], "key paper", "yes"))
+        # The planner learns a new list's columns (Notes is one) from GET /api/lists.
+        self.assertIn("Notes", [c["label"] for c in self.call("GET", "/api/lists", key=self.user_key)[1]["new_list"]["columns"]])
+        # The import is a change of its own: undoing to rev 1 is the empty list.
+        self.assertEqual(self.call("GET", "/api/lists/imported/history/1", key=self.user_key)[1]["version"]["doc"]["items"], [])
+
+        # A bad op makes nothing, and names itself.
+        status, body = self.call("POST", "/api/lists", key=self.user_key, body={"name": "Broken", "ops": [ops[3], {"op": "move", "row": "#9", "to": 1}]})
+        self.assertEqual((status, body["index"]), (400, 1))
+        self.assertEqual(self.call("GET", "/api/lists/broken", key=self.user_key)[0], 404)
+        # Not with from.
+        self.assertEqual(self.call("POST", "/api/lists", key=self.user_key, body={"name": "Copy", "from": "imported", "ops": ops})[0], 400)
+
+        # Added onto a list from a row on, the new papers keep the file's order.
+        third = [k for k in self.call("GET", "/api/papers", key=self.user_key)[1]["papers"] if k["key"] not in (WOOLRICH, MINDALIGN)][0]["key"]
+        boards.create_board(self.store, "Two", "test")
+        self.call("POST", "/api/lists/two/ops", key=self.user_key, body={"ops": [{"op": "add", "paper": WOOLRICH}, {"op": "add", "paper": third, "at": "bottom"}]})
+        status, body = self.call("POST", "/api/lists/two/ops", key=self.user_key, body={"ops": [
+            {"op": "add", "paper": {"key": "ref-a", "title": "A"}, "if_absent": True, "at": 2},
+            {"op": "add", "paper": {"key": "ref-b", "title": "B"}, "if_absent": True, "at": 3},
+        ]})
+        self.assertEqual(status, 200, body)
+        self.assertEqual([i["key"] for i in body["list"]["doc"]["items"]], [WOOLRICH, "ref-a", "ref-b", third])
+
     def test_a_locked_list_refuses_changes(self) -> None:
         boards.create_board(self.store, "Frozen", "test")
         self.store.update_value("boards", "frozen", lambda record: record.update(locked=True))

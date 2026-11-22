@@ -12,6 +12,11 @@
 //   the tags it lacks and fills its empty cells.
 // replace: the list becomes the file's rows, in the file's order, with the
 //   file's tags and cells. The staging shelf is left alone.
+//
+// where ("bottom" by default, "top" or a row number N): where the new papers
+// go, in the file's order. Papers already here stay put; replace ignores it.
+// fresh: the list is being made from the file, so its columns arrive unfolded
+// and in the file's order.
 const ListCSV = {
   H_NUM: /^#$|^no\.?$|^rank$/i,
   H_KEY: /^(doi[_ ]?or[_ ]?key|key)$/i,
@@ -84,7 +89,7 @@ const ListCSV = {
   },
 
   // -> { ops , counts: { new , updated , unchanged , removed } , columns: [ new labels ] , rows }
-  plan( rows , doc , mode ) {
+  plan( rows , doc , mode , where , fresh ) {
     if ( rows.length < 2 ) throw new Error( I18n.get( "lists.csv_empty" ) );
     const head = rows[ 0 ].map( ( h ) => String( h || "" ).trim() );
     const at = { key: -1 , doi: -1 , title: -1 , year: -1 , journal: -1 , authors: -1 , tier: -1 };
@@ -120,8 +125,9 @@ const ListCSV = {
     if ( columns.length + newColumns.length > 16 ) throw new Error( I18n.get( "lists.csv_too_many_columns" ) );
     newColumns.forEach( ( label ) => {
       ops.push( { op: "column_add" , label: label } );
-      ops.push( { op: "column_fold" , col: label , folded: true } );
+      if ( !fresh ) ops.push( { op: "column_fold" , col: label , folded: true } );
     } );
+    if ( fresh ) extra.forEach( ( column , i ) => ops.push( { op: "column_move" , col: column.col , to: i + 1 } ) );
 
     const byKey = new Map();
     const byTitle = new Map();
@@ -178,7 +184,10 @@ const ListCSV = {
         if ( Number.isFinite( year ) ) paper.year = year;
         if ( cell( at.journal ) ) paper.journal = cell( at.journal );
         if ( cell( at.authors ) ) paper.authors = cell( at.authors );
-        const op = { op: "add" , paper: paper , if_absent: true , auto_tag: false , prefill: false , at: "bottom" };
+        let place = "bottom";
+        if ( mode !== "replace" && where === "top" ) place = 1 + counts.new;
+        else if ( mode !== "replace" && Number.isInteger( where ) && where > 0 ) place = where + counts.new;
+        const op = { op: "add" , paper: paper , if_absent: true , auto_tag: false , prefill: false , at: place };
         if ( tags.length ) op.tags = tags;
         if ( Object.keys( cells ).length ) op.cells = cells;
         ops.push( op );

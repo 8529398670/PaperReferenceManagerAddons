@@ -9471,6 +9471,10 @@
                       },
                       "type": "array"
                     },
+                    "new_list": {
+                      "description": "What a new list starts with: its columns ({id, label}), so an import can be planned against it.",
+                      "type": "object"
+                    },
                     "next": {
                       "description": "Offset of the next page, or null on the last one.",
                       "type": [
@@ -9520,7 +9524,7 @@
         ]
       },
       "post": {
-        "description": "A new list: empty, a full copy of the list `from` names, or a copy of only the rows `keys` names.",
+        "description": "A new list: empty, a full copy of the list `from` names, a copy of only the rows `keys` names, or one started with `ops` (an import).",
         "operationId": "post_api_lists",
         "requestBody": {
           "content": {
@@ -9553,6 +9557,20 @@
                   "name": {
                     "description": "The new list's name.",
                     "type": "string"
+                  },
+                  "ops": {
+                    "description": "Start the new list with these ops (as POST /api/lists/<slug>/ops takes them), e.g. a CSV import. Checked first: when one fails nothing is made and the answer names it. Not with from.",
+                    "oneOf": [
+                      {
+                        "items": {
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "required": [

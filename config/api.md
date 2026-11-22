@@ -3143,6 +3143,7 @@ Every curated list, the main one first: slug, name, rev (its version number), ho
 | Field | Type | Required | Limits | Description |
 |---|---|---|---|---|
 | `lists` | array of object | yes |  |  |
+| `new_list` | object | no |  | What a new list starts with: its columns ({id, label}), so an import can be planned against it. |
 | `next` | integer or null | yes |  | Offset of the next page, or null on the last one. |
 | `total` | integer | yes |  |  |
 
@@ -3150,7 +3151,7 @@ Every curated list, the main one first: slug, name, rev (its version number), ho
 
 Make a new list
 
-A new list: empty, a full copy of the list `from` names, or a copy of only the rows `keys` names.
+A new list: empty, a full copy of the list `from` names, a copy of only the rows `keys` names, or one started with `ops` (an import).
 
 |  |  |
 |---|---|
@@ -3166,6 +3167,7 @@ A new list: empty, a full copy of the list `from` names, or a copy of only the r
 | `from` | string | no |  | Copy this list (its slug) instead of starting empty. |
 | `keys` | array of string or null | no |  | With from: copy only these rows (keys), and only the tags they use. |
 | `name` | string | yes |  | The new list's name. |
+| `ops` | array of object or null | no |  | Start the new list with these ops (as POST /api/lists/<slug>/ops takes them), e.g. a CSV import. Checked first: when one fails nothing is made and the answer names it. Not with from. |
 
 **Reply 200**: Success
 

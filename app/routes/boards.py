@@ -19,7 +19,7 @@ from starlette.responses import Response
 
 from app.apidocs import PATH, QUERY, Reply, route
 from app.apidocs import Request as RequestType
-from app.boards import cite, gsheet, ops, refparse
+from app.boards import board, cite, gsheet, ops, refparse
 from app.boards import store as boards
 from app.boards.service import LIBRARY, BoardService
 from app.routes.library import get_catalogue
@@ -57,6 +57,7 @@ class SlugPath(RequestType):
 
 class ListsReply(Paged):
     lists: list[dict[str, Any]]
+    new_list: Annotated[dict[str, Any], Meta(description="What a new list starts with: its columns ({id, label}), so an import can be planned against it.")] = {}
 
 
 @route(
@@ -67,13 +68,15 @@ class ListsReply(Paged):
 )
 def list_lists(request: Request, body: Page) -> ListsReply:
     page = cut_page(boards.list_boards(get_store(request)), body)
-    return ListsReply(lists=page.pop("rows"), **page)
+    blank = board.default_doc()
+    return ListsReply(lists=page.pop("rows"), new_list={"columns": blank["columns"]}, **page)
 
 
 class CreateList(RequestType):
     name: Annotated[str, Meta(description="The new list's name.", extra={"error": "name must be text"})]
     from_: Annotated[str, Meta(description="Copy this list (its slug) instead of starting empty.")] = msgspec.field(default="", name="from")
     keys: Annotated[list[str] | None, Meta(description="With from: copy only these rows (keys), and only the tags they use.", extra={"error": "keys must be a list of row keys"})] = None
+    ops: Annotated[list[dict[str, Any]] | None, Meta(description="Start the new list with these ops (as POST /api/lists/<slug>/ops takes them), e.g. a CSV import. Checked first: when one fails nothing is made and the answer names it. Not with from.", extra={"error": "ops must be a list of ops"})] = None
 
 
 class ListReply(Reply):
@@ -83,7 +86,7 @@ class ListReply(Reply):
 @route(
     "POST /api/lists", summary="Make a new list",
     tag=TAG, errors=(404, 410),
-    description="A new list: empty, a full copy of the list `from` names, or a copy of only the rows `keys` names.",
+    description="A new list: empty, a full copy of the list `from` names, a copy of only the rows `keys` names, or one started with `ops` (an import).",
     mcp_http="An agent edits lists; which lists exist is a person's decision.",
 )
 def create_list(request: Request, body: CreateList) -> ListReply:
@@ -96,13 +99,30 @@ def create_list(request: Request, body: CreateList) -> ListReply:
             original = get_service(request).find(body.from_, get_catalogue(request))
             source = original["slug"]
             doc = boards.copy_doc(original["doc"], body.keys)
+            if body.ops is not None:
+                raise boards.BoardError("ops can't be used with from: copy the list, then change it")
         elif body.keys is not None:
             raise boards.BoardError("keys needs from: the list to copy them from")
+        if body.ops:
+            # Tried on an empty list first, so a bad op makes nothing.
+            try:
+                ops.apply_ops(board.default_doc(), get_service(request).ctx(), body.ops)
+            except ops.OpFailure as failure:
+                raise boards.BoardError(failure.msg, 400, index=failure.index, op=failure.op) from None
         record = boards.create_board(store, body.name, name, doc=doc, copied_from=source)
     except boards.BoardError as refusal:
         raise board_refused(refusal) from None
     audit(request, KIND_ADMIN, "list created", {"slug": record["slug"], "name": record["name"], "from": source})
     get_service(request).changed(record["slug"], record["rev"], name)
+    if body.ops:
+        # Run as a change of its own, so the list's history shows the import.
+        try:
+            run_ops(get_service(request), record["slug"], body.ops, name, None, False, get_catalogue(request))
+        except boards.BoardError as refusal:
+            boards.delete_board(store, record["slug"], name)
+            get_service(request).changed(record["slug"], record["rev"], name, deleted=True)
+            raise board_refused(refusal) from None
+        record = boards.get_board(store, record["slug"]) or record
     return ListReply(list=boards.summary(record))
 
 
@@ -280,7 +300,7 @@ def schema_body() -> dict[str, Any]:
     body["auth"] = "A signed-in browser session (with csrf_token in the body), or Authorization: Bearer <API key>."
     body["endpoints"] = {
         "GET /api/lists": "every list: {slug, name, rev, count, shelf, locked}, the main list first",
-        "POST /api/lists": "{name, from?, keys?} -- a new list: empty, a copy of list `from`, or of only its rows `keys`",
+        "POST /api/lists": "{name, from?, keys?, ops?} -- a new list: empty, a copy of list `from`, or of only its rows `keys`; or started with `ops` (an import: checked first, nothing made if one fails)",
         "POST /api/lists/<slug>/rename": "{name} -- the slug follows the name; the old slug keeps answering",
         "POST /api/lists/<slug>/delete": "into the trash for 30 days (ops then answer 410); not the main list",
         "POST /api/lists/<slug>/undelete": "out of the trash",
