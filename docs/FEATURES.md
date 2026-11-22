@@ -13,6 +13,7 @@ The idea that changes everything: **no reindex, no pipeline to run**.
 - [x] **P1** DOI / key normalisation as the old app did it (`nodoi-zotero-*` keys), so old lists still match.
 - [x] **P1** `/api/exists` + `/api/version` for the userscripts (a DOI settles it; with no DOI, title fuzzy ≥ 96). An API key is required.
 - [x] **P1** Userscripts updated (`userscripts/`): new address, `Authorization: Bearer`.
+- [x] **New** Zotero plugin (`zotero-plugin/`, built with `scripts/build_zotero_plugin.sh`). A paper saved in desktop Zotero, by the Connector or anything else, is sent to PRMA once its PDF has finished downloading; right-click → Send to PRMA covers older papers. PRMA passes it on to a ZoteroWebDAV library, keeping its Zotero keys (`POST /api/ingest/items`, then `/api/ingest/file` in pieces). That library is the caller's own if they have one, else the server's library (admins only; never a local Zotero folder). The paper is searchable seconds later. The desktop copy stays, tagged `prma:sent`.
 - [x] **P1** PDF served from Zotero storage (`/api/paper/pdf?key=`).
 - [x] **P2** "Recently added" from Zotero, on the Lists screen (past week / 2 weeks / month, multi-pick, tag and position per paper).
 - [x] **P4** Paper screen (`#paper/<key>`, every title links there): abstract (Zotero, else OpenAlex), the text split on its headings with a table of contents, code and dataset links, citations with a link to its missing network, which lists it is on, each stage's state with Retry, Prev / Next through the list it was opened from.

@@ -265,6 +265,8 @@ ERROR_MEANINGS = {
     404: "No such thing, or this feature is switched off.",
     409: "The record has moved on: an undo too late, or a stale edit.",
     410: "It was deleted: a list in the trash, which can still be put back.",
+    413: "The request body is too large.",
+    424: "The library this writes to refused or could not be reached: error says why.",
     429: "Too many requests.",
     503: "In maintenance mode. Retry-After says when to try again.",
 }

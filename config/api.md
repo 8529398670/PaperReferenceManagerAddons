@@ -19,6 +19,7 @@ This file is generated: do not edit it. Change the docs next to the handlers and
 - [Crawl](#crawl)
 - [Figures](#figures)
 - [Google Sheets](#google-sheets)
+- [Ingest](#ingest)
 - [Library](#library)
 - [Lists](#lists)
 - [Missing papers](#missing-papers)
@@ -2814,6 +2815,85 @@ Switch a list's Google Sheet mirror off, one-way or two-way; sync now; or overwr
 
 [`SheetMirror`](#sheetmirror).
 
+## Ingest
+
+| Method | Path | Summary | Who may call |
+|---|---|---|---|
+| POST | [`/api/ingest/file`](#post-apiingestfile) | Send a piece of an attachment's file | browser session or API key, anyone signed in |
+| POST | [`/api/ingest/items`](#post-apiingestitems) | Add papers to your library | browser session or API key, anyone signed in |
+| GET | [`/api/ingest/target`](#get-apiingesttarget) | Where papers you send go | browser session or API key, anyone signed in |
+
+### POST /api/ingest/file
+
+Send a piece of an attachment's file
+
+The body is one piece of the file, starting at offset: chunk_bytes long, but the last, which ends the file. Send the pieces in order. When the last arrives the library stores the file as Zotero's WebDAV sync does, and the attachment opens in PRMA.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | None, HTTP only: For the Zotero plugin, which sends a paper's Zotero JSON and files; an agent has neither. |
+| Errors | 400, 401, 403, 404, 409, 413, 424, 429, 503 |
+
+**Parameters**
+
+| Name | In | Type | Required | Limits | Description |
+|---|---|---|---|---|---|
+| `key` | query | string | no |  | The attachment item's Zotero key, stored first with POST /api/ingest/items. |
+| `filename` | query | string | no | at most 255 characters | The file's name, without folders. |
+| `size` | query | integer | no | at least 1; default `1` | The whole file's size in bytes. |
+| `offset` | query | integer | no | at least 0 | Where this piece starts: a multiple of chunk_bytes (GET /api/ingest/target). 0 starts the file over. |
+| `mtime` | query | integer | no | at least 0 | The file's modification time, in milliseconds since 1970. Default: now. |
+| `X-CSRF-Token` | header | string | no |  | From GET /api/me. Browser sessions only. |
+
+**Request body**
+
+Raw bytes, as `application/octet-stream`.
+
+**Reply 200**: Success
+
+[`IngestFileReply`](#ingestfilereply).
+
+### POST /api/ingest/items
+
+Add papers to your library
+
+Stores items and collections, as Zotero's JSON and with their Zotero keys, in the library GET /api/ingest/target names. Collections go first, then each item after its parent. Sending the same again changes nothing. At most 200 items and 200 collections. Then send each attachment's file to POST /api/ingest/file. The paper shows up in the library seconds later.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | None, HTTP only: For the Zotero plugin, which sends a paper's Zotero JSON and files; an agent has neither. |
+| Errors | 400, 401, 403, 409, 424, 429, 503 |
+
+**Request body**
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `collections` | array of object | no |  | Each {key, data}: Zotero's JSON for a collection the items are filed in, and its parents. Optional. |
+| `csrf_token` | string | no |  | From GET /api/me. Browser sessions only. |
+| `items` | array of object | no |  | Each {key, data}: data is Zotero's JSON for the item (Zotero.Item.toJSON(), the web API's data object), key its 8-character Zotero key. The paper, then its attachments and notes (parentItem names the paper). |
+
+**Reply 200**: Success
+
+[`IngestItemsReply`](#ingestitemsreply).
+
+### GET /api/ingest/target
+
+Where papers you send go
+
+Your own library if you connected one on the Account screen, else the server's library (admins only, and only when it is a ZoteroWebDAV server). Never names the library's address. The Zotero plugin's Test connection button asks this.
+
+|  |  |
+|---|---|
+| Who may call | browser session or API key, anyone signed in |
+| MCP tool | None, HTTP only: For the Zotero plugin, which sends a paper's Zotero JSON and files; an agent has neither. |
+| Errors | 401, 429, 503 |
+
+**Reply 200**: Success
+
+[`IngestTarget`](#ingesttarget).
+
 ## Library
 
 | Method | Path | Summary | Who may call |
@@ -4781,6 +4861,40 @@ The shapes the routes above refer to by name.
 | `names[].created_at` | string (date-time) | yes |  |  |
 | `names[].name` | string | yes |  |  |
 | `names[].target` | string | yes |  |  |
+
+### IngestFileReply
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `done` | boolean | yes |  | The whole file arrived and is stored. |
+| `received` | integer | yes |  | Bytes of the file the library holds so far. |
+
+### IngestItemsReply
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `failed` | integer | yes |  |  |
+| `results` | array of [`IngestResult`](#ingestresult) | yes |  | One per record: collections first, then items, each parent before its children. |
+| `stored` | integer | yes |  |  |
+
+### IngestResult
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `changed` | boolean | yes |  | false when the library already had exactly this. |
+| `error` | string | yes |  | Why it was not stored. Empty when ok. |
+| `key` | string | yes |  |  |
+| `kind` | string | yes |  | "item" or "collection". |
+| `ok` | boolean | yes |  |  |
+
+### IngestTarget
+
+| Field | Type | Required | Limits | Description |
+|---|---|---|---|---|
+| `chunk_bytes` | integer | yes |  | How long each piece of a file sent to POST /api/ingest/file must be, all but the last. |
+| `kind` | string | yes |  | "own": your own library (the Account screen). "server": the server's library. Empty when writable is false. |
+| `reason` | string | yes |  | Why papers cannot be stored. Empty when they can. |
+| `writable` | boolean | yes |  | Whether papers you send can be stored. false: reason says why. |
 
 ### Job
 

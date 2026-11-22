@@ -1,0 +1,22 @@
+<vbox id="prma-prefs" onload="Zotero.PRMAPrefs?.init()" xmlns:html="http://www.w3.org/1999/xhtml">
+  <groupbox>
+    <label><html:h2>Paper Reference Manager</html:h2></label>
+    <html:p style="margin-top: 0">
+      New papers (from the Zotero Connector or anything else) are sent to PRMA once their PDF has downloaded,
+      and PRMA stores them in your ZoteroWebDAV library. They stay here too, tagged prma:sent.
+      Right-click a paper → Send to PRMA to send one again.
+    </html:p>
+    <html:div style="display: grid; grid-template-columns: max-content 1fr; gap: 6px 10px; align-items: center; max-width: 640px">
+      <html:label for="prma-url">PRMA address</html:label>
+      <html:input type="text" id="prma-url" preference="extensions.prma.url" placeholder="http://127.0.0.1:25620"/>
+      <html:label for="prma-key">API key</html:label>
+      <html:input type="password" id="prma-key" preference="extensions.prma.apiKey" placeholder="id.secret, from PRMA's API keys screen" autocomplete="off"/>
+    </html:div>
+    <checkbox id="prma-auto" preference="extensions.prma.autoSend" label="Send new papers automatically" native="true"/>
+    <hbox align="center" style="margin-top: 6px">
+      <button id="prma-test" label="Test connection" oncommand="Zotero.PRMAPrefs.test()"/>
+      <label id="prma-status" style="margin-inline-start: 8px"/>
+    </hbox>
+    <label id="prma-waiting"/>
+  </groupbox>
+</vbox>

@@ -314,6 +314,103 @@
         ],
         "type": "object"
       },
+      "IngestFileReply": {
+        "properties": {
+          "done": {
+            "description": "The whole file arrived and is stored.",
+            "type": "boolean"
+          },
+          "received": {
+            "description": "Bytes of the file the library holds so far.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "done",
+          "received"
+        ],
+        "type": "object"
+      },
+      "IngestItemsReply": {
+        "properties": {
+          "failed": {
+            "type": "integer"
+          },
+          "results": {
+            "description": "One per record: collections first, then items, each parent before its children.",
+            "items": {
+              "$ref": "#/components/schemas/IngestResult"
+            },
+            "type": "array"
+          },
+          "stored": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "failed",
+          "results",
+          "stored"
+        ],
+        "type": "object"
+      },
+      "IngestResult": {
+        "properties": {
+          "changed": {
+            "description": "false when the library already had exactly this.",
+            "type": "boolean"
+          },
+          "error": {
+            "description": "Why it was not stored. Empty when ok.",
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "description": "\"item\" or \"collection\".",
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "changed",
+          "error",
+          "key",
+          "kind",
+          "ok"
+        ],
+        "type": "object"
+      },
+      "IngestTarget": {
+        "properties": {
+          "chunk_bytes": {
+            "description": "How long each piece of a file sent to POST /api/ingest/file must be, all but the last.",
+            "type": "integer"
+          },
+          "kind": {
+            "description": "\"own\": your own library (the Account screen). \"server\": the server's library. Empty when writable is false.",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Why papers cannot be stored. Empty when they can.",
+            "type": "string"
+          },
+          "writable": {
+            "description": "Whether papers you send can be stored. false: reason says why.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "chunk_bytes",
+          "kind",
+          "reason",
+          "writable"
+        ],
+        "type": "object"
+      },
       "Job": {
         "properties": {
           "interrupted": {
@@ -8524,6 +8621,253 @@
         ]
       }
     },
+    "/api/ingest/file": {
+      "post": {
+        "description": "The body is one piece of the file, starting at offset: chunk_bytes long, but the last, which ends the file. Send the pieces in order. When the last arrives the library stores the file as Zotero's WebDAV sync does, and the attachment opens in PRMA.",
+        "operationId": "post_api_ingest_file",
+        "parameters": [
+          {
+            "description": "The attachment item's Zotero key, stored first with POST /api/ingest/items.",
+            "in": "query",
+            "name": "key",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The file's name, without folders.",
+            "in": "query",
+            "name": "filename",
+            "schema": {
+              "maxLength": 255,
+              "type": "string"
+            }
+          },
+          {
+            "description": "The whole file's size in bytes.",
+            "in": "query",
+            "name": "size",
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Where this piece starts: a multiple of chunk_bytes (GET /api/ingest/target). 0 starts the file over.",
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The file's modification time, in milliseconds since 1970. Default: now.",
+            "in": "query",
+            "name": "mtime",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "From GET /api/me. Browser sessions only.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestFileReply"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "409": {
+            "$ref": "#/components/responses/E409"
+          },
+          "413": {
+            "$ref": "#/components/responses/E413"
+          },
+          "424": {
+            "$ref": "#/components/responses/E424"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Send a piece of an attachment's file",
+        "tags": [
+          "Ingest"
+        ],
+        "x-mcp-http": "For the Zotero plugin, which sends a paper's Zotero JSON and files; an agent has neither."
+      }
+    },
+    "/api/ingest/items": {
+      "post": {
+        "description": "Stores items and collections, as Zotero's JSON and with their Zotero keys, in the library GET /api/ingest/target names. Collections go first, then each item after its parent. Sending the same again changes nothing. At most 200 items and 200 collections. Then send each attachment's file to POST /api/ingest/file. The paper shows up in the library seconds later.",
+        "operationId": "post_api_ingest_items",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "collections": {
+                    "description": "Each {key, data}: Zotero's JSON for a collection the items are filed in, and its parents. Optional.",
+                    "items": {
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "csrf_token": {
+                    "description": "From GET /api/me. Browser sessions only.",
+                    "type": "string"
+                  },
+                  "items": {
+                    "description": "Each {key, data}: data is Zotero's JSON for the item (Zotero.Item.toJSON(), the web API's data object), key its 8-character Zotero key. The paper, then its attachments and notes (parentItem names the paper).",
+                    "items": {
+                      "type": "object"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestItemsReply"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "409": {
+            "$ref": "#/components/responses/E409"
+          },
+          "424": {
+            "$ref": "#/components/responses/E424"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Add papers to your library",
+        "tags": [
+          "Ingest"
+        ],
+        "x-mcp-http": "For the Zotero plugin, which sends a paper's Zotero JSON and files; an agent has neither."
+      }
+    },
+    "/api/ingest/target": {
+      "get": {
+        "description": "Your own library if you connected one on the Account screen, else the server's library (admins only, and only when it is a ZoteroWebDAV server). Never names the library's address. The Zotero plugin's Test connection button asks this.",
+        "operationId": "get_api_ingest_target",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestTarget"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Where papers you send go",
+        "tags": [
+          "Ingest"
+        ],
+        "x-mcp-http": "For the Zotero plugin, which sends a paper's Zotero JSON and files; an agent has neither."
+      }
+    },
     "/api/keys": {
       "get": {
         "operationId": "get_api_keys",
@@ -16726,6 +17070,9 @@
     },
     {
       "name": "Google Sheets"
+    },
+    {
+      "name": "Ingest"
     },
     {
       "name": "Library"

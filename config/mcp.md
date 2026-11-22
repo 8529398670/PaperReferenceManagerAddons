@@ -1954,6 +1954,7 @@ Routes an API key may call that have no tool, and why.
 | [`GET /api/crawl/{search}/export.xlsx`](api.md#get-apicrawlsearchexportxlsx) | A file to download. |
 | [`GET /api/figures/export`](api.md#get-apifiguresexport) | A file to download; figure_picks gives the ids as data. |
 | [`GET /api/figures/image`](api.md#get-apifiguresimage) | An image, for a browser to show. |
+| [`GET /api/ingest/target`](api.md#get-apiingesttarget) | For the Zotero plugin, which sends a paper's Zotero JSON and files; an agent has neither. |
 | [`GET /api/library/links`](api.md#get-apilibrarylinks) | Settings for drawing the page's links, not something an agent acts on. |
 | [`GET /api/library/stream`](api.md#get-apilibrarystream) | A live event stream for the page; library_version is the polling equivalent. |
 | [`GET /api/lists/deleted`](api.md#get-apilistsdeleted) | Which lists exist is a person's decision. |
@@ -1969,6 +1970,8 @@ Routes an API key may call that have no tool, and why.
 | [`GET /api/searches/{search}/export`](api.md#get-apisearchessearchexport) | A file to download. |
 | [`GET /api/summaries/rollup.xlsx`](api.md#get-apisummariesrollupxlsx) | A file to download. |
 | [`POST /api/export/xlsx`](api.md#post-apiexportxlsx) | A file to download, made from the rows sent. |
+| [`POST /api/ingest/file`](api.md#post-apiingestfile) | For the Zotero plugin, which sends a paper's Zotero JSON and files; an agent has neither. |
+| [`POST /api/ingest/items`](api.md#post-apiingestitems) | For the Zotero plugin, which sends a paper's Zotero JSON and files; an agent has neither. |
 | [`POST /api/lists`](api.md#post-apilists) | An agent edits lists; which lists exist is a person's decision. |
 | [`POST /api/lists/unzip`](api.md#post-apilistsunzip) | It reads a file for the page's import dialog; POST /api/lists makes the lists. |
 | [`POST /api/lists/{slug}/delete`](api.md#post-apilistsslugdelete) | Which lists exist is a person's decision. |
