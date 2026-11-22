@@ -188,6 +188,11 @@ const Api = {
   setKeySignIn( keyId , on ) {
     return this.post( "/api/keys/" + encodeURIComponent( keyId ) + "/sign-in" , { may_sign_in: on } );
   },
+  // Whether one of the owner's own admin keys may mint keys for other
+  // accounts (an outside admin tool such as ProjectPortal). Owner only.
+  setKeyMintKeys( keyId , on ) {
+    return this.post( "/api/keys/" + encodeURIComponent( keyId ) + "/mint-keys" , { may_mint_keys: on } );
+  },
   revokeKey( keyId )           { return this.post( "/api/keys/" + encodeURIComponent( keyId ) + "/revoke" ); },
   deleteKey( keyId )           { return this.post( "/api/keys/" + encodeURIComponent( keyId ) + "/delete" ); },
   restoreKey( keyId )          { return this.post( "/api/keys/" + encodeURIComponent( keyId ) + "/restore" ); },

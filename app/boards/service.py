@@ -88,11 +88,13 @@ class BoardService:
 
     # -- what ops need from outside the document ---------------------------------
 
-    def resolve(self, spec: str) -> dict[str, Any]:
+    def resolve(self, spec: str, catalogue: Any = None) -> dict[str, Any]:
         """The paper an `add` names: a key, a DOI, a Zotero key, or a title
         close enough to be that paper (96, as the old app). Raises OpError
-        naming the closest titles when it is none of those."""
-        paper = self.catalogue.find(spec)
+        naming the closest titles when it is none of those. catalogue is the
+        library to look in; None is the server's."""
+        catalogue = catalogue if catalogue is not None else self.catalogue
+        paper = catalogue.find(spec)
         if paper is None and self.content is not None and spec.strip()[:1] == "W" and spec.strip()[1:].isdigit():
             # An OpenAlex id: a paper the library cites or is cited by.
             work = self.content.pool.work(spec.strip())
@@ -103,7 +105,7 @@ class BoardService:
                     "in_library": False,
                 }
         if paper is None and len(spec) >= 8:
-            result = self.catalogue.search(spec, mode="title")
+            result = catalogue.search(spec, mode="title")
             best = result.rows[0] if result.rows else None
             if best is not None:
                 from rapidfuzz import fuzz
@@ -125,12 +127,13 @@ class BoardService:
             "in_library": True,
         }
 
-    def meta(self, keys: list[str], mods: bool = False, links: bool = False, titles: dict | None = None) -> dict[str, Any]:
+    def meta(self, keys: list[str], mods: bool = False, links: bool = False, titles: dict | None = None, catalogue: Any = None) -> dict[str, Any]:
         """What ops ask about papers: whether each is in the library, its
         modality tags (mods) and the code and dataset links found in it
         (links), as the content stages have them so far."""
+        catalogue = catalogue if catalogue is not None else self.catalogue
         out = {}
-        here = [key for key in keys if self.catalogue.get(key) is not None]
+        here = [key for key in keys if catalogue.get(key) is not None]
         found = self.content.meta(here, links) if (self.content is not None and (mods or links)) else {}
         for key in here:
             out[key] = {"in_library": True, **found.get(key, {})}
@@ -254,9 +257,15 @@ class BoardService:
         out.sort(key=lambda row: row["added"], reverse=True)
         return out
 
-    def ctx(self) -> ops.Ctx:
+    def ctx(self, catalogue: Any = None) -> ops.Ctx:
+        """What ops need from outside the document. catalogue is the library
+        papers are looked up in; None is the server's."""
+        resolve, meta = self.resolve, self.meta
+        if catalogue is not None:
+            resolve = lambda spec: self.resolve(spec, catalogue)  # noqa: E731
+            meta = lambda keys, mods=False, links=False, titles=None: self.meta(keys, mods, links, titles, catalogue)  # noqa: E731
         return ops.Ctx(
-            resolve=self.resolve, meta=self.meta, parse_refs=self.parse_refs, cite_styles=cite.usable(),
+            resolve=resolve, meta=meta, parse_refs=self.parse_refs, cite_styles=cite.usable(),
             list_doc=self.list_doc, tiers_doc=self.tiers_doc, shared_docs=self.shared_docs, remaining=self.remaining,
             modalities=self.content.vocab.labels if self.content is not None else [],
         )
@@ -326,13 +335,15 @@ class BoardService:
 
     # -- papers newly saved to Zotero joining a list (options.auto_add) ----------
 
-    def auto_add(self) -> list[dict[str, Any]]:
+    def auto_add(self, catalogue: Any = None) -> list[dict[str, Any]]:
         """Put the papers saved to Zotero since each list's auto_add_since on
         every list with auto_add on, at its top or bottom, oldest first (so at
         the top the newest ends up first), and move the mark past them. Called
-        after every library sync; a no-op when nothing is new. A locked list
-        keeps its mark, so it catches up once unlocked. -> {slug, added} per
-        list changed."""
+        after every library sync, the server's and each user's own (catalogue:
+        the library that synced; None is the server's); a no-op when nothing
+        is new. A locked list keeps its mark, so it catches up once unlocked.
+        -> {slug, added} per list changed."""
+        catalogue = catalogue if catalogue is not None else self.catalogue
         with self._auto_add_lock:
             out: list[dict[str, Any]] = []
             lists = [record for _, record in self.store.all(db.BUCKET_BOARDS) if not record.get("deleted") and not record.get("locked")]
@@ -341,7 +352,7 @@ class BoardService:
             if not wanted:
                 return out
             papers = sorted(
-                ((paper.record.get("date_added") or "", paper.key) for paper in self.catalogue.all()),
+                ((paper.record.get("date_added") or "", paper.key) for paper in catalogue.all()),
             )
             for record, opts in wanted:
                 since = opts.get("auto_add_since") or ""
@@ -351,7 +362,7 @@ class BoardService:
                 if not new:
                     continue
                 try:
-                    added = self._auto_add_one(record["slug"], opts["auto_add"], new)
+                    added = self._auto_add_one(record["slug"], opts["auto_add"], new, catalogue)
                 except boards.BoardError as refusal:
                     print(f"[lists] auto-add to {record['slug']!r} failed: {refusal}", flush=True)
                     continue
@@ -359,7 +370,7 @@ class BoardService:
                     out.append({"slug": record["slug"], "added": added})
             return out
 
-    def _auto_add_one(self, slug: str, where: str, new: list[tuple[str, str]]) -> int:
+    def _auto_add_one(self, slug: str, where: str, new: list[tuple[str, str]], catalogue: Any = None) -> int:
         """One list's share of auto_add. An add that fails (a paper the library
         no longer finds) is left out and the rest go on. -> papers added."""
         new = new[: ops.MAX_OPS - 1]  # the rest come with the next sync, the mark stopping short of them
@@ -369,7 +380,7 @@ class BoardService:
         mark = {"auto_add_since": new[-1][0]}
         while True:
             try:
-                applied = boards.apply_ops(self.store, slug, batch, self.ctx(), AUTO_ADD_BY, set_options=mark)
+                applied = boards.apply_ops(self.store, slug, batch, self.ctx(catalogue), AUTO_ADD_BY, set_options=mark)
                 break
             except boards.BoardError as refusal:
                 index = refusal.extra.get("index")

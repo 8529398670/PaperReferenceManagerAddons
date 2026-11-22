@@ -94,3 +94,25 @@ class AutoAddTest(LibraryCase):
         boards.set_locked(self.store, "auto", False, "test")
         self.assertEqual(self.service.auto_add(), [{"slug": "auto", "added": 2}])
         self.assertEqual(self.order("other"), [])
+
+    def test_a_users_own_library_adds_its_new_papers(self) -> None:
+        """The Zotero plugin sends to the sender's own library: its sync adds
+        that library's new papers, which the server's library does not have."""
+        from app.library.catalogue import Catalogue
+        from app.library.zotero import Library
+        from app.search.index import Index
+        from app.tests.zotero_fixture import sample
+
+        own_zotero = sample(self.root / "OwnZotero")
+        own_zotero.add("A paper only in my own library", added="2026-04-02 09:00:00")
+        index = Index(self.root / "own" / "search.db")
+        self.addCleanup(index.close)
+        own = Catalogue(Library(self.root / "OwnZotero", self.root / "own"), index)
+        own.sync()
+        new_key = next(p.key for p in own.all() if p.record["title"].startswith("A paper only in my own"))
+        self.assertIsNone(self.app.state.library.catalogue.get(new_key))
+        self.switch_on("bottom", since="2026-03-01 10:00:00")
+        self.assertEqual(self.service.auto_add(), [])
+        self.assertEqual(self.service.auto_add(own), [{"slug": "auto", "added": 1}])
+        self.assertEqual(self.order(), [new_key])
+        self.assertEqual(self.options()["auto_add_since"], "2026-04-02 09:00:00")

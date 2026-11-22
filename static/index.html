@@ -77,7 +77,7 @@
           <a class="nav-link" href="#status" data-nav="status"><i class="bi bi-activity" aria-hidden="true"></i><span data-i18n="nav.status"></span></a>
           <hr class="sidebar-rule" />
           <!-- Account: its second line names who is signed in (App.labelAccount). -->
-          <a class="nav-link" href="#account" data-nav="account"><i class="bi bi-person-circle" aria-hidden="true"></i><span class="nav-link-text"><span data-i18n="nav.account"></span><span id="sidebar-user" class="nav-link-sub"></span></span></a>
+          <a class="nav-link" href="#account" data-nav="account"><i class="bi bi-person-circle" aria-hidden="true"></i><span class="nav-link-text"><span data-i18n="nav.account"></span><span id="sidebar-user" class="nav-link-sub"></span><span id="view-only-badge" class="badge text-bg-secondary align-self-start mt-1" data-i18n="nav.view_only" hidden></span></span></a>
           <a class="nav-link" href="#appearance" data-nav="appearance"><i class="bi bi-palette" aria-hidden="true"></i><span data-i18n="nav.appearance"></span></a>
           <a class="nav-link" href="#shortcuts" data-nav="shortcuts"><i class="bi bi-keyboard" aria-hidden="true"></i><span data-i18n="nav.shortcuts"></span></a>
           <a class="nav-link" href="#info" data-nav="info"><i class="bi bi-question-circle" aria-hidden="true"></i><span data-i18n="nav.info"></span></a>
@@ -85,11 +85,11 @@
 
           <div id="sidebar-admin" class="sidebar-group" hidden>
             <h3 class="sidebar-heading" data-i18n="nav.admin_heading"></h3>
-            <a class="nav-link" href="#users" data-nav="users"><i class="bi bi-people" aria-hidden="true"></i><span data-i18n="nav.users"></span></a>
-            <a class="nav-link" href="#all-keys" data-nav="all-keys"><i class="bi bi-shield-lock" aria-hidden="true"></i><span data-i18n="nav.all_keys"></span></a>
-            <a class="nav-link" href="#logs" data-nav="logs"><i class="bi bi-journal-text" aria-hidden="true"></i><span data-i18n="nav.logs"></span></a>
-            <a class="nav-link" href="#jobs" data-nav="jobs"><i class="bi bi-clock-history" aria-hidden="true"></i><span data-i18n="nav.jobs"></span></a>
-            <a class="nav-link" href="#settings" data-nav="settings"><i class="bi bi-sliders" aria-hidden="true"></i><span data-i18n="nav.settings"></span></a>
+            <a class="nav-link" href="/admin/users" data-nav="users"><i class="bi bi-people" aria-hidden="true"></i><span data-i18n="nav.users"></span></a>
+            <a class="nav-link" href="/admin/api-keys" data-nav="all-keys"><i class="bi bi-shield-lock" aria-hidden="true"></i><span data-i18n="nav.all_keys"></span></a>
+            <a class="nav-link" href="/admin/logs" data-nav="logs"><i class="bi bi-journal-text" aria-hidden="true"></i><span data-i18n="nav.logs"></span></a>
+            <a class="nav-link" href="/admin/jobs" data-nav="jobs"><i class="bi bi-clock-history" aria-hidden="true"></i><span data-i18n="nav.jobs"></span></a>
+            <a class="nav-link" href="/admin/settings" data-nav="settings"><i class="bi bi-sliders" aria-hidden="true"></i><span data-i18n="nav.settings"></span></a>
           </div>
           <p id="sidebar-version" class="sidebar-version" hidden></p>
         </nav>
@@ -1335,7 +1335,7 @@
           <h2 class="view-title visually-hidden" data-i18n="account.heading"></h2>
 
 
-          <section class="card">
+          <section class="card" data-write>
             <div class="card-body">
               <h3 class="card-title" data-i18n="account.profile_heading"></h3>
               <form id="rename-form" class="row g-3 align-items-end" autocomplete="off">
@@ -1396,7 +1396,7 @@
 
           <!-- A login link for your own account, to sign in on another device.
                Any signed-in user may mint one; see Api.createMyLoginLink. -->
-          <section class="card">
+          <section class="card" data-write>
             <div class="card-body">
               <h3 class="card-title" data-i18n="account.device_heading"></h3>
               <p class="text-body-secondary" data-i18n="account.device_description"></p>
@@ -1420,7 +1420,7 @@
           </section>
 
           <!-- Only while the owner has auth.two_factor on; see two_factor.js. -->
-          <section class="card" id="two-factor-panel" hidden>
+          <section class="card" data-write id="two-factor-panel" data-path="/account/two-factor" hidden>
             <div class="card-body">
               <h3 class="card-title" data-i18n="two_factor.heading"></h3>
               <p class="text-body-secondary" data-i18n="two_factor.description"></p>
@@ -1469,7 +1469,7 @@
             select is revealed only for an admin (see keys.js) because a key can
             never carry more permission than the account that owns it.
           -->
-          <section class="card" id="api-keys-panel" hidden>
+          <section class="card" id="api-keys-panel" data-path="/account/api-keys" hidden>
             <div class="card-body">
               <h3 class="card-title" data-i18n="api_keys.heading"></h3>
               <p class="text-body-secondary" data-i18n="api_keys.description"></p>
@@ -1481,7 +1481,7 @@
                 </span>
               </p>
 
-              <form id="create-key-form" class="row g-3 align-items-end" autocomplete="off">
+              <form id="create-key-form" data-write class="row g-3 align-items-end" autocomplete="off">
                 <div class="col-md">
                   <label for="key-name" class="form-label" data-i18n="api_keys.name_label"></label>
                   <input id="key-name" class="form-control" name="name" maxlength="80" required
@@ -1491,6 +1491,7 @@
                   <label for="key-role" class="form-label" data-i18n="api_keys.role_label"></label>
                   <select id="key-role" class="form-select" name="role">
                     <option value="user" data-i18n="api_keys.role_user"></option>
+                    <option value="viewer" data-i18n="api_keys.role_viewer"></option>
                     <option value="admin" data-i18n="api_keys.role_admin"></option>
                   </select>
                 </div>
@@ -1577,7 +1578,7 @@
                 </div>
               </fieldset>
 
-              <form id="mcp-key-form" class="row g-3 align-items-end" autocomplete="off">
+              <form id="mcp-key-form" data-write class="row g-3 align-items-end" autocomplete="off">
                 <div class="col-md">
                   <label for="mcp-key-name" class="form-label" data-i18n="mcp.name_label"></label>
                   <input id="mcp-key-name" class="form-control" name="name" maxlength="80" required />
@@ -1586,6 +1587,7 @@
                   <label for="mcp-key-role" class="form-label" data-i18n="api_keys.role_label"></label>
                   <select id="mcp-key-role" class="form-select" name="role">
                     <option value="user" data-i18n="api_keys.role_user"></option>
+                    <option value="viewer" data-i18n="api_keys.role_viewer"></option>
                     <option value="admin" data-i18n="api_keys.role_admin"></option>
                   </select>
                 </div>
@@ -1846,6 +1848,7 @@
                   <label for="new-role" class="form-label" data-i18n="admin.new_role_label"></label>
                   <select id="new-role" class="form-select" name="role">
                     <option value="user" data-i18n="admin.role_user"></option>
+                    <option value="viewer" data-i18n="admin.role_viewer"></option>
                     <option value="admin" data-i18n="admin.role_admin"></option>
                   </select>
                 </div>
@@ -1954,6 +1957,7 @@
                   <label for="user-key-role" class="form-label" data-i18n="api_keys.role_label"></label>
                   <select id="user-key-role" class="form-select" name="role">
                     <option value="user" data-i18n="api_keys.role_user"></option>
+                    <option value="viewer" data-i18n="api_keys.role_viewer"></option>
                     <option value="admin" data-i18n="api_keys.role_admin"></option>
                   </select>
                 </div>
@@ -2198,7 +2202,7 @@
           <dl id="shortcut-list" class="shortcut-list mb-0"></dl>
         </div>
         <div class="modal-footer">
-          <a id="shortcuts-list-change" href="#shortcuts" class="btn btn-link" data-i18n="shortcuts.list_change" hidden></a>
+          <a id="shortcuts-list-change" href="/shortcuts" class="btn btn-link" data-i18n="shortcuts.list_change" hidden></a>
         </div>
       </div>
     </div>

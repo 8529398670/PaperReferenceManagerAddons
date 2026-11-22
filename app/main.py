@@ -26,7 +26,7 @@ from app.core.maintenance import Maintenance
 from app.core.middleware import EXCEPTION_HANDLERS, AppVersion, NoStore, RateLimit, SecurityHeaders
 from app.core.request_id import RequestID
 from app.core.request_log import RequestLog
-from app.core.security import LoadActor
+from app.core.security import LoadActor, ViewOnly
 from app.core.static_files import StaticServer
 from app.boards.service import BoardService
 from app.boards.sheetsync import SheetSync
@@ -114,6 +114,13 @@ def build_app(
 
     library.after_sync = after_sync
     libraries.after_sync = lambda: setattr(content, "dirty", True)
+    # Papers just saved to a user's own library join the lists that asked for
+    # them too (the Zotero plugin sends to the sender's own library).
+    def user_synced(service: LibraryService) -> None:
+        boards.library_stale()
+        boards.auto_add(service.catalogue)
+
+    libraries.on_user_sync = user_synced
     boards.content = content
     # The scanned PDFs' text, from the worker's OCR, searched like Zotero's.
     library.catalogue.text_fallback = content.ocr_text
@@ -221,6 +228,7 @@ def build_app(
             Middleware(RateLimit, settings=settings, logger=logger),
             Middleware(LoadActor, store=store, settings=settings),
             Middleware(RequestLog, settings=settings, logger=logger),
+            Middleware(ViewOnly),
             Middleware(Maintenance, store=store, settings=settings),
         ],
         exception_handlers=EXCEPTION_HANDLERS,

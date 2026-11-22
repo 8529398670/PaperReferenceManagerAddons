@@ -80,6 +80,8 @@ class LibraryRegistry:
         # Hooks main sets: what the server library's after_sync and
         # text_fallback do, for every user library too.
         self.after_sync: Callable[[], None] | None = None
+        # And told which user library it was (lists' auto_add reads its papers).
+        self.on_user_sync: Callable[[LibraryService], None] | None = None
         self.text_fallback: Callable[[str], str] | None = None
         self.union = Union(self)
         # Replaced in tests: the remote a user's source is read through.
@@ -178,8 +180,18 @@ class LibraryRegistry:
         service = LibraryService(self.cfg, library=library, index_path=folder / "search.db", source_id=source.id)
         service.load()
         service.catalogue.text_fallback = self.text_fallback
-        service.after_sync = self.after_sync
+        service.after_sync = lambda: self._synced(service)
         return service
+
+    def _synced(self, service: LibraryService) -> None:
+        """A user's own library found something (or was first read)."""
+        if self.after_sync is not None:
+            self.after_sync()
+        if self.on_user_sync is not None:
+            try:
+                self.on_user_sync(service)
+            except Exception as error:  # noqa: BLE001 -- the sync itself already landed
+                print(f"[libraries] after-sync hook failed: {error!r}", flush=True)
 
     def _drop(self, user_id: int) -> None:
         """The user's library is gone (cleared, or the account deleted):
