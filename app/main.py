@@ -42,6 +42,7 @@ from app.library.registry import LibraryRegistry
 from app.review.missing import MissingReview
 from app.review.service import ReviewService
 from app.review.view import ReviewView
+from app.core.skill_origin import skill_origin
 from app.routes import build_routes
 
 # How often config.yaml is checked for edits made outside the Settings screen.
@@ -255,6 +256,8 @@ def build_app(
     app.state.language = lang
     # Reported to MCP clients as serverInfo.version.
     app.state.version = version
+    # Reported by /api/me, so ProjectPortal can tell an app behind its template.
+    app.state.skill, app.state.skill_commit = skill_origin()
     app.state.live_reload = reload_watcher
     return app
 

@@ -101,7 +101,7 @@ class TwoFactorTest(AuthRoutesTestCase):
         self.assertEqual(fresh.get("/api/me").status_code, 401)
 
         wrong = fresh.post("/api/login/two-factor", json={"challenge": response["challenge"], "code": "000000"})
-        self.assertEqual(wrong.json(), {"error": "two_factor_wrong"})
+        self.assertEqual(wrong.json(), {"error": "two_factor_wrong", "code": "forbidden"})
         right = fresh.post("/api/login/two-factor", json={"challenge": response["challenge"], "code": code_for(secret, 1)})
         self.assertEqual(right.status_code, 200)
         self.assertEqual(fresh.get("/api/me").json()["id"], self.alice.id)
@@ -123,7 +123,7 @@ class TwoFactorTest(AuthRoutesTestCase):
         _, recovery = self.enrol(alice)
         challenge = self.new_challenge()
         self.assertEqual(self.finish(challenge, recovery[0]).status_code, 200)
-        self.assertEqual(self.finish(challenge, recovery[1]).json(), {"error": "challenge_invalid"})
+        self.assertEqual(self.finish(challenge, recovery[1]).json(), {"error": "challenge_invalid", "code": "invalid"})
 
     def new_challenge(self) -> str:
         return login_tokens.redeem_login_token(
@@ -146,7 +146,7 @@ class TwoFactorTest(AuthRoutesTestCase):
         challenge = self.new_challenge()
         for _ in range(5):
             self.finish(challenge, "000000")
-        self.assertEqual(self.finish(challenge, code_for(secret, 1)).json(), {"error": "two_factor_locked"})
+        self.assertEqual(self.finish(challenge, code_for(secret, 1)).json(), {"error": "two_factor_locked", "code": "rate_limited"})
 
     def test_parallel_wrong_codes_cannot_pass_the_lockout(self) -> None:
         """S4: twenty wrong codes sent at once get at most five evaluated. The
@@ -212,7 +212,7 @@ class TwoFactorTest(AuthRoutesTestCase):
         secret, _ = self.enrol(alice)
         challenge = self.new_challenge()
         credentials.set_user_disabled(self.store, self.alice.id, True)
-        self.assertEqual(self.finish(challenge, code_for(secret, 1)).json(), {"error": "challenge_invalid"})
+        self.assertEqual(self.finish(challenge, code_for(secret, 1)).json(), {"error": "challenge_invalid", "code": "invalid"})
 
     def test_turning_two_factor_on_ends_other_sessions(self) -> None:
         """S15: an attacker's session stayed signed in after the victim

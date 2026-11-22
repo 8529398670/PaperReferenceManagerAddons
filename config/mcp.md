@@ -168,6 +168,7 @@ Make a new account and its first login link, to hand to the person. role is admi
 | `account_expires_at` | string (date-time) or null | no |  | When the account stops working (RFC 3339). Left out: never. expires_in_minutes is the login link's expiry, not this. |
 | `display_name` | string | yes | 1 to 80 characters |  |
 | `expires_in_minutes` | integer or null | no | 0 to 525600 | 0 never expires. Default auth.login_token_ttl_seconds for a link that works once, auth.multi_use_login_token_ttl_seconds otherwise. |
+| `kind` | string | no | one of `person`, `service`; default `person` | person, the default. service is refused (403 service_account): a service account is made by Connect on the owner's API keys screen. |
 | `max_uses` | integer or null | no | 0 to 1000 | Sign-ins the link allows: 1-1000, or 0 for unlimited. Default 1. |
 | `role` | string | yes | one of `admin`, `user`, `viewer` |  |
 
@@ -1994,6 +1995,7 @@ Routes an API key may call that have no tool, and why.
 | [`POST /api/export/xlsx`](api.md#post-apiexportxlsx) | A file to download, made from the rows sent. |
 | [`POST /api/ingest/file`](api.md#post-apiingestfile) | For the Zotero plugin, which sends a paper's Zotero JSON and files; an agent has neither. |
 | [`POST /api/ingest/items`](api.md#post-apiingestitems) | For the Zotero plugin, which sends a paper's Zotero JSON and files; an agent has neither. |
+| [`POST /api/keys/self/rotate`](api.md#post-apikeysselfrotate) | Makes an API key's credential, which no MCP tool does. |
 | [`POST /api/lists`](api.md#post-apilists) | An agent edits lists; which lists exist is a person's decision. |
 | [`POST /api/lists/unzip`](api.md#post-apilistsunzip) | It reads a file for the page's import dialog; POST /api/lists makes the lists. |
 | [`POST /api/lists/{slug}/delete`](api.md#post-apilistsslugdelete) | Which lists exist is a person's decision. |
