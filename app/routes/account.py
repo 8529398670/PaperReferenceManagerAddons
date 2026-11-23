@@ -25,6 +25,8 @@ from app.routes.account_library import MyLibrary, my_library
 from app.routes.api_docs_md import api_doc_url
 from app.routes.api_docs_md import mcp_doc_url
 from app.routes.admin import CancelLoginLinkReply, DisplayName, ExpiresInMinutes, LoginLink, LoginLinkReply, MaxUses, OkReply, RenameUserReply, link_options, link_reply
+from app.routes.admin import key_login_link_options
+from app.routes.helpers import refuse_key_born
 from app.routes.helpers import Refused, get_config, get_store, run
 from app.routes.helpers import DateTime
 from app.routes.logs import audit
@@ -280,14 +282,8 @@ def create_my_login_link(request: Request, body: MyLoginLink) -> LoginLinkReply:
     minutes, whatever it asked for, and revoking the key voids it while it is
     unused."""
     actor = actor_from(request)
-    if actor.api_key is not None and not actor.api_key.may_sign_in:
-        raise Refused(403, "this key may not make sign-in links: turn that on for it on the API keys card")
     options = link_options(request, body)
-    if actor.api_key is not None:
-        ttl = options.ttl_seconds
-        if ttl <= 0 or ttl > api_keys.KEY_LOGIN_LINK_TTL_SECONDS:
-            ttl = api_keys.KEY_LOGIN_LINK_TTL_SECONDS
-        options = replace(options, max_uses=1, unlimited=False, ttl_seconds=ttl)
+    options = key_login_link_options(request, options)
     credential, info = login_tokens.issue_login_link(get_store(request), actor.user.id, options)
     audit(request, KIND_AUTH, "own login link created", {"max_uses": info["max_uses"], "expires_at": info["expires_at"]})
     return LoginLinkReply(**link_reply(credential, info))
