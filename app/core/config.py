@@ -252,6 +252,7 @@ class DockerSection:
     worker: bool
     worker_memory: str
     worker_cpus: str
+    network_subnet: str
 
 
 @dataclass
@@ -974,6 +975,12 @@ def validate(file: File) -> list[str]:
     check(bool(_SIZE.match(docker.tmpfs_size)), f"docker.tmpfs_size must look like 16m, got {docker.tmpfs_size!r}")
     check(bool(_SIZE.match(docker.worker_memory)), f"docker.worker_memory must look like 4g, got {docker.worker_memory!r}")
     check(bool(_CPUS.match(docker.worker_cpus)), f"docker.worker_cpus must be a number like 4, got {docker.worker_cpus!r}")
+    if docker.network_subnet:
+        try:
+            net = ipaddress.ip_network(docker.network_subnet, strict=True)
+            check(net.version == 4 and net.num_addresses >= 8, f"docker.network_subnet must be an IPv4 range like 172.31.25.0/24, got {docker.network_subnet!r}")
+        except ValueError:
+            check(False, f"docker.network_subnet must be an IPv4 range like 172.31.25.0/24, got {docker.network_subnet!r}")
     check(docker.zotero_dir == "" or path_ok(docker.zotero_dir), "docker.zotero_dir must be empty or a path with no ':' in it")
 
     return problems

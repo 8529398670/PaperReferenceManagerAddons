@@ -286,6 +286,28 @@ if command -v lsof >/dev/null 2>&1; then
   fi
 fi
 
+# docker.network_subnet: both containers on a network of their own, where
+# Docker answers DNS itself instead of the default bridge's NAT dropping one
+# of a lookup's two replies. Made, or remade on a changed subnet, here: the
+# server's container is gone by now, and the worker's is removed first.
+NETWORK_FLAGS=()
+if [ -n "$docker_network" ]; then
+  if [ -n "$( docker ps -aq --filter "name=^${docker_worker_container}\$" )" ]; then
+    docker rm -f "$docker_worker_container" >/dev/null
+  fi
+  HAVE_SUBNET="$( docker network inspect "$docker_network" --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}' 2>/dev/null || true )"
+  if [ -n "$HAVE_SUBNET" ] && [ "$HAVE_SUBNET" != "$docker_network_subnet" ]; then
+    echo "Network ${docker_network} is on ${HAVE_SUBNET}; remaking it on ${docker_network_subnet}..."
+    docker network rm "$docker_network" >/dev/null
+    HAVE_SUBNET=""
+  fi
+  if [ -z "$HAVE_SUBNET" ]; then
+    docker network create --driver bridge --subnet "$docker_network_subnet" --gateway "$docker_network_gateway" "$docker_network" >/dev/null
+    echo "Created network ${docker_network} (${docker_network_subnet})."
+  fi
+  NETWORK_FLAGS=( --network "$docker_network" )
+fi
+
 echo "Starting ${docker_container} on ${docker_bind_address}:${docker_host_port}..."
 # --stop-timeout: `docker stop` allows 10 seconds by default, and the server can
 # need 15 -- 10 for requests to finish, 5 for a background job -- so the default
@@ -295,6 +317,7 @@ docker run -d \
   --restart "$docker_restart" \
   --stop-timeout 20 \
   -p "$docker_publish" \
+  ${NETWORK_FLAGS[@]+"${NETWORK_FLAGS[@]}"} \
   -v "${DATA_DIR}:/app/data" \
   -v "${CONFIG_FILE}:${CONTAINER_CONFIG}" \
   -v "${SECRET_FILE}:${CONTAINER_SECRET}:ro" \
@@ -332,7 +355,7 @@ if [ "$docker_worker" = "true" ]; then
           --name "$docker_worker_container" \
           --restart "$docker_restart" \
           --stop-timeout 20 \
-          --network bridge \
+          ${NETWORK_FLAGS[@]+"${NETWORK_FLAGS[@]}"} \
           -v "${DATA_DIR}:/app/data" \
           -v "${CONFIG_FILE}:${CONTAINER_CONFIG}:ro" \
           -v "${SECRET_FILE}:${CONTAINER_SECRET}:ro" \

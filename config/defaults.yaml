@@ -391,3 +391,12 @@ docker:
   worker: false
   worker_memory: 4g
   worker_cpus: "4"
+
+  # A network of its own for both containers, e.g. 172.31.25.0/24. Empty uses
+  # Docker's default bridge, where a lookup of both a name's IPv4 and IPv6
+  # addresses can lose a reply in the bridge's NAT and stall a second, or
+  # fail ("Try again"). On a network of its own Docker answers lookups itself
+  # (127.0.0.11, cached). Traffic through the published port then arrives
+  # from the subnet's first address (172.31.25.1): put that in
+  # server.trusted_proxies.
+  network_subnet: ""

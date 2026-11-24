@@ -10,6 +10,7 @@ script prints is what the server will do.
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import os
 import sys
 from pathlib import Path
@@ -297,6 +298,12 @@ def command_shell(args: argparse.Namespace) -> None:
             ("docker_worker_container", docker.container + "-worker"),
             ("docker_worker_memory", docker.worker_memory),
             ("docker_worker_cpus", docker.worker_cpus),
+            # A user-defined network for both containers (docker.network_subnet),
+            # and its gateway: the address the published port's traffic, and so
+            # the reverse proxy, arrives from.
+            ("docker_network", docker.container + "-net" if docker.network_subnet else ""),
+            ("docker_network_subnet", docker.network_subnet),
+            ("docker_network_gateway", str(next(ipaddress.ip_network(docker.network_subnet).hosts())) if docker.network_subnet else ""),
             # Only local reads a Zotero folder; none and remote mount nothing.
             ("library_source", file.library.source),
             ("server_port", str(file.server.port)),
