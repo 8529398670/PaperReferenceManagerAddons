@@ -286,15 +286,43 @@ if command -v lsof >/dev/null 2>&1; then
   fi
 fi
 
+# stop_worker takes the worker's container down without stranding its task.
+# `docker rm -f` kills it outright, and the task it held stays leased to a
+# worker that is gone until the lease runs out (15 minutes). SIGTERM lets it
+# finish the task in hand (up to WORKER_STOP_WAIT seconds), a second one
+# drops that task and hands it back to the queue; either way it releases what
+# it holds before it exits. Its restart policy is lifted first, or Docker
+# would start it again the moment it exits.
+WORKER_STOP_WAIT=60
+stop_worker() {
+  [ -n "$( docker ps -aq --filter "name=^${docker_worker_container}\$" )" ] || return 0
+  if [ "$( docker inspect -f '{{.State.Running}}' "$docker_worker_container" 2>/dev/null )" = "true" ]; then
+    docker update --restart no "$docker_worker_container" >/dev/null 2>&1 || true
+    echo "Stopping ${docker_worker_container} (the task in hand gets up to ${WORKER_STOP_WAIT}s to finish)..."
+    docker kill -s TERM "$docker_worker_container" >/dev/null 2>&1 || true
+    local waited=0
+    while [ "$( docker inspect -f '{{.State.Running}}' "$docker_worker_container" 2>/dev/null )" = "true" ]; do
+      if [ "$waited" -eq "$WORKER_STOP_WAIT" ]; then
+        echo "  still busy: handing its task back to the queue"
+        docker kill -s TERM "$docker_worker_container" >/dev/null 2>&1 || true
+      elif [ "$waited" -ge $(( WORKER_STOP_WAIT + 15 )) ]; then
+        echo "  not stopping: removed anyway (its task waits out its lease)"
+        break
+      fi
+      sleep 1
+      waited=$(( waited + 1 ))
+    done
+  fi
+  docker rm -f "$docker_worker_container" >/dev/null 2>&1 || true
+}
+
 # docker.network_subnet: both containers on a network of their own, where
 # Docker answers DNS itself instead of the default bridge's NAT dropping one
 # of a lookup's two replies. Made, or remade on a changed subnet, here: the
 # server's container is gone by now, and the worker's is removed first.
 NETWORK_FLAGS=()
 if [ -n "$docker_network" ]; then
-  if [ -n "$( docker ps -aq --filter "name=^${docker_worker_container}\$" )" ]; then
-    docker rm -f "$docker_worker_container" >/dev/null
-  fi
+  stop_worker
   HAVE_SUBNET="$( docker network inspect "$docker_network" --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}' 2>/dev/null || true )"
   if [ -n "$HAVE_SUBNET" ] && [ "$HAVE_SUBNET" != "$docker_network_subnet" ]; then
     echo "Network ${docker_network} is on ${HAVE_SUBNET}; remaking it on ${docker_network_subnet}..."
@@ -344,9 +372,7 @@ printf '%s\n' "$DOCKER_SETTINGS" > "$DOCKER_LAST"
 # and has its own limits, docker.worker_memory and docker.worker_cpus. A
 # worker that fails to build or start leaves the server running: the two
 # stages wait, and everything else works.
-if [ -n "$( docker ps -aq --filter "name=^${docker_worker_container}\$" )" ]; then
-  docker rm -f "$docker_worker_container" >/dev/null
-fi
+stop_worker
 WORKER_NOTE="off (docker.worker)"
 if [ "$docker_worker" = "true" ]; then
   echo "Building ${docker_image}-worker from docker/Dockerfile.worker..."
