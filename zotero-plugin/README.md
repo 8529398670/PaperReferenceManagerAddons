@@ -22,6 +22,7 @@ Open **Tools → PRMA Forwarder Settings…** at any time. It opens Zotero's set
 - **What is sent.** Zotero's JSON for the paper, its attachments and notes, and the collections it is filed in (with their parents) go to `POST /api/ingest/items`. Then each attachment's file goes to `POST /api/ingest/file`, in 4 MiB pieces.
 - **Keys and files.** Zotero keys are kept, so the paper has the same key in Zotero, in ZoteroWebDAV and in PRMA. Files linked outside Zotero's storage folder, such as those ZotFile moved, are uploaded too, and the library keeps its own copy.
 - **The desktop copy.** The paper stays in Zotero and gets the tag `prma:sent`, so it is never sent twice on its own.
+- **Files added later.** When a PDF (or a note) is added to a paper that was already sent, for example because the Connector found no PDF and you attached one by hand, the paper is sent again once the file is on disk. Only the new file is uploaded.
 - **Sending by hand.** Right-click one or more papers → **Send to PRMA** sends them, even if they were sent before. Sending the same paper again changes nothing in the library.
 - **Failures.** When a send fails (PRMA is down, or the key is wrong), a short note appears in the corner. The paper is tried again every 5 minutes and when Zotero starts. The settings pane shows how many are waiting.
 - **Turning it off.** Untick **Send new papers automatically** to stop the automatic sends. The menu still works.

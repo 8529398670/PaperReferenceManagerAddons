@@ -193,6 +193,7 @@ def live_config(boot: Config, boot_file: config.File, file: config.File) -> Conf
             remote_poll_seconds=file.library.remote_poll_seconds,
             max_user_libraries=file.library.max_user_libraries,
             users_read_server=file.library.users_read_server,
+            process_on_open=file.library.process_on_open,
         ),
         enrich=copy.deepcopy(file.enrich),
         llm=copy.deepcopy(file.llm),

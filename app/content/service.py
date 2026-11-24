@@ -150,8 +150,9 @@ class ContentService:
         # library's stream.
         self.publish: Callable[[str, dict[str, Any]], None] = lambda name, data: None
         self.dirty = True
-        # library.source remote: nothing that needs a paper's PDF or text runs
-        # until the paper is opened (open()), and what already ran is kept.
+        # library.source remote: what already ran is kept, never redone from
+        # the remote's copy, and with library.process_on_open nothing that
+        # needs a paper's PDF or text runs until the paper is opened (open()).
         # The papers opened so far, kept across restarts.
         # A paper from a user's own library (app/library/registry.py, always
         # remote) is on demand too, whatever the server's library is: see
@@ -260,6 +261,11 @@ class ContentService:
     def _on_demand(self, key: str) -> bool:
         return self.on_demand or self._owner(key) is not None
 
+    def _opened(self, key: str) -> bool:
+        """Whether an on-demand paper's PDF work runs: every paper, unless
+        library.process_on_open keeps it to the papers someone opened."""
+        return key in self.demanded or not getattr(self.settings(), "process_on_open", False)
+
     def _settled(self, rows: dict[tuple[str, str], tuple[str, str]], key: str, stage: str) -> bool:
         return rows.get((key, stage), ("", ""))[0] in st.SETTLED
 
@@ -273,7 +279,7 @@ class ContentService:
         probe.text_sig = paper.text_sig or "remote"
         sigs = self.signatures(probe, rows) or {}
         out = {st.OPENALEX: sigs[st.OPENALEX]}
-        if paper.key not in self.demanded:
+        if not self._opened(paper.key):
             return out
         if rows.get((paper.key, st.OCR), ("", ""))[0] != st.DONE:
             return out
@@ -286,7 +292,7 @@ class ContentService:
         """heavy() for a remote library: an opened paper's figures, and its
         text (OCR, which uses the text layer when it is good) while any text
         stage has not finished. The worker fetches the PDF."""
-        if paper.key not in self.demanded:
+        if not self._opened(paper.key):
             return []
         pdf = first_pdf(paper.record)
         if not pdf:
@@ -363,6 +369,7 @@ class ContentService:
                     release.append((paper.key, stage))
         changed = (self.files.want(wants) if wants else 0) + settled
         here = {paper.key for paper in papers}
+        opened = {key for key in here if self._opened(key)}
         # Gone from the library: kept, its work held, while the catalogue
         # keeps the paper (VANISHED_KEEP_SECONDS), so a key that comes back
         # (the source switched, the remote imported again) loses nothing.
@@ -372,11 +379,11 @@ class ContentService:
                 changed += self.files.unhold(key, stage)
             # Left over from before the switch, or no longer needed by an
             # opened paper: waits until something wants it.
-            changed += self.files.hold(st.LOCAL + st.HEAVY, self.demanded)
+            changed += self.files.hold(st.LOCAL + st.HEAVY, opened)
         else:
-            # Users' libraries' papers stay on demand: what an unopened one
-            # had left over waits.
-            changed += self.files.unhold(keep=waiting | (on_demand - self.demanded))
+            # Users' libraries' papers are on demand too: with
+            # process_on_open, what an unopened one had left over waits.
+            changed += self.files.unhold(keep=waiting | (on_demand - opened))
         changed += self.files.hold_keys(waiting)
         if waiting - self._waiting:
             # Out of the citation network now; backfill_one puts it back if

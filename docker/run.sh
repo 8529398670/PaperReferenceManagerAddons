@@ -315,6 +315,43 @@ wait_healthy
 mkdir -p .run
 printf '%s\n' "$DOCKER_SETTINGS" > "$DOCKER_LAST"
 
+# The figures / OCR worker (docker.worker): its own image and container,
+# replaced on every run like the server's. It mounts the same data directory
+# (the queue, the fetched PDFs, the results) and config, publishes nothing,
+# and has its own limits, docker.worker_memory and docker.worker_cpus. A
+# worker that fails to build or start leaves the server running: the two
+# stages wait, and everything else works.
+if [ -n "$( docker ps -aq --filter "name=^${docker_worker_container}\$" )" ]; then
+  docker rm -f "$docker_worker_container" >/dev/null
+fi
+WORKER_NOTE="off (docker.worker)"
+if [ "$docker_worker" = "true" ]; then
+  echo "Building ${docker_image}-worker from docker/Dockerfile.worker..."
+  if docker build --file docker/Dockerfile.worker --tag "${docker_image}-worker:latest" . \
+     && docker run -d \
+          --name "$docker_worker_container" \
+          --restart "$docker_restart" \
+          --stop-timeout 20 \
+          --network bridge \
+          -v "${DATA_DIR}:/app/data" \
+          -v "${CONFIG_FILE}:${CONTAINER_CONFIG}:ro" \
+          -v "${SECRET_FILE}:${CONTAINER_SECRET}:ro" \
+          --read-only \
+          --tmpfs "/tmp:rw,nosuid,size=1g" \
+          --cap-drop ALL \
+          --security-opt no-new-privileges:true \
+          --pids-limit 512 \
+          --memory "$docker_worker_memory" \
+          --cpus "$docker_worker_cpus" \
+          "${docker_image}-worker:latest" >/dev/null; then
+    WORKER_NOTE="${docker_worker_container} (${docker_worker_cpus} CPUs, ${docker_worker_memory}): docker logs -f ${docker_worker_container}"
+  else
+    WORKER_NOTE="FAILED to build or start (above); figures and OCR wait"
+    echo "WARNING: the worker did not start. The server is running without it." >&2
+  fi
+fi
+echo "Worker: ${WORKER_NOTE}"
+
 cat <<NOTE
 
 Ready: ${docker_url}

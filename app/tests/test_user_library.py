@@ -282,6 +282,17 @@ class NoServerLibraryTest(UserLibraryCase):
         none_cfg = replace(cfg, library=replace(cfg.library, source="none"))
         self.assertIsInstance(make_library(none_cfg), NoLibrary)
 
+    def test_no_server_library_counts_as_synced(self) -> None:
+        """With source none the content queue still runs: it waits for the
+        server's library to have synced, and an empty one has at once."""
+        from app.library.service import LibraryService, NoLibrary
+
+        service = LibraryService(self.libraries.cfg, library=NoLibrary(), index_path=self.libraries.root / "server-none" / "search.db")  # type: ignore[arg-type]
+        self.addCleanup(service.close)
+        service._load_and_sync()
+        self.assertTrue(service.catalogue.status.ready)
+        self.assertTrue(service.catalogue.synced)
+
     def test_admins_see_nothing_until_they_connect(self) -> None:
         from dataclasses import replace
 

@@ -7,7 +7,9 @@
 
 It needs torch and friends, which have no Alpine wheels, so it is not part of
 the server or its image: `scripts/run.sh worker` makes its own venv
-(.venv-worker, from requirements-pipeline.txt) and starts it. The server never
+(.venv-worker, from requirements-pipeline.txt) and starts it; with Docker,
+docker.worker true has docker/run.sh run it in a container of its own
+(docker/Dockerfile.worker) beside the server's. The server never
 waits for it. With no worker the two stages stay pending, the screens say
 "not available", and everything else works the same.
 

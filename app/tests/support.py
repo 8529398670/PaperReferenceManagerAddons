@@ -72,6 +72,8 @@ def sample_value(key: Any) -> Any:
         "docker.memory": "512m",
         "docker.cpus": "2",
         "docker.tmpfs_size": "32m",
+        "docker.worker_memory": "6g",
+        "docker.worker_cpus": "6",
         "google_sheets.default_mode": "two-way",
         "llm.provider": "gemini",
         "mri_design.base_url": "https://planner.example.com",

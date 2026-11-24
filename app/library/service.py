@@ -103,8 +103,11 @@ class LibraryService:
             self._loaded = True
         result = self.catalogue.sync(force=force)
         if isinstance(self.library, NoLibrary):
-            # Nothing to wait for: an empty library is ready at once.
+            # Nothing to wait for: an empty library is ready at once, and
+            # synced, or the content queue (which waits for the server's
+            # library) would never run users' libraries' papers.
             self.catalogue.status.ready = True
+            self.catalogue.synced = True
         if self.after_sync is not None and (first or (result is not None and result.any())):
             self.after_sync()
         return result

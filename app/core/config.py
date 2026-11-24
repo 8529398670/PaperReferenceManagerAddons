@@ -194,6 +194,7 @@ class LibrarySection:
     remote_poll_seconds: int
     max_user_libraries: int
     users_read_server: bool
+    process_on_open: bool
 
 
 @dataclass
@@ -248,6 +249,9 @@ class DockerSection:
     pids_limit: int
     tmpfs_size: str
     zotero_dir: str
+    worker: bool
+    worker_memory: str
+    worker_cpus: str
 
 
 @dataclass
@@ -349,6 +353,10 @@ class LibraryConfig:
     # Whether users (not the owner or admins) may read this library. Off:
     # each connects their own ZoteroWebDAV server (app/library/registry.py).
     users_read_server: bool = False
+    # A ZoteroWebDAV library's PDF work (figures, OCR, the text stages):
+    # false runs it for every paper as it arrives; true only for the papers
+    # someone opens (app/content/service.py, on demand).
+    process_on_open: bool = False
 
 
 @dataclass(frozen=True)
@@ -964,6 +972,8 @@ def validate(file: File) -> list[str]:
     check(bool(_CPUS.match(docker.cpus)), f"docker.cpus must be a number like 1 or 0.5, got {docker.cpus!r}")
     check(docker.pids_limit > 0, "docker.pids_limit must be positive")
     check(bool(_SIZE.match(docker.tmpfs_size)), f"docker.tmpfs_size must look like 16m, got {docker.tmpfs_size!r}")
+    check(bool(_SIZE.match(docker.worker_memory)), f"docker.worker_memory must look like 4g, got {docker.worker_memory!r}")
+    check(bool(_CPUS.match(docker.worker_cpus)), f"docker.worker_cpus must be a number like 4, got {docker.worker_cpus!r}")
     check(docker.zotero_dir == "" or path_ok(docker.zotero_dir), "docker.zotero_dir must be empty or a path with no ':' in it")
 
     return problems
@@ -1244,6 +1254,7 @@ def library_config(file: File, paths: "Paths") -> LibraryConfig:
         remote_poll_seconds=file.library.remote_poll_seconds,
         max_user_libraries=file.library.max_user_libraries,
         users_read_server=file.library.users_read_server,
+        process_on_open=file.library.process_on_open,
     )
 
 

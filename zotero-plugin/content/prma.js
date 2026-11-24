@@ -12,6 +12,10 @@
  * the same keys. The paper then gets the tag prma:sent, so it is never sent
  * twice on its own; right-click → Send to PRMA sends any paper again.
  *
+ * A file or note added later to a paper already sent (a PDF found or
+ * attached by hand after the Connector saved only the metadata) sends that
+ * paper again once the file is on disk, uploading only the new files.
+ *
  * A failed send is kept (extensions.prma.retryQueue) and tried again every
  * RETRY_MS and at startup. The API key is never logged. */
 
@@ -38,7 +42,7 @@
     rootURI: "",
     observerID: null,
     retryTimer: null,
-    pending: new Map(), // parent item id -> { first, timer }
+    pending: new Map(), // parent item id -> { first, timer, later, newKeys }
     sending: new Set(), // parent item keys being sent now
     chunk: CHUNK,
 
@@ -172,16 +176,25 @@
         } else if (item.parentItemID) {
           // An attachment or note: its paper waits a little longer.
           const parent = Zotero.Items.get(item.parentItemID);
-          if (!parent || !parent.isRegularItem()) continue;
+          if (!parent || !parent.isRegularItem() || !parent.isTopLevelItem()) continue;
+          if (parent.hasTag(SENT_TAG)) {
+            // Added after the paper was sent: send it again with this one.
+            this.schedule(parent.id, QUIET_MS, item.key);
+            continue;
+          }
           const added = Zotero.Date.sqlToDate(parent.dateAdded, true);
           const recent = added && Date.now() - added.getTime() < RECENT_MS;
-          if (this.pending.has(parent.id) || (recent && !parent.hasTag(SENT_TAG))) this.schedule(parent.id);
+          if (this.pending.has(parent.id) || recent) this.schedule(parent.id);
         }
       }
     },
 
-    schedule(itemID, delay = QUIET_MS) {
-      const entry = this.pending.get(itemID) || { first: Date.now(), timer: null };
+    schedule(itemID, delay = QUIET_MS, laterKey = "") {
+      const entry = this.pending.get(itemID) || { first: Date.now(), timer: null, later: false, newKeys: new Set() };
+      if (laterKey) {
+        entry.later = true;
+        entry.newKeys.add(laterKey);
+      }
       if (entry.timer) clearTimeout(entry.timer);
       entry.timer = setTimeout(() => this.settle(itemID), delay);
       this.pending.set(itemID, entry);
@@ -194,7 +207,7 @@
         this.pending.delete(itemID);
         return;
       }
-      if (item.hasTag(SENT_TAG)) {
+      if (item.hasTag(SENT_TAG) && !entry.later) {
         this.pending.delete(itemID);
         return;
       }
@@ -205,8 +218,10 @@
       }
       this.pending.delete(itemID);
       try {
-        await this.send(item);
+        // A later addition uploads only its own files; the rest are there.
+        await this.send(item, entry.later ? entry.newKeys : null);
         this.log(`sent ${item.key}`);
+        if (entry.later) this.toast(`Sent the new file or note of “${this.shortTitle(item)}” to PRMA.`);
       } catch (error) {
         this.toast(`Could not send “${this.shortTitle(item)}” to PRMA: ${error.message} It will be tried again.`, true);
       }
@@ -232,14 +247,15 @@
 
     // -- sending -----------------------------------------------------------
 
-    async send(item) {
+    // onlyFiles: a Set of attachment keys whose files to upload; null uploads every file.
+    async send(item, onlyFiles = null) {
       if (!this.baseURL() || !this.apiKey()) {
         throw new Error("Set PRMA's address and an API key under Tools → PRMA Forwarder Settings.");
       }
       if (this.sending.has(item.key)) return;
       this.sending.add(item.key);
       try {
-        await this.sendNow(item);
+        await this.sendNow(item, onlyFiles);
         this.forgetFailed(item.key);
         if (!item.hasTag(SENT_TAG)) {
           item.addTag(SENT_TAG);
@@ -253,7 +269,7 @@
       }
     },
 
-    async sendNow(item) {
+    async sendNow(item, onlyFiles = null) {
       const children = Zotero.Items.get([...item.getAttachments(), ...item.getNotes()]);
       const parentJSON = item.toJSON();
       // The tag goes with it, so the library says it came this way.
@@ -271,6 +287,7 @@
       if (failed.length) throw new Error(`PRMA did not store ${failed[0].key}: ${failed[0].error}`);
       for (const att of children) {
         if (!att.isAttachment() || !this.hasFile(att)) continue;
+        if (onlyFiles && !onlyFiles.has(att.key)) continue;
         const path = await att.getFilePathAsync();
         if (!path) continue;
         await this.upload(att, path);

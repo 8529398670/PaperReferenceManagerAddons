@@ -267,6 +267,11 @@ class OnDemandTest(unittest.TestCase):
         class Settings:
             openalex_enabled = False
             openalex_api_key = ""
+            # These tests are about the papers nobody opened (on demand);
+            # test_every_paper_runs_by_default turns it off.
+            process_on_open = True
+
+        self.settings = Settings
 
         def service(library: Any) -> ContentService:
             catalogue = Catalogue(library, self.index)
@@ -443,6 +448,26 @@ class OnDemandTest(unittest.TestCase):
 
     def states_sig(self, content: Any, key: str, stage: str) -> str:
         return content.files.rows()[(key, stage)][1]
+
+    def test_every_paper_runs_by_default(self) -> None:
+        """library.process_on_open off (the default): every paper's PDF work
+        is queued as it arrives, opened or not, and what the local library's
+        text already made is still kept, never redone."""
+        from app.content import store as st
+
+        self.settings.process_on_open = False
+        remote = self.service(self.remote_library)
+        remote.reconcile()
+        for doi in ("10.48550/arXiv.2606.20696", "10.1006/nimg.2001.0931"):
+            states = self.states(remote, doi)
+            self.assertEqual(states[st.FIGURES], st.PENDING, doi)
+            self.assertEqual(states[st.METHODS], st.DONE, doi)
+            self.assertNotIn(st.OCR, states)  # its text stages are done
+        self.assertEqual(remote.files.counts()[st.METHODS][st.PENDING], 0)
+        # Turned on again: what nobody opened waits.
+        self.settings.process_on_open = True
+        remote.reconcile()
+        self.assertEqual(self.states(remote, "10.1006/nimg.2001.0931")[st.FIGURES], st.HELD)
 
     def test_back_to_local_releases_what_was_held(self) -> None:
         from app.content import store as st

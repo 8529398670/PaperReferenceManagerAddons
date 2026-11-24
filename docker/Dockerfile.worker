@@ -1,0 +1,56 @@
+# syntax=docker/dockerfile:1
+#
+# The figures / OCR worker (`python -m app worker`, app/worker/run.py) as a
+# container beside the server's. docker/run.sh builds and starts it when
+# docker.worker is true.
+#
+# Debian, not Alpine: torch, onnxruntime and OpenCV ship no musllinux wheels,
+# which is why the worker was never part of the server's image. Python 3.12:
+# rapidocr-onnxruntime caps Python below 3.13 (see requirements-pipeline.txt).
+#
+# It shares only the data directory with the server: the queue
+# (papers/content.db, SQLite in WAL mode, a claimed task leased), the PDFs the
+# server fetched from a ZoteroWebDAV library (cache/), and each paper's
+# results folder. It publishes no port.
+
+FROM python:3.12-slim-bookworm
+
+# opencv-python (needed by doclayout-yolo and rapidocr) loads libGL and glib
+# even headless.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd -g 10001 app \
+ && useradd -u 10001 -g app -d /app -s /usr/sbin/nologin -M app
+
+WORKDIR /app
+
+# CPU torch first, from PyTorch's own index: PyPI's Linux x86_64 wheel bundles
+# CUDA, gigabytes this box has no GPU for. The pipeline file then finds it
+# already satisfied.
+COPY requirements-pipeline.txt .
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.5.1 torchvision==0.20.1 \
+ && pip install --no-cache-dir -r requirements-pipeline.txt \
+ && python -m pip uninstall --yes --quiet pip
+
+COPY app ./app
+COPY config/defaults.yaml config/language.yaml ./config/
+
+# The same fixed layout as the server's image: config at
+# /app/config/config.yaml, state in /app/data (app/core/layout.py).
+RUN cp app/core/layout_container.py app/core/layout_pinned.py \
+ && python -m compileall -q app \
+ && mkdir -p /app/data && chown app:app /app/data
+
+# The container runs --read-only: the libraries' own caches and settings go to
+# the tmpfs. The layout model itself is kept in /app/data/models after its
+# first download (app/worker/run.py find_model).
+ENV HOME=/tmp \
+    HF_HOME=/tmp/hf \
+    YOLO_CONFIG_DIR=/tmp/yolo \
+    MPLCONFIGDIR=/tmp/mpl \
+    PYTHONDONTWRITEBYTECODE=1
+
+USER app
+
+ENTRYPOINT ["python", "-u", "-m", "app", "worker"]

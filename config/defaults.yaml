@@ -259,6 +259,12 @@ library:
   # admins sees an empty library until they connect their own ZoteroWebDAV
   # server on the Account screen. [live]
   users_read_server: false
+  # A ZoteroWebDAV library's PDF work -- figures, OCR when the text layer is
+  # poor, methods, links, modalities -- for every paper as it arrives
+  # (false), or only for the papers someone opens (true: nothing is fetched
+  # or OCR'd for a paper nobody looks at). What already ran is kept either
+  # way. [live]
+  process_on_open: false
   # The folder holding zotero.sqlite and storage/, read with source local.
   # [restart]
   zotero_dir: ~/Zotero
@@ -375,3 +381,13 @@ docker:
   # read-only at /zotero when library.source is local. Empty uses
   # library.zotero_dir. ~ and relative paths are resolved on the host.
   zotero_dir: ""
+
+  # The figures / OCR worker (doclayout-yolo, RapidOCR) in a container of its
+  # own, <container>-worker, built from docker/Dockerfile.worker (Debian:
+  # torch has no Alpine wheels). It shares only data_dir with the server and
+  # works through its queue, so the server's limits above stay small. Its
+  # first build downloads about 1 GB, and the layout model is fetched into
+  # data_dir/models on its first start.
+  worker: false
+  worker_memory: 4g
+  worker_cpus: "4"
