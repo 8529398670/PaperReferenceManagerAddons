@@ -206,6 +206,34 @@ class ContentTest(unittest.TestCase):
         self.assertEqual(pool.totals()["refs"], 3)
         self.assertEqual(pool.totals()["citing"], 2)
 
+    def test_not_found_is_asked_again_later(self) -> None:
+        """A paper OpenAlex had no record of is looked up again once its wait
+        (by how new the paper is) has passed, and only then."""
+        from app.content import service as sv
+        from app.content import store as st
+
+        self.content.reconcile()
+        self.drain("net")
+        key = next(k for (k, s), (state, _) in self.content.files.rows().items() if s == st.OPENALEX and state == st.NOT_FOUND)
+        calls = len(self.fake.calls)
+        # Within the wait: nothing is asked.
+        self.content._recheck_after = 0.0
+        self.drain("net")
+        self.assertEqual(len(self.fake.calls), calls)
+        # Past it: asked again (still not there, so not found again).
+        db = self.content.files._db
+        db.execute("UPDATE tasks SET done_at = done_at - ? WHERE key = ? AND stage = ?", (31 * 86400, key, st.OPENALEX))
+        self.content._recheck_after = 0.0
+        self.assertTrue(self.content.step("net"))
+        self.assertGreater(len(self.fake.calls), calls)
+        self.assertEqual(self.content.files.of(key)[st.OPENALEX]["state"], st.NOT_FOUND)
+        # The wait grows with the paper's age.
+        now = 2_000_000_000.0
+        self.assertEqual(sv.recheck_wait("2033-05-17 00:00:00", now), 86400.0)
+        self.assertEqual(sv.recheck_wait("2033-01-01 00:00:00", now), 7 * 86400.0)
+        self.assertEqual(sv.recheck_wait("2020-01-01 00:00:00", now), 30 * 86400.0)
+        self.assertEqual(sv.recheck_wait("", now), 30 * 86400.0)
+
     def test_removing_a_paper_takes_its_network_back(self) -> None:
         self.content.reconcile()
         self.drain("net")

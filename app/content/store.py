@@ -27,7 +27,7 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 # 2 added the heavy stages' columns (input, lease, owner, changed_at) and the
 # workers table; a version-1 file is upgraded in place, never dropped.
@@ -359,9 +359,28 @@ class ContentStore:
                 self._db.executemany("UPDATE tasks SET state = ? WHERE key = ? AND stage = ?", held)
         return len(held)
 
+    def recheck_not_found(self, stage: str, now: float, wait: Callable[[str], float], skip: Iterable[str] = ()) -> int:
+        """Not-found tasks of a stage asked again once wait(added) seconds
+        have passed since the last answer: a paper OpenAlex had not indexed
+        may be there now. Queued behind everything else. -> how many."""
+        skip = set(skip)
+        with self._lock:
+            found = self._db.execute(
+                "SELECT key, added, done_at FROM tasks WHERE stage = ? AND state = ?", (stage, NOT_FOUND)
+            ).fetchall()
+            due = [(key,) for key, added, done_at in found if key not in skip and (done_at or 0) + wait(added or "") <= now]
+            if due:
+                self._db.executemany(
+                    f"UPDATE tasks SET state = '{PENDING}', attempts = 0, next_at = 0, priority = 0 "
+                    f"WHERE key = ? AND stage = '{stage}' AND state = '{NOT_FOUND}'",
+                    due,
+                )
+        return len(due)
+
     def retry(self, key: str = "", stage: str = "") -> int:
         """Ask again: failed and not-found tasks of a paper, of a stage, or one.
-        A not-found OpenAlex lookup is only ever re-asked this way."""
+        Not-found OpenAlex lookups are also asked again by themselves, now
+        and then (recheck_not_found)."""
         where, args = ["state IN (?, ?)"], [FAILED, NOT_FOUND]
         if key:
             where.append("key = ?")

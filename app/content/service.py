@@ -39,6 +39,7 @@ import hashlib
 import os
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -67,6 +68,24 @@ REVIEW_KEPT = "review@"
 REVIEW_KEPT_MAX = 8
 # The papers opened while the library is remote (ContentService.demanded).
 DEMANDED_FILE = "on-demand.json"
+# A paper OpenAlex has no record of is asked again after this long, by how
+# long ago it was added: a new paper (a preprint, an OpenReview submission) is
+# often indexed weeks later. Looked for at most this often.
+RECHECK_DAYS = ((30, 1), (365, 7), (None, 30))
+RECHECK_EVERY_SECONDS = 3600.0
+
+
+def recheck_wait(added: str, now: float | None = None) -> float:
+    """Seconds a not-found OpenAlex lookup waits before it is asked again."""
+    now = time.time() if now is None else now
+    try:
+        age_days = (now - datetime.strptime(added[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc).timestamp()) / 86400
+    except ValueError:
+        age_days = float("inf")
+    for limit, days in RECHECK_DAYS:
+        if limit is None or age_days < limit:
+            return days * 86400.0
+    return RECHECK_DAYS[-1][1] * 86400.0
 
 
 def read_text(files: list[str]) -> str:
@@ -170,6 +189,7 @@ class ContentService:
         self.running: dict[str, str] = {}
         self._tasks: list[asyncio.Task[None]] = []
         self._backfill_after = 0.0
+        self._recheck_after = 0.0
         self.on_meta: Callable[[list[str]], None] | None = None
         # Papers whose Zotero text is unusable (methods summary usable=False):
         # they are the ones OCR is queued for. Loaded on the first reconcile.
@@ -508,6 +528,10 @@ class ContentService:
         if not library.openalex_enabled:
             return self.backfill_one()
         due = self.files.next_due((st.OPENALEX,), now)
+        if due is None and now >= self._recheck_after:
+            self._recheck_after = now + RECHECK_EVERY_SECONDS
+            if self.files.recheck_not_found(st.OPENALEX, now, recheck_wait, skip=self._waiting):
+                due = self.files.next_due((st.OPENALEX,), now)
         if due is None:
             return self.backfill_one()
         self.run_openalex(due[0], library.openalex_api_key)
