@@ -298,12 +298,6 @@ class ContentService:
         if not pdf:
             return []
         sig = "pdf:" + pdf_signature({"pdfs": [pdf]})
-        owner = self._owner(paper.key)
-        if owner is not None and not (self._settled(rows, paper.key, st.FIGURES) and self._settled(rows, paper.key, st.OCR)):
-            # The worker fetches only the server library's files: a user
-            # library's PDF is fetched here, with that user's key.
-            if owner.library.ensure_pdf(pdf) is None:
-                return []
         out = []
         if not self._settled(rows, paper.key, st.FIGURES):
             out.append((st.FIGURES, sig, {"pdf": pdf}))
@@ -312,6 +306,14 @@ class ContentService:
         text_stages = [s for s in (self.signatures(probe, rows) or {}) if s != st.OPENALEX]
         if any(not self._settled(rows, paper.key, s) for s in text_stages) and not self._settled(rows, paper.key, st.OCR):
             out.append((st.OCR, sig, {"pdf": pdf}))
+        owner = self._owner(paper.key)
+        if out and owner is not None:
+            # The worker fetches only the server library's files: a user
+            # library's PDF is fetched here, with that user's key -- and only
+            # for a task about to be queued, never for a paper whose figures
+            # are done and whose text needs no OCR.
+            if owner.library.ensure_pdf(pdf) is None:
+                return []
         return out
 
     def _load_unusable(self) -> set[str]:
